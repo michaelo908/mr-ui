@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ElementType } from "react";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -171,7 +172,8 @@ function renderMR(content: string, opts?: RenderMROpts) {
                 ? "text-[20px] font-semibold"
                 : "text-[18px] font-semibold";
 
-          const Tag = (`h${level}` as keyof JSX.IntrinsicElements);
+          // ✅ Avoid relying on global JSX namespace (can fail on Vercel depending on tsconfig)
+          const Tag = (`h${level}` as ElementType);
 
           // Gold only for the "Rewrite" heading (phase shift marker)
           const headingColor = isRewriteHeading ? "text-[#b08d2a]" : "text-neutral-100";
