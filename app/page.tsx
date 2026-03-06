@@ -1,34 +1,139 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ElementType } from "react";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
 const THINKING_TOKEN = "__MR_THINKING__";
+const MR_GOLD = "#C6A75A";
 
 function classNames(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
 }
 
-/** ---------- Parsing + Rendering ---------- */
+function stripMarkdownWrapper(text: string) {
+  return text
+    .trim()
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/^\*\*(.+)\*\*$/s, "$1")
+    .replace(/^__(.+)__$/s, "$1")
+    .replace(/[：:]+$/g, "")
+    .trim();
+}
 
-type Node =
-  | { type: "heading"; level: number; text: string; key: string }
-  | { type: "hr"; key: string }
-  | { type: "quote"; lines: string[]; key: string }
-  | { type: "list"; items: string[]; key: string }
-  | { type: "para"; text: string; key: string }
-  | { type: "spacer"; key: string };
+function normalizeSectionLabel(text: string) {
+  return stripMarkdownWrapper(text)
+    .toLowerCase()
+    .replace(/[’']/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-function parseMR(content: string): Node[] {
+function getSectionKind(line: string): "summary" | "depth" | "rewrite" | "debrief" | null {
+  const t = normalizeSectionLabel(line);
+
+  if (
+    t === "executive summary" ||
+    t === "editors summary" ||
+    t === "editor summary"
+  ) {
+    return "summary";
+  }
+
+  if (
+    t === "diagnosis in depth" ||
+    t === "editors notes in depth" ||
+    t === "editor notes in depth"
+  ) {
+    return "depth";
+  }
+
+  if (t === "rewrite") {
+    return "rewrite";
+  }
+
+  if (
+    t === "rewrite debrief" ||
+    t === "editors debrief" ||
+    t === "editor debrief" ||
+    t === "editors final rewrite notes" ||
+    t === "editor final rewrite notes"
+  ) {
+    return "debrief";
+  }
+
+  return null;
+}
+
+function parseStructuredMR(content: string) {
   const lines = content.split(/\r?\n/);
+
+  type Kind = "summary" | "depth" | "rewrite" | "debrief";
+  const sections: Partial<Record<Kind, string>> = {};
+  const order: Kind[] = [];
+
+  let current: Kind | null = null;
+  let buffer: string[] = [];
+
+  function flush() {
+    if (!current) return;
+    const text = buffer.join("\n").trim();
+    if (text) {
+      sections[current] = text;
+      if (!order.includes(current)) order.push(current);
+    }
+    buffer = [];
+  }
+
+  for (const rawLine of lines) {
+    const kind = getSectionKind(rawLine);
+    if (kind) {
+      flush();
+      current = kind;
+      continue;
+    }
+    buffer.push(rawLine);
+  }
+
+  flush();
+
+  const hasStructured =
+    Boolean(sections.summary) ||
+    Boolean(sections.depth) ||
+    Boolean(sections.rewrite) ||
+    Boolean(sections.debrief);
+
+  return { hasStructured, sections, order };
+}
+
+/**
+ * Richer renderer:
+ * - headings
+ * - dividers
+ * - quotes
+ * - lists using - or •
+ * - inline **bold**, *italic*, `code`
+ * - preserves nice body rhythm
+ */
+function renderMR(content: string) {
+  const lines = content.split(/\r?\n/);
+
+  type Node =
+    | { type: "heading"; level: number; text: string; key: string }
+    | { type: "hr"; key: string }
+    | { type: "quote"; lines: string[]; key: string }
+    | { type: "list"; items: string[]; key: string }
+    | { type: "para"; text: string; key: string }
+    | { type: "spacer"; key: string };
+
   const nodes: Node[] = [];
   let i = 0;
 
   const pushSpacerIfNeeded = () => {
     const prev = nodes[nodes.length - 1];
-    if (prev && prev.type !== "spacer") nodes.push({ type: "spacer", key: `s-${i}-${nodes.length}` });
+    if (prev && prev.type !== "spacer") {
+      nodes.push({ type: "spacer", key: `s-${i}-${nodes.length}` });
+    }
   };
 
   while (i < lines.length) {
@@ -66,10 +171,10 @@ function parseMR(content: string): Node[] {
       continue;
     }
 
-    if (/^- /.test(trimmed)) {
+    if (/^(-|•)\s+/.test(trimmed)) {
       const items: string[] = [];
-      while (i < lines.length && /^- /.test((lines[i] ?? "").trim())) {
-        items.push((lines[i] ?? "").trim().replace(/^- /, ""));
+      while (i < lines.length && /^(-|•)\s+/.test((lines[i] ?? "").trim())) {
+        items.push((lines[i] ?? "").trim().replace(/^(-|•)\s+/, ""));
         i++;
       }
       nodes.push({ type: "list", items, key: `ul-${i}-${items.length}` });
@@ -84,76 +189,58 @@ function parseMR(content: string): Node[] {
       if (/^(#{1,6})\s+/.test(l)) break;
       if (/^(-{3,}|\*{3,})\s*$/.test(t)) break;
       if (/^>\s?/.test(t)) break;
-      if (/^- /.test(t)) break;
+      if (/^(-|•)\s+/.test(t)) break;
       para.push(l);
       i++;
     }
     nodes.push({ type: "para", text: para.join("\n").trim(), key: `p-${i}-${para.length}` });
   }
 
-  return nodes;
-}
-
-type RenderMROpts = {
-  showRewriteButtons?: boolean;
-  onRevealRewrite?: () => void;
-  disableRewrite?: boolean;
-  messageIndex?: number;
-
-  // When the Rewrite section is visible, show "Copy rewrite" button beside the Rewrite heading
-  onCopyRewrite?: () => void;
-  copyRewriteActive?: boolean;
-};
-
-function renderMR(content: string, opts?: RenderMROpts) {
-  const nodes = parseMR(content);
-
   function renderInline(text: string) {
-    const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g);
+    const tokens = text
+      .split(/(`[^`]+`|\*\*[\s\S]+?\*\*|\*[^*]+\*)/g)
+      .filter(Boolean);
 
-    return parts.map((p, idx) => {
-      if (!p) return null;
-
-      const code = p.match(/^`([^`]+)`$/);
-      if (code) {
+    return tokens.map((token, idx) => {
+      const codeMatch = token.match(/^`([^`]+)`$/);
+      if (codeMatch) {
         return (
           <code
             key={idx}
             className="rounded-md border border-neutral-800 bg-neutral-900/50 px-1.5 py-0.5 text-[0.95em] text-neutral-200"
           >
-            {code[1]}
+            {codeMatch[1]}
           </code>
         );
       }
 
-      const bold = p.match(/^\*\*([^*]+)\*\*$/);
-      if (bold) {
+      const boldMatch = token.match(/^\*\*([\s\S]+)\*\*$/);
+      if (boldMatch) {
         return (
           <strong key={idx} className="font-semibold text-neutral-100">
-            {bold[1]}
+            {boldMatch[1]}
           </strong>
         );
       }
 
-      const italic = p.match(/^\*([^*]+)\*$/);
-      if (italic) {
+      const italicMatch = token.match(/^\*([\s\S]+)\*$/);
+      if (italicMatch) {
         return (
-          <em key={idx} className="italic text-neutral-200">
-            {italic[1]}
+          <em key={idx} className="italic">
+            {italicMatch[1]}
           </em>
         );
       }
 
-      return <span key={idx}>{p}</span>;
+      return <span key={idx}>{token}</span>;
     });
   }
-
-  const showButtons = Boolean(opts?.showRewriteButtons && opts?.onRevealRewrite);
 
   return (
     <div className="space-y-0">
       {nodes.map((n) => {
         if (n.type === "spacer") return <div key={n.key} className="h-3" />;
+
         if (n.type === "hr") {
           return (
             <div key={n.key} className="py-4">
@@ -164,91 +251,26 @@ function renderMR(content: string, opts?: RenderMROpts) {
 
         if (n.type === "heading") {
           const level = Math.min(n.level, 6);
-          const txt = (n.text ?? "").trim();
-          const isES = txt === "Executive Summary";
-          const isDepth = txt === "Diagnosis in Depth";
-          const isRewriteHeading = txt === "Rewrite";
-
           const cls =
             level === 1
               ? "text-[22px] font-semibold"
               : level === 2
-              ? "text-[20px] font-semibold"
-              : "text-[18px] font-semibold";
+                ? "text-[20px] font-semibold"
+                : "text-[18px] font-semibold";
 
-          const Tag = (`h${level}` as ElementType);
+          const Tag = (`h${level}` as keyof JSX.IntrinsicElements);
 
-          const headingColor = isRewriteHeading ? "text-[#b08d2a]" : "text-neutral-100";
-
-          const mi = typeof opts?.messageIndex === "number" ? opts.messageIndex : undefined;
-
-          // Anchors
-          const esId = typeof mi === "number" && isES ? `mr-es-${mi}` : undefined;
-          const depthId = typeof mi === "number" && isDepth ? `mr-depth-${mi}` : undefined;
-          const rewriteId = typeof mi === "number" && isRewriteHeading ? `mr-rewrite-${mi}` : undefined;
-
-          const headingEl = (
+          return (
             <Tag
               key={n.key}
-              id={esId ?? depthId ?? rewriteId}
-              className={classNames("mt-6 first:mt-0 tracking-tight", cls, headingColor)}
+              className={classNames(
+                "mt-6 first:mt-0 tracking-tight text-neutral-100",
+                cls
+              )}
             >
               {renderInline(n.text)}
             </Tag>
           );
-
-          // Reveal button under ES + Depth
-          if (showButtons && (isES || isDepth)) {
-            return (
-              <div key={n.key} className="mt-6 first:mt-0">
-                <div className="flex items-center justify-between gap-3">
-                  {headingEl}
-                  <button
-                    onClick={opts?.onRevealRewrite}
-                    disabled={Boolean(opts?.disableRewrite)}
-                    className={classNames(
-                      "rounded-xl border px-3 py-2 text-sm font-semibold",
-                      "border-neutral-700 hover:bg-neutral-800",
-                      opts?.disableRewrite ? "cursor-not-allowed text-neutral-600" : "text-neutral-100"
-                    )}
-                    title="Reveal Rewrite + Rewrite Debrief"
-                  >
-                    Rewrite
-                  </button>
-                </div>
-              </div>
-            );
-          }
-
-          // Rewrite heading: bold gold divider (no label) + "Copy rewrite" beside heading
-          if (isRewriteHeading) {
-            return (
-              <div key={n.key} className="mt-10">
-                {/* Bold gold divider (no label) */}
-                <div className="mb-6 h-[3px] w-full rounded-full bg-[#b08d2a]" />
-
-                <div className="flex items-center justify-between gap-3">
-                  {headingEl}
-
-                  {opts?.onCopyRewrite ? (
-                    <button
-                      onClick={opts.onCopyRewrite}
-                      className={classNames(
-                        "rounded-lg border px-2.5 py-1 text-xs font-semibold",
-                        "border-[#b08d2a]/40 bg-[#b08d2a]/10 text-[#d7b75a] hover:bg-[#b08d2a]/15",
-                        opts.copyRewriteActive ? "bg-[#b08d2a]/20" : ""
-                      )}
-                      title="Copy Rewrite + Rewrite Debrief only"
-                    >
-                      {opts.copyRewriteActive ? "Copied" : "Copy rewrite"}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            );
-          }
-
-          return headingEl;
         }
 
         if (n.type === "quote") {
@@ -280,13 +302,12 @@ function renderMR(content: string, opts?: RenderMROpts) {
           );
         }
 
-        const paraLines = n.text.split("\n");
         return (
-          <p key={n.key} className="my-2 text-[17px] leading-7 text-neutral-300">
-            {paraLines.map((line, idx) => (
+          <p key={n.key} className="my-2 text-[17px] leading-7 text-neutral-200">
+            {n.text.split("\n").map((line, idx, arr) => (
               <span key={idx}>
                 {renderInline(line)}
-                {idx < paraLines.length - 1 ? <br /> : null}
+                {idx < arr.length - 1 ? <br /> : null}
               </span>
             ))}
           </p>
@@ -296,189 +317,133 @@ function renderMR(content: string, opts?: RenderMROpts) {
   );
 }
 
-/** ---------- Clipboard Export (Rich: text/plain + text/html) ---------- */
+function StructuredAssistantMessage({
+  content,
+  onCopyText,
+}: {
+  content: string;
+  onCopyText: (text: string) => Promise<void> | void;
+}) {
+  const { hasStructured, sections } = useMemo(() => parseStructuredMR(content), [content]);
+  const rewriteRef = useRef<HTMLDivElement | null>(null);
+  const [showRewrite, setShowRewrite] = useState(false);
 
-function escapeHtml(s: string) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+  useEffect(() => {
+    setShowRewrite(false);
+  }, [content]);
 
-function inlineToHtml(text: string) {
-  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g);
-  return parts
-    .map((p) => {
-      if (!p) return "";
-      const code = p.match(/^`([^`]+)`$/);
-      if (code) return `<code>${escapeHtml(code[1])}</code>`;
-      const bold = p.match(/^\*\*([^*]+)\*\*$/);
-      if (bold) return `<strong>${escapeHtml(bold[1])}</strong>`;
-      const italic = p.match(/^\*([^*]+)\*$/);
-      if (italic) return `<em>${escapeHtml(italic[1])}</em>`;
-      return escapeHtml(p);
-    })
-    .join("");
-}
-
-function renderMRToPlainText(content: string) {
-  const nodes = parseMR(content);
-
-  const stripInline = (s: string) =>
-    s
-      .replace(/`([^`]+)`/g, "$1")
-      .replace(/\*\*([^*]+)\*\*/g, "$1")
-      .replace(/\*([^*]+)\*/g, "$1");
-
-  const out: string[] = [];
-
-  for (const n of nodes) {
-    if (n.type === "spacer") {
-      if (out.length && out[out.length - 1] !== "") out.push("");
-      continue;
-    }
-
-    if (n.type === "hr") {
-      out.push("");
-      out.push("────────────────────────────────");
-      out.push("");
-      continue;
-    }
-
-    if (n.type === "heading") {
-      out.push("");
-      out.push(stripInline(n.text).trim());
-      out.push("");
-      continue;
-    }
-
-    if (n.type === "quote") {
-      out.push("");
-      for (const q of n.lines) out.push(`> ${stripInline(q).trim()}`);
-      out.push("");
-      continue;
-    }
-
-    if (n.type === "list") {
-      out.push("");
-      for (const it of n.items) out.push(`• ${stripInline(it).trim()}`);
-      out.push("");
-      continue;
-    }
-
-    const p = stripInline(n.text).trim();
-    if (p) {
-      out.push(p);
-      out.push("");
-    }
+  if (!hasStructured) {
+    return <div className="text-[17px] leading-7">{renderMR(content)}</div>;
   }
 
-  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  const summary = sections.summary?.trim();
+  const depth = sections.depth?.trim();
+  const rewrite = sections.rewrite?.trim();
+  const debrief = sections.debrief?.trim();
+
+  const revealRewrite = () => {
+    setShowRewrite(true);
+    setTimeout(() => {
+      rewriteRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  };
+
+  return (
+    <div className="space-y-5">
+      {summary ? (
+        <section>
+          <h2 className="text-[20px] font-semibold tracking-tight text-neutral-100">
+            Editor’s Summary
+          </h2>
+          <div className="mt-3">{renderMR(summary)}</div>
+
+          {rewrite && !showRewrite ? (
+            <div className="mt-5">
+              <button
+                onClick={revealRewrite}
+                className="rounded-xl border px-6 py-3 text-sm font-semibold text-black transition hover:brightness-110"
+                style={{
+                  backgroundColor: MR_GOLD,
+                  borderColor: MR_GOLD,
+                }}
+              >
+                Rewrite
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {depth ? (
+        <details className="rounded-2xl border border-neutral-800 bg-neutral-900/20">
+          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-neutral-300 marker:hidden">
+            <div className="flex items-center justify-between gap-4">
+              <span>Editor’s Notes in Depth</span>
+              <span className="text-xs uppercase tracking-widest text-neutral-500">Click to expand</span>
+            </div>
+          </summary>
+          <div className="border-t border-neutral-800 px-4 py-4">
+            {renderMR(depth)}
+          </div>
+        </details>
+      ) : null}
+
+      {rewrite && showRewrite ? (
+        <section
+          ref={rewriteRef}
+          className="rounded-2xl border border-neutral-800 bg-neutral-950/70 px-4 py-5"
+        >
+          <div
+            className="mb-6 h-[2px] w-full rounded-full"
+            style={{ backgroundColor: MR_GOLD }}
+          />
+
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2
+              className="text-[20px] font-semibold tracking-tight"
+              style={{ color: MR_GOLD }}
+            >
+              Rewrite
+            </h2>
+
+            <button
+              onClick={() => onCopyText(rewrite)}
+              className="rounded-xl border px-3 py-2 text-sm font-semibold transition"
+              style={{
+                color: MR_GOLD,
+                borderColor: `${MR_GOLD}99`,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = `${MR_GOLD}1A`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "transparent";
+              }}
+            >
+              Copy rewrite
+            </button>
+          </div>
+
+          <div>{renderMR(rewrite)}</div>
+        </section>
+      ) : null}
+
+      {debrief && showRewrite ? (
+        <section>
+          <h2 className="text-[20px] font-semibold tracking-tight text-neutral-100">
+            Editor’s Debrief
+          </h2>
+          <div className="mt-3">{renderMR(debrief)}</div>
+        </section>
+      ) : null}
+    </div>
+  );
 }
 
-function renderMRToHtml(content: string) {
-  const nodes = parseMR(content);
-
-  const css = `
-    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; font-size: 14px; line-height: 1.55; color: #111; }
-    h1,h2,h3,h4,h5,h6 { margin: 18px 0 10px; font-weight: 700; }
-    h1 { font-size: 20px; } h2 { font-size: 18px; } h3 { font-size: 16px; }
-    p { margin: 8px 0; }
-    hr { border: 0; border-top: 1px solid #ddd; margin: 14px 0; }
-    blockquote { margin: 10px 0; padding: 10px 12px; border-left: 3px solid #ccc; background: #f7f7f7; }
-    ul { margin: 8px 0 8px 22px; }
-    li { margin: 4px 0; }
-    code { font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace; font-size: 0.95em; background: #f2f2f2; border: 1px solid #e3e3e3; padding: 1px 4px; border-radius: 4px; }
-    em { font-style: italic; }
-    strong { font-weight: 700; }
-  `.trim();
-
-  const chunks: string[] = [];
-
-  for (const n of nodes) {
-    if (n.type === "spacer") {
-      chunks.push(`<p></p>`);
-      continue;
-    }
-    if (n.type === "hr") {
-      chunks.push(`<hr/>`);
-      continue;
-    }
-    if (n.type === "heading") {
-      const level = Math.min(Math.max(n.level, 1), 6);
-      chunks.push(`<h${level}>${inlineToHtml(n.text)}</h${level}>`);
-      continue;
-    }
-    if (n.type === "quote") {
-      const ps = n.lines.map((q) => `<p>${inlineToHtml(q)}</p>`).join("");
-      chunks.push(`<blockquote>${ps}</blockquote>`);
-      continue;
-    }
-    if (n.type === "list") {
-      const lis = n.items.map((it) => `<li>${inlineToHtml(it)}</li>`).join("");
-      chunks.push(`<ul>${lis}</ul>`);
-      continue;
-    }
-    const lines = n.text.split("\n").map((l) => inlineToHtml(l));
-    chunks.push(`<p>${lines.join("<br/>")}</p>`);
-  }
-
-  return `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8" />
-<style>${css}</style>
-</head>
-<body>
-${chunks.join("\n")}
-</body>
-</html>`;
-}
-
-function renderUserToHtml(text: string) {
-  const css = `
-    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; font-size: 14px; line-height: 1.55; color: #111; }
-    pre { white-space: pre-wrap; margin: 0; }
-  `.trim();
-
-  return `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8" />
-<style>${css}</style>
-</head>
-<body>
-<pre>${escapeHtml(text.trim())}</pre>
-</body>
-</html>`;
-}
-
-async function writeClipboardRich(opts: { plain: string; html: string }) {
-  try {
-    // @ts-ignore
-    if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
-      // @ts-ignore
-      const item = new ClipboardItem({
-        "text/plain": new Blob([opts.plain], { type: "text/plain" }),
-        "text/html": new Blob([opts.html], { type: "text/html" }),
-      });
-      // @ts-ignore
-      await navigator.clipboard.write([item]);
-      return;
-    }
-  } catch {
-    // fall through
-  }
-
-  try {
-    await navigator.clipboard.writeText(opts.plain);
-  } catch {}
-}
-
-/** ---------- Commands ---------- */
-
+/**
+ * Dev-only command parser.
+ * - "/h <text>" or "/heresy <text>" => MR Heresy mode
+ */
 function parseCommand(raw: string): { mode: "general" | "mr_heresy"; content: string } {
   const text = raw.trim();
   if (!text) return { mode: "general", content: "" };
@@ -492,50 +457,11 @@ function parseCommand(raw: string): { mode: "general" | "mr_heresy"; content: st
   return { mode: "general", content: text };
 }
 
-/** ---------- Helpers ---------- */
-
-// Detect if assistant output contains the 4 mandatory sections
-function isLayeredFourSectionOutput(content: string) {
-  const t = (content || "").toLowerCase();
-  return (
-    t.includes("## executive summary") &&
-    t.includes("## diagnosis in depth") &&
-    t.includes("## rewrite") &&
-    t.includes("## rewrite debrief")
-  );
-}
-
-// For display: hide everything from "## Rewrite" onwards until revealed
-function hideRewriteForDisplay(full: string) {
-  const idx = full.toLowerCase().indexOf("## rewrite");
-  if (idx === -1) return full;
-  return full.slice(0, idx).trimEnd();
-}
-
-// Extract only the Rewrite + Rewrite Debrief block (for copy convenience)
-function extractRewriteBlock(full: string) {
-  const lower = (full || "").toLowerCase();
-  const idx = lower.indexOf("## rewrite");
-  if (idx === -1) return "";
-  return full.slice(idx).trim();
-}
-
-/** ---------- Page ---------- */
-
 export default function Home() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
-
-  // per-message reveal state (assistant message index -> revealed)
-  const [revealedRewrite, setRevealedRewrite] = useState<Record<number, boolean>>({});
-
-  // copy feedback state
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
-
-  // prevent repeated auto-scroll-to-ES on same message
-  const lastAutoFocusRef = useRef<string>("");
 
   const canSend = useMemo(() => draft.trim().length > 0 && !isLoading, [draft, isLoading]);
 
@@ -546,149 +472,39 @@ export default function Home() {
     }, 50);
   }
 
-  function scrollToExecutiveSummary(messageIndex: number) {
-    setTimeout(() => {
-      const el = document.getElementById(`mr-es-${messageIndex}`);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      else scrollToBottom();
-    }, 60);
-  }
-
-  // Auto-focus behavior:
-  // - If the latest completed assistant message is a 4-section output and rewrite is NOT revealed,
-  //   scroll to its Executive Summary.
-  // - Otherwise, behave like chat (scroll to bottom).
   useEffect(() => {
-    // find last completed assistant message (not thinking token)
-    let lastIdx = -1;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const m = messages[i];
-      if (m?.role === "assistant" && m.content !== THINKING_TOKEN) {
-        lastIdx = i;
-        break;
-      }
-    }
-
-    if (lastIdx >= 0) {
-      const m = messages[lastIdx];
-      const isFour = m.role === "assistant" && isLayeredFourSectionOutput(m.content);
-      const isRevealed = Boolean(revealedRewrite[lastIdx]);
-
-      if (isFour && !isRevealed) {
-        const key = `es:${lastIdx}:${m.content.length}`;
-        if (lastAutoFocusRef.current !== key) {
-          lastAutoFocusRef.current = key;
-          scrollToExecutiveSummary(lastIdx);
-          return;
-        }
-      }
-    }
-
     scrollToBottom();
-  }, [messages, revealedRewrite]);
+  }, [messages.length]);
 
-  function pulseCopied(key: string) {
-    setCopiedKey(key);
-    window.setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 900);
-  }
-
-  function buildContext(history: Msg[], maxTurns = 8) {
-    const clean = history
-      .filter((m) => !(m.role === "assistant" && m.content === THINKING_TOKEN))
-      .slice(-maxTurns);
-
-    if (clean.length === 0) return "";
-
-    return clean.map((m) => `${m.role === "user" ? "You" : "MR"}:\n${m.content}`).join("\n\n");
-  }
-
-  function exportPlain(msg: Msg) {
-    if (msg.role === "assistant") return renderMRToPlainText(msg.content);
-    return msg.content.trim();
-  }
-
-  function exportHtml(msg: Msg) {
-    if (msg.role === "assistant") return renderMRToHtml(msg.content);
-    return renderUserToHtml(msg.content);
+  async function onCopyText(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {}
   }
 
   async function onCopyMessage(index: number) {
     const msg = messages[index];
     if (!msg) return;
     if (msg.role === "assistant" && msg.content === THINKING_TOKEN) return;
-
-    const plain = exportPlain(msg);
-    const html = exportHtml(msg);
-    await writeClipboardRich({ plain, html });
-    pulseCopied(`msg-${index}`);
-  }
-
-  async function onCopyRewrite(index: number) {
-    const msg = messages[index];
-    if (!msg) return;
-    if (msg.role !== "assistant") return;
-    if (msg.content === THINKING_TOKEN) return;
-
-    const block = extractRewriteBlock(msg.content);
-    if (!block) return;
-
-    const plain = renderMRToPlainText(block);
-    const html = renderMRToHtml(block);
-    await writeClipboardRich({ plain, html });
-    pulseCopied(`rw-${index}`);
+    await onCopyText(msg.content);
   }
 
   async function onCopyAll() {
     if (messages.length === 0) return;
-
-    const plainBlocks: string[] = [];
-    for (const m of messages) {
-      if (m.role === "assistant" && m.content === THINKING_TOKEN) continue;
-      plainBlocks.push(`${m.role === "user" ? "You" : "MR"}:\n${exportPlain(m)}`);
-    }
-    const plain = plainBlocks.join("\n\n");
-
-    const css = `
-      body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; font-size: 14px; line-height: 1.55; color: #111; }
-      .label { font-weight: 700; margin: 18px 0 8px; }
-      .block { margin-bottom: 18px; }
-      hr { border: 0; border-top: 1px solid #ddd; margin: 18px 0; }
-    `.trim();
-
-    const htmlBlocks = messages
+    const lines = messages
       .filter((m) => !(m.role === "assistant" && m.content === THINKING_TOKEN))
-      .map((m) => {
-        const label = m.role === "user" ? "You" : "MR";
-        const fragment = m.role === "assistant" ? renderMRToHtml(m.content) : renderUserToHtml(m.content);
-        const bodyOnly = fragment.split("<body>")[1]?.split("</body>")[0] ?? `<pre>${escapeHtml(m.content)}</pre>`;
-        return `<div class="block"><div class="label">${escapeHtml(label)}:</div>${bodyOnly}</div>`;
-      })
-      .join(`<hr/>`);
-
-    const html = `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8" />
-<style>${css}</style>
-</head>
-<body>
-${htmlBlocks}
-</body>
-</html>`;
-
-    await writeClipboardRich({ plain, html });
-    pulseCopied("all");
+      .map((m) => `${m.role === "user" ? "You" : "MR"}: ${m.content}`);
+    await onCopyText(lines.join("\n\n"));
   }
 
   function onClear() {
     if (isLoading) return;
     setMessages([]);
     setDraft("");
-    setRevealedRewrite({});
-    lastAutoFocusRef.current = "";
   }
 
-  async function sendRaw(raw: string) {
+  async function onSend() {
+    const raw = draft;
     if (!raw.trim() || isLoading) return;
 
     const parsed = parseCommand(raw);
@@ -704,25 +520,30 @@ ${htmlBlocks}
       return;
     }
 
+    setDraft("");
     setIsLoading(true);
 
-    // Add user + thinking token
-    setMessages((m) => [...m, { role: "user", content: raw.trim() }, { role: "assistant", content: THINKING_TOKEN }]);
+    setMessages((m) => [
+      ...m,
+      { role: "user", content: raw.trim() },
+      { role: "assistant", content: THINKING_TOKEN },
+    ]);
+
+    scrollToBottom();
 
     const isHeresy = parsed.mode === "mr_heresy";
-    const context = buildContext([...messages, { role: "user", content: raw.trim() }], 8);
 
     const payload = isHeresy
       ? {
           mode: "mr_heresy",
           input: " ",
-          context: `Conversation context:\n\n${context}\n\nApply Multirrupt Mode to the following text:\n\n${text}`,
+          context: `Apply Multirrupt Mode to the following text:\n\n${text}`,
           constraints: {},
         }
       : {
           mode: "general",
           input: text,
-          context: `Conversation context:\n\n${context}`,
+          context: "",
           constraints: {},
         };
 
@@ -752,14 +573,8 @@ ${htmlBlocks}
       );
     } finally {
       setIsLoading(false);
+      scrollToBottom();
     }
-  }
-
-  async function onSend() {
-    const raw = draft;
-    if (!raw.trim() || isLoading) return;
-    setDraft("");
-    await sendRaw(raw.trim());
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -769,46 +584,24 @@ ${htmlBlocks}
     }
   }
 
-  function revealRewriteForMessage(i: number) {
-    setRevealedRewrite((prev) => ({ ...prev, [i]: true }));
-    setTimeout(() => {
-      const el = document.getElementById(`mr-rewrite-${i}`);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 60);
-  }
-
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100">
-      {/* tiny toast feedback */}
-      <div
-        className={classNames(
-          "pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-2xl border px-4 py-2 text-sm shadow-lg backdrop-blur",
-          copiedKey ? "opacity-100" : "opacity-0",
-          "transition-opacity duration-200",
-          "border-neutral-800 bg-neutral-900/70 text-neutral-100"
-        )}
-        aria-live="polite"
-      >
-        Copied.
-      </div>
-
       <div className="mx-auto w-full max-w-3xl px-4 py-10">
         <header className="mb-6 flex items-center justify-between">
           <div>
             <div className="text-2xl font-semibold tracking-tight">Multirrupt - GRAVITAS</div>
-            <div className="mt-1 text-sm text-neutral-400">Narrative engineering for persuasion, clarity, and conversion.</div>
+            <div className="mt-1 text-sm text-neutral-400">
+              Narrative engineering for persuasion, clarity, and conversion.
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={onCopyAll}
               disabled={messages.length === 0}
-              className={classNames(
-                "rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600",
-                copiedKey === "all" ? "bg-neutral-900" : ""
-              )}
+              className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
             >
-              {copiedKey === "all" ? "Copied" : "Copy all"}
+              Copy all
             </button>
             <button
               onClick={onClear}
@@ -820,12 +613,16 @@ ${htmlBlocks}
           </div>
         </header>
 
-        <div ref={scrollerRef} className="h-[60vh] overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-950 p-4">
+        <div
+          ref={scrollerRef}
+          className="h-[60vh] overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-950 p-4"
+        >
           {messages.length === 0 ? (
             <div className="text-[17px] leading-7 text-neutral-400">
-              Start by pasting an email, landing page, ad, or just ask a question.
+              Start by pasting an email, landing page, ad, article, or any text you want reviewed.
               <div className="mt-2 text-neutral-600">
-                Tip: <span className="text-neutral-400">Enter</span> sends, <span className="text-neutral-400">Shift+Enter</span> makes a new line.
+                Tip: <span className="text-neutral-400">Enter</span> sends,{" "}
+                <span className="text-neutral-400">Shift+Enter</span> makes a new line.
               </div>
               <div className="mt-2 text-neutral-700">
                 Dev: type <span className="text-neutral-400">/h</span> at the start of a message to run MR Heresy mode.
@@ -835,14 +632,6 @@ ${htmlBlocks}
             <div className="space-y-4">
               {messages.map((m, i) => {
                 const isThinking = m.role === "assistant" && m.content === THINKING_TOKEN;
-                const isFourSection = m.role === "assistant" && !isThinking && isLayeredFourSectionOutput(m.content);
-                const isRevealed = Boolean(revealedRewrite[i]);
-
-                // display-only: hide rewrite until revealed
-                const displayContent =
-                  m.role === "assistant" && isFourSection && !isRevealed ? hideRewriteForDisplay(m.content) : m.content;
-
-                const showRewriteButtons = m.role === "assistant" && !isThinking && isFourSection && !isRevealed;
 
                 return (
                   <div
@@ -852,43 +641,30 @@ ${htmlBlocks}
                       m.role === "user"
                         ? "border-neutral-800 bg-neutral-900/40"
                         : isThinking
-                        ? "border-emerald-900/60 bg-emerald-900/15"
-                        : "border-neutral-800 bg-neutral-900/20"
+                          ? "border-emerald-900/60 bg-emerald-900/15"
+                          : "border-neutral-800 bg-neutral-900/20"
                     )}
                   >
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                      <div className="text-xs uppercase tracking-widest text-neutral-400">{m.role === "user" ? "You" : "MR"}</div>
-
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="text-xs uppercase tracking-widest text-neutral-400">
+                        {m.role === "user" ? "You" : "MR"}
+                      </div>
                       <button
                         onClick={() => onCopyMessage(i)}
                         disabled={isThinking}
-                        className={classNames(
-                          "rounded-lg border border-neutral-700 px-2 py-1 text-xs hover:bg-neutral-800 disabled:text-neutral-600",
-                          copiedKey === `msg-${i}` ? "bg-neutral-800" : ""
-                        )}
-                        title="Copy this message"
+                        className="rounded-lg border border-neutral-700 px-2 py-1 text-xs hover:bg-neutral-800 disabled:text-neutral-600"
                       >
-                        {copiedKey === `msg-${i}` ? "Copied" : "Copy"}
+                        Copy
                       </button>
                     </div>
 
-                    {/* Reading column to reduce fatigue on long outputs */}
-                    <div className="mx-auto max-w-[640px] text-[17px] leading-7">
+                    <div className="text-[17px] leading-7">
                       {isThinking ? (
                         <span className="italic text-emerald-200/80">Thinking…</span>
                       ) : m.role === "assistant" ? (
-                        renderMR(displayContent, {
-                          showRewriteButtons,
-                          onRevealRewrite: () => revealRewriteForMessage(i),
-                          disableRewrite: isLoading,
-                          messageIndex: i,
-
-                          // Only show copy rewrite button when rewrite is actually visible
-                          onCopyRewrite: isFourSection && isRevealed ? () => onCopyRewrite(i) : undefined,
-                          copyRewriteActive: copiedKey === `rw-${i}`,
-                        })
+                        <StructuredAssistantMessage content={m.content} onCopyText={onCopyText} />
                       ) : (
-                        <p className="my-2 whitespace-pre-wrap text-[17px] leading-7 text-neutral-300">{m.content}</p>
+                        renderMR(m.content)
                       )}
                     </div>
                   </div>
@@ -910,9 +686,9 @@ ${htmlBlocks}
             <button
               onClick={onSend}
               disabled={!canSend}
-              className="h-[56px] rounded-xl px-5 text-sm font-semibold bg-neutral-100 text-neutral-950 hover:bg-white disabled:bg-neutral-800 disabled:text-neutral-500"
+              className="h-[56px] rounded-xl bg-neutral-100 px-5 text-sm font-semibold text-neutral-950 hover:bg-white disabled:bg-neutral-800 disabled:text-neutral-500"
             >
-              Send
+              Review
             </button>
           </div>
         </div>
