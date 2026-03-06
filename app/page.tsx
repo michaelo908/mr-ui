@@ -15,8 +15,8 @@ function stripMarkdownWrapper(text: string) {
   return text
     .trim()
     .replace(/^#{1,6}\s+/, "")
-    .replace(/^\*\*(.+)\*\*$/s, "$1")
-    .replace(/^__(.+)__$/s, "$1")
+    .replace(/^\*\*(.+)\*\*$/, "$1")
+    .replace(/^__(.+)__$/, "$1")
     .replace(/[：:]+$/g, "")
     .trim();
 }
