@@ -258,7 +258,7 @@ function renderMR(content: string) {
                 ? "text-[20px] font-semibold"
                 : "text-[18px] font-semibold";
 
-          const Tag = (`h${level}` as keyof JSX.IntrinsicElements);
+          const Tag = (`h${level}` as keyof React.JSX.IntrinsicElements);
 
           return (
             <Tag
