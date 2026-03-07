@@ -11,6 +11,36 @@ function classNames(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
 }
 
+async function copyElementRich(element: HTMLElement | null) {
+  if (!element) return;
+
+  const clone = element.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll('[data-copy-ui="true"]').forEach((node) => node.remove());
+
+  try {
+    if (
+      navigator.clipboard &&
+      "write" in navigator.clipboard &&
+      typeof ClipboardItem !== "undefined"
+    ) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": new Blob([clone.innerHTML], {
+            type: "text/html",
+          }),
+          "text/plain": new Blob([clone.innerText], {
+            type: "text/plain",
+          }),
+        }),
+      ]);
+    } else {
+      await navigator.clipboard.writeText(clone.innerText);
+    }
+  } catch {
+    await navigator.clipboard.writeText(clone.innerText);
+  }
+}
+
 function stripMarkdownWrapper(text: string) {
   return text
     .trim()
@@ -29,7 +59,9 @@ function normalizeSectionLabel(text: string) {
     .trim();
 }
 
-function getSectionKind(line: string): "summary" | "depth" | "rewrite" | "debrief" | null {
+function getSectionKind(
+  line: string
+): "summary" | "depth" | "rewrite" | "debrief" | null {
   const t = normalizeSectionLabel(line);
 
   if (
@@ -106,15 +138,6 @@ function parseStructuredMR(content: string) {
   return { hasStructured, sections, order };
 }
 
-/**
- * Richer renderer:
- * - headings
- * - dividers
- * - quotes
- * - lists using - or •
- * - inline **bold**, *italic*, `code`
- * - preserves nice body rhythm
- */
 function renderMR(content: string) {
   const lines = content.split(/\r?\n/);
 
@@ -193,7 +216,11 @@ function renderMR(content: string) {
       para.push(l);
       i++;
     }
-    nodes.push({ type: "para", text: para.join("\n").trim(), key: `p-${i}-${para.length}` });
+    nodes.push({
+      type: "para",
+      text: para.join("\n").trim(),
+      key: `p-${i}-${para.length}`,
+    });
   }
 
   function renderInline(text: string) {
@@ -317,19 +344,72 @@ function renderMR(content: string) {
   );
 }
 
+function ThinkingStatus() {
+  const steps = [
+    "Reading message structure…",
+    "Assessing narrative flow…",
+    "Checking clarity and friction points…",
+    "Evaluating persuasion dynamics…",
+    "Examining audience perception…",
+    "Mapping argument coherence…",
+    "Reviewing emotional cadence…",
+  ];
+
+  const [idx, setIdx] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const nextDelay = () => {
+      const roll = Math.random();
+
+      if (roll < 0.15) return 2800 + Math.floor(Math.random() * 300); // occasional long pause
+      if (roll < 0.75) return 1600 + Math.floor(Math.random() * 900); // most common
+      return 1000 + Math.floor(Math.random() * 700); // occasional quicker hop
+    };
+
+    const scheduleNext = () => {
+      timer = setTimeout(() => {
+        if (cancelled) return;
+        setIdx((n) => (n + 1) % steps.length);
+        scheduleNext();
+      }, nextDelay());
+    };
+
+    scheduleNext();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, []);
+
+  return <span className="italic text-emerald-200/80">{steps[idx]}</span>;
+}
+
 function StructuredAssistantMessage({
   content,
-  onCopyText,
 }: {
   content: string;
-  onCopyText: (text: string) => Promise<void> | void;
 }) {
   const { hasStructured, sections } = useMemo(() => parseStructuredMR(content), [content]);
-  const rewriteRef = useRef<HTMLDivElement | null>(null);
+  const rewriteSectionRef = useRef<HTMLElement | null>(null);
+  const rewriteContentRef = useRef<HTMLDivElement | null>(null);
   const [showRewrite, setShowRewrite] = useState(false);
+  const [showRewriteButton, setShowRewriteButton] = useState(false);
+  const [rewriteState, setRewriteState] = useState<"idle" | "working">("idle");
 
   useEffect(() => {
     setShowRewrite(false);
+    setShowRewriteButton(false);
+    setRewriteState("idle");
+
+    const id = setTimeout(() => {
+      setShowRewriteButton(true);
+    }, 700);
+
+    return () => clearTimeout(id);
   }, [content]);
 
   if (!hasStructured) {
@@ -342,10 +422,23 @@ function StructuredAssistantMessage({
   const debrief = sections.debrief?.trim();
 
   const revealRewrite = () => {
-    setShowRewrite(true);
     setTimeout(() => {
-      rewriteRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 80);
+      setShowRewrite(true);
+      setTimeout(() => {
+        rewriteSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+    }, 300);
+  };
+
+  const handleRewriteClick = () => {
+    setRewriteState("working");
+    setTimeout(() => {
+      revealRewrite();
+    }, 450);
+  };
+
+  const copyRewriteRich = async () => {
+    await copyElementRich(rewriteContentRef.current);
   };
 
   return (
@@ -357,17 +450,26 @@ function StructuredAssistantMessage({
           </h2>
           <div className="mt-3">{renderMR(summary)}</div>
 
-          {rewrite && !showRewrite ? (
-            <div className="mt-5">
+          {rewrite && !showRewrite && showRewriteButton ? (
+            <div
+              className={classNames(
+                "mt-5 transition-all duration-500",
+                showRewriteButton ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+              )}
+            >
               <button
-                onClick={revealRewrite}
-                className="rounded-xl border px-6 py-3 text-sm font-semibold text-black transition hover:brightness-110"
+                onClick={handleRewriteClick}
+                data-copy-ui="true"
+                className={classNames(
+                  "rounded-xl border px-6 py-3 text-sm font-semibold tracking-wide text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]",
+                  rewriteState === "working" && "animate-pulse"
+                )}
                 style={{
                   backgroundColor: MR_GOLD,
                   borderColor: MR_GOLD,
                 }}
               >
-                Rewrite
+                {rewriteState === "working" ? "Rewriting…" : "Rewrite"}
               </button>
             </div>
           ) : null}
@@ -379,7 +481,9 @@ function StructuredAssistantMessage({
           <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-neutral-300 marker:hidden">
             <div className="flex items-center justify-between gap-4">
               <span>Editor’s Notes in Depth</span>
-              <span className="text-xs uppercase tracking-widest text-neutral-500">Click to expand</span>
+              <span className="text-xs uppercase tracking-widest text-neutral-500">
+                Click to expand
+              </span>
             </div>
           </summary>
           <div className="border-t border-neutral-800 px-4 py-4">
@@ -390,11 +494,17 @@ function StructuredAssistantMessage({
 
       {rewrite && showRewrite ? (
         <section
-          ref={rewriteRef}
-          className="rounded-2xl border border-neutral-800 bg-neutral-950/70 px-4 py-5"
+          ref={rewriteSectionRef}
+          className={classNames(
+            "rounded-2xl border border-neutral-800 bg-neutral-950/70 px-4 py-5 transition-all duration-500",
+            showRewrite ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+          )}
         >
           <div
-            className="mb-6 h-[2px] w-full rounded-full"
+            className={classNames(
+              "mb-6 h-[2px] rounded-full transition-all duration-500",
+              showRewrite ? "w-full opacity-100" : "w-0 opacity-0"
+            )}
             style={{ backgroundColor: MR_GOLD }}
           />
 
@@ -407,7 +517,8 @@ function StructuredAssistantMessage({
             </h2>
 
             <button
-              onClick={() => onCopyText(rewrite)}
+              onClick={copyRewriteRich}
+              data-copy-ui="true"
               className="rounded-xl border px-3 py-2 text-sm font-semibold transition"
               style={{
                 color: MR_GOLD,
@@ -424,7 +535,15 @@ function StructuredAssistantMessage({
             </button>
           </div>
 
-          <div>{renderMR(rewrite)}</div>
+          <div
+            ref={rewriteContentRef}
+            className={classNames(
+              "transition-all duration-700 delay-100",
+              showRewrite ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+            )}
+          >
+            {renderMR(rewrite)}
+          </div>
         </section>
       ) : null}
 
@@ -440,10 +559,6 @@ function StructuredAssistantMessage({
   );
 }
 
-/**
- * Dev-only command parser.
- * - "/h <text>" or "/heresy <text>" => MR Heresy mode
- */
 function parseCommand(raw: string): { mode: "general" | "mr_heresy"; content: string } {
   const text = raw.trim();
   if (!text) return { mode: "general", content: "" };
@@ -462,6 +577,7 @@ export default function Home() {
   const [draft, setDraft] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const messageContentRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const canSend = useMemo(() => draft.trim().length > 0 && !isLoading, [draft, isLoading]);
 
@@ -476,31 +592,40 @@ export default function Home() {
     scrollToBottom();
   }, [messages.length]);
 
-  async function onCopyText(text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {}
-  }
-
   async function onCopyMessage(index: number) {
-    const msg = messages[index];
-    if (!msg) return;
-    if (msg.role === "assistant" && msg.content === THINKING_TOKEN) return;
-    await onCopyText(msg.content);
+    const el = messageContentRefs.current[index] ?? null;
+    await copyElementRich(el);
   }
 
   async function onCopyAll() {
     if (messages.length === 0) return;
-    const lines = messages
-      .filter((m) => !(m.role === "assistant" && m.content === THINKING_TOKEN))
-      .map((m) => `${m.role === "user" ? "You" : "MR"}: ${m.content}`);
-    await onCopyText(lines.join("\n\n"));
+
+    const wrapper = document.createElement("div");
+
+    messages.forEach((m, i) => {
+      if (m.role === "assistant" && m.content === THINKING_TOKEN) return;
+
+      const el = messageContentRefs.current[i];
+      if (!el) return;
+
+      const block = document.createElement("div");
+      block.style.marginBottom = "24px";
+
+      const body = document.createElement("div");
+      body.innerHTML = el.innerHTML;
+
+      block.appendChild(body);
+      wrapper.appendChild(block);
+    });
+
+    await copyElementRich(wrapper);
   }
 
   function onClear() {
     if (isLoading) return;
     setMessages([]);
     setDraft("");
+    messageContentRefs.current = {};
   }
 
   async function onSend() {
@@ -515,7 +640,10 @@ export default function Home() {
       setMessages((m) => [
         ...m,
         { role: "user", content: raw.trim() },
-        { role: "assistant", content: "Heresy mode: paste the text after /h (e.g. “/h <paste text>”)." },
+        {
+          role: "assistant",
+          content: "Heresy mode: paste the text after /h (e.g. “/h <paste text>”).",
+        },
       ]);
       return;
     }
@@ -589,7 +717,9 @@ export default function Home() {
       <div className="mx-auto w-full max-w-3xl px-4 py-10">
         <header className="mb-6 flex items-center justify-between">
           <div>
-            <div className="text-2xl font-semibold tracking-tight">Multirrupt - GRAVITAS</div>
+            <div className="text-2xl font-semibold tracking-tight">
+              Multirrupt - GRAVITAS
+            </div>
             <div className="mt-1 text-sm text-neutral-400">
               Narrative engineering for persuasion, clarity, and conversion.
             </div>
@@ -598,6 +728,7 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <button
               onClick={onCopyAll}
+              data-copy-ui="true"
               disabled={messages.length === 0}
               className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
             >
@@ -605,6 +736,7 @@ export default function Home() {
             </button>
             <button
               onClick={onClear}
+              data-copy-ui="true"
               disabled={messages.length === 0 || isLoading}
               className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
             >
@@ -631,7 +763,8 @@ export default function Home() {
           ) : (
             <div className="space-y-4">
               {messages.map((m, i) => {
-                const isThinking = m.role === "assistant" && m.content === THINKING_TOKEN;
+                const isThinking =
+                  m.role === "assistant" && m.content === THINKING_TOKEN;
 
                 return (
                   <div
@@ -645,12 +778,16 @@ export default function Home() {
                           : "border-neutral-800 bg-neutral-900/20"
                     )}
                   >
-                    <div className="mb-3 flex items-center justify-between">
+                    <div
+                      data-copy-ui="true"
+                      className="mb-3 flex items-center justify-between"
+                    >
                       <div className="text-xs uppercase tracking-widest text-neutral-400">
                         {m.role === "user" ? "You" : "MR"}
                       </div>
                       <button
                         onClick={() => onCopyMessage(i)}
+                        data-copy-ui="true"
                         disabled={isThinking}
                         className="rounded-lg border border-neutral-700 px-2 py-1 text-xs hover:bg-neutral-800 disabled:text-neutral-600"
                       >
@@ -658,11 +795,16 @@ export default function Home() {
                       </button>
                     </div>
 
-                    <div className="text-[17px] leading-7">
+                    <div
+                      ref={(el) => {
+                        messageContentRefs.current[i] = el;
+                      }}
+                      className="text-[17px] leading-7"
+                    >
                       {isThinking ? (
-                        <span className="italic text-emerald-200/80">Thinking…</span>
+                        <ThinkingStatus />
                       ) : m.role === "assistant" ? (
-                        <StructuredAssistantMessage content={m.content} onCopyText={onCopyText} />
+                        <StructuredAssistantMessage content={m.content} />
                       ) : (
                         renderMR(m.content)
                       )}
@@ -685,6 +827,7 @@ export default function Home() {
             />
             <button
               onClick={onSend}
+              data-copy-ui="true"
               disabled={!canSend}
               className="h-[56px] rounded-xl bg-neutral-100 px-5 text-sm font-semibold text-neutral-950 hover:bg-white disabled:bg-neutral-800 disabled:text-neutral-500"
             >
