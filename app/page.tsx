@@ -721,7 +721,7 @@ export default function Home() {
               Multirrupt - GRAVITAS
             </div>
             <div className="mt-1 text-sm text-neutral-400">
-              Narrative engineering for persuasion, clarity, and conversion.
+             Narrative Intelligence for Momentum, Clarity, Flow, and Audience Perception.
             </div>
           </div>
 
@@ -757,7 +757,7 @@ export default function Home() {
                 <span className="text-neutral-400">Shift+Enter</span> makes a new line.
               </div>
               <div className="mt-2 text-neutral-700">
-                Dev: type <span className="text-neutral-400">/h</span> at the start of a message to run MR Heresy mode.
+                
               </div>
             </div>
           ) : (
