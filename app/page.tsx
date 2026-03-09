@@ -364,9 +364,9 @@ function ThinkingStatus() {
     const nextDelay = () => {
       const roll = Math.random();
 
-      if (roll < 0.15) return 2800 + Math.floor(Math.random() * 300); // occasional long pause
-      if (roll < 0.75) return 1600 + Math.floor(Math.random() * 900); // most common
-      return 1000 + Math.floor(Math.random() * 700); // occasional quicker hop
+      if (roll < 0.15) return 2800 + Math.floor(Math.random() * 300);
+      if (roll < 0.75) return 1600 + Math.floor(Math.random() * 900);
+      return 1000 + Math.floor(Math.random() * 700);
     };
 
     const scheduleNext = () => {
@@ -399,11 +399,13 @@ function StructuredAssistantMessage({
   const [showRewrite, setShowRewrite] = useState(false);
   const [showRewriteButton, setShowRewriteButton] = useState(false);
   const [rewriteState, setRewriteState] = useState<"idle" | "working">("idle");
+  const [rewriteCopied, setRewriteCopied] = useState(false);
 
   useEffect(() => {
     setShowRewrite(false);
     setShowRewriteButton(false);
     setRewriteState("idle");
+    setRewriteCopied(false);
 
     const id = setTimeout(() => {
       setShowRewriteButton(true);
@@ -439,6 +441,10 @@ function StructuredAssistantMessage({
 
   const copyRewriteRich = async () => {
     await copyElementRich(rewriteContentRef.current);
+    setRewriteCopied(true);
+    setTimeout(() => {
+      setRewriteCopied(false);
+    }, 2000);
   };
 
   return (
@@ -531,7 +537,7 @@ function StructuredAssistantMessage({
                 e.currentTarget.style.backgroundColor = "transparent";
               }}
             >
-              Copy rewrite
+              {rewriteCopied ? "✓ Copied" : "Copy rewrite"}
             </button>
           </div>
 
@@ -543,6 +549,26 @@ function StructuredAssistantMessage({
             )}
           >
             {renderMR(rewrite)}
+          </div>
+
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={copyRewriteRich}
+              data-copy-ui="true"
+              className="rounded-xl border px-3 py-2 text-sm font-semibold transition"
+              style={{
+                color: MR_GOLD,
+                borderColor: `${MR_GOLD}99`,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = `${MR_GOLD}1A`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "transparent";
+              }}
+            >
+              {rewriteCopied ? "✓ Copied" : "Copy rewrite"}
+            </button>
           </div>
         </section>
       ) : null}
@@ -576,6 +602,8 @@ export default function Home() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [copiedAll, setCopiedAll] = useState(false);
+  const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const messageContentRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
@@ -595,6 +623,10 @@ export default function Home() {
   async function onCopyMessage(index: number) {
     const el = messageContentRefs.current[index] ?? null;
     await copyElementRich(el);
+    setCopiedMessageIndex(index);
+    setTimeout(() => {
+      setCopiedMessageIndex((current) => (current === index ? null : current));
+    }, 2000);
   }
 
   async function onCopyAll() {
@@ -619,12 +651,18 @@ export default function Home() {
     });
 
     await copyElementRich(wrapper);
+    setCopiedAll(true);
+    setTimeout(() => {
+      setCopiedAll(false);
+    }, 2000);
   }
 
   function onClear() {
     if (isLoading) return;
     setMessages([]);
     setDraft("");
+    setCopiedAll(false);
+    setCopiedMessageIndex(null);
     messageContentRefs.current = {};
   }
 
@@ -732,7 +770,7 @@ export default function Home() {
               disabled={messages.length === 0}
               className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
             >
-              Copy all
+              {copiedAll ? "✓ Copied" : "Copy all"}
             </button>
             <button
               onClick={onClear}
@@ -756,9 +794,7 @@ export default function Home() {
                 Tip: <span className="text-neutral-400">Enter</span> sends,{" "}
                 <span className="text-neutral-400">Shift+Enter</span> makes a new line.
               </div>
-              <div className="mt-2 text-neutral-700">
-                
-              </div>
+              <div className="mt-2 text-neutral-700"></div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -791,7 +827,7 @@ export default function Home() {
                         disabled={isThinking}
                         className="rounded-lg border border-neutral-700 px-2 py-1 text-xs hover:bg-neutral-800 disabled:text-neutral-600"
                       >
-                        Copy
+                        {copiedMessageIndex === i ? "✓ Copied" : "Copy"}
                       </button>
                     </div>
 
