@@ -11,7 +11,37 @@ export default function LoginPage() {
   useEffect(() => {
     let mounted = true;
 
+    async function hydrateFromHash() {
+      const hash = window.location.hash.startsWith("#")
+        ? window.location.hash.slice(1)
+        : "";
+
+      if (!hash) return false;
+
+      const params = new URLSearchParams(hash);
+      const access_token = params.get("access_token");
+      const refresh_token = params.get("refresh_token");
+
+      if (access_token && refresh_token) {
+        const { error } = await supabase.auth.setSession({
+          access_token,
+          refresh_token,
+        });
+
+        if (!error) {
+          window.history.replaceState({}, "", "/login");
+          window.location.href = "/";
+          return true;
+        }
+      }
+
+      return false;
+    }
+
     async function checkSession() {
+      const handledHash = await hydrateFromHash();
+      if (handledHash) return;
+
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -26,6 +56,8 @@ export default function LoginPage() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+
       if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
         window.location.href = "/";
       }
