@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -8,13 +8,27 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
 
+  useEffect(() => {
+    async function checkSession() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session) {
+        window.location.href = "/";
+      }
+    }
+
+    checkSession();
+  }, [supabase]);
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback` ,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
 
@@ -29,14 +43,14 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-neutral-950 px-4 text-neutral-100">
       <div className="w-full max-w-sm">
         <div className="mb-10 flex justify-center">
-  <div className="rounded-md bg-white/90 px-4 py-2">
-    <img
-      src="/MR_Logo1.png"
-      alt="Multirrupt"
-      style={{ width: "280px", height: "auto" }}
-    />
-  </div>
-</div>
+          <div className="rounded-md bg-white/90 px-4 py-2">
+            <img
+              src="/MR_Logo1.png"
+              alt="Multirrupt"
+              style={{ width: "280px", height: "auto" }}
+            />
+          </div>
+        </div>
 
         <form
           onSubmit={handleLogin}
