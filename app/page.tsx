@@ -1,14 +1,51 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 type Msg = { role: "user" | "assistant"; content: string };
+type CopyFormat = "email" | "landing" | "social" | "document";
+type RewriteVariant = {
+  id: string;
+  label: string;
+  content: string;
+  copyFormat: CopyFormat;
+};
 
 const THINKING_TOKEN = "__MR_THINKING__";
 const MR_GOLD = "#C6A75A";
 
 function classNames(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
+}
+
+function getSavedCopyFormat(): CopyFormat {
+  if (typeof window === "undefined") return "email";
+  const saved = window.localStorage.getItem("mr-copy-format");
+  if (
+    saved === "email" ||
+    saved === "landing" ||
+    saved === "social" ||
+    saved === "document"
+  ) {
+    return saved;
+  }
+  return "email";
+}
+
+function makeRewriteLabel(index: number) {
+  const letters = ["Version A", "Version B", "Version C"];
+  return letters[index] || `Version ${index + 1}`;
+}
+
+function makeRewriteVariant(content: string, index: number): RewriteVariant {
+  return {
+    id: `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+    label: makeRewriteLabel(index),
+    content,
+    copyFormat: getSavedCopyFormat(),
+  };
 }
 
 async function copyElementRich(element: HTMLElement | null) {
@@ -38,6 +75,115 @@ async function copyElementRich(element: HTMLElement | null) {
     }
   } catch {
     await navigator.clipboard.writeText(clone.innerText);
+  }
+}
+
+function escapeHtml(text: string) {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function normalizeCopyText(text: string) {
+  return text.replace(/\r\n/g, "\n").trim();
+}
+
+function formatForEmail(text: string) {
+  return normalizeCopyText(text)
+
+    // remove markdown emphasis
+    .replace(/\*\*([\s\S]+?)\*\*/g, "$1")
+    .replace(/\*([\s\S]+?)\*/g, "$1")
+    .replace(/__([\s\S]+?)__/g, "$1")
+    .replace(/_([\s\S]+?)_/g, "$1")
+
+    // normalize dash spacing
+    .replace(/\s*[—–]\s*/g, " - ")
+    .replace(/−/g, "-")
+
+    // collapse excessive spacing
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function formatForLanding(text: string) {
+  return normalizeCopyText(text)
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]+\n/g, "\n");
+}
+
+function formatForSocial(text: string) {
+  return normalizeCopyText(text)
+    .replace(/\. +/g, ".\n\n")
+    .replace(/\?\s+/g, "?\n\n")
+    .replace(/!\s+/g, "!\n\n")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+function formatForDocument(text: string) {
+  return normalizeCopyText(text)
+    .replace(/\*\*([\s\S]+?)\*\*/g, "$1")
+    .replace(/\*([\s\S]+?)\*/g, "$1")
+    .replace(/__([\s\S]+?)__/g, "$1")
+    .replace(/_([\s\S]+?)_/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/([^\n])\n([^\n])/g, "$1 $2")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function formatRewriteForCopy(text: string, format: CopyFormat) {
+  switch (format) {
+    case "landing":
+      return formatForLanding(text);
+    case "social":
+      return formatForSocial(text);
+    case "document":
+      return formatForDocument(text);
+    case "email":
+    default:
+      return formatForEmail(text);
+  }
+}
+
+function textToHtmlParagraphs(text: string) {
+  return text
+    .split(/\n{2,}/)
+    .map((paragraph) => {
+      const safe = escapeHtml(paragraph).replace(/\n/g, "<br>");
+      return `<p>${safe}</p>`;
+    })
+    .join("");
+}
+
+async function copyFormattedTextRich(text: string, format: CopyFormat) {
+  const formatted = formatRewriteForCopy(text, format);
+  const html = textToHtmlParagraphs(formatted);
+
+  try {
+    if (
+      navigator.clipboard &&
+      "write" in navigator.clipboard &&
+      typeof ClipboardItem !== "undefined"
+    ) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": new Blob([html], {
+            type: "text/html",
+          }),
+          "text/plain": new Blob([formatted], {
+            type: "text/plain",
+          }),
+        }),
+      ]);
+    } else {
+      await navigator.clipboard.writeText(formatted);
+    }
+  } catch {
+    await navigator.clipboard.writeText(formatted);
   }
 }
 
@@ -285,7 +431,7 @@ function renderMR(content: string) {
                 ? "text-[20px] font-semibold"
                 : "text-[18px] font-semibold";
 
-          const Tag = (`h${level}` as keyof React.JSX.IntrinsicElements);
+          const Tag = `h${level}` as keyof React.JSX.IntrinsicElements;
 
           return (
             <Tag
@@ -353,6 +499,7 @@ function ThinkingStatus() {
     "Examining audience perception…",
     "Mapping argument coherence…",
     "Reviewing emotional cadence…",
+    "Analysing Momentum…",
   ];
 
   const [idx, setIdx] = useState(0);
@@ -390,38 +537,75 @@ function ThinkingStatus() {
 
 function StructuredAssistantMessage({
   content,
+  sourceRaw,
 }: {
   content: string;
+  sourceRaw: string;
 }) {
   const { hasStructured, sections } = useMemo(() => parseStructuredMR(content), [content]);
   const rewriteSectionRef = useRef<HTMLElement | null>(null);
-  const rewriteContentRef = useRef<HTMLDivElement | null>(null);
+  const newestRewriteRef = useRef<HTMLDivElement | null>(null);
   const [showRewrite, setShowRewrite] = useState(false);
   const [showRewriteButton, setShowRewriteButton] = useState(false);
   const [rewriteState, setRewriteState] = useState<"idle" | "working">("idle");
-  const [rewriteCopied, setRewriteCopied] = useState(false);
+  const [copiedRewriteId, setCopiedRewriteId] = useState<string | null>(null);
+  const [rewrites, setRewrites] = useState<RewriteVariant[]>([]);
+  const [isGeneratingAlternate, setIsGeneratingAlternate] = useState(false);
+
+  const summary = sections.summary?.trim();
+  const depth = sections.depth?.trim();
+  const rewrite = sections.rewrite?.trim();
+  const debrief = sections.debrief?.trim();
 
   useEffect(() => {
     setShowRewrite(false);
     setShowRewriteButton(false);
     setRewriteState("idle");
-    setRewriteCopied(false);
+    setCopiedRewriteId(null);
+    setIsGeneratingAlternate(false);
+
+    if (rewrite) {
+      setRewrites([makeRewriteVariant(rewrite, 0)]);
+    } else {
+      setRewrites([]);
+    }
 
     const id = setTimeout(() => {
       setShowRewriteButton(true);
     }, 700);
 
     return () => clearTimeout(id);
-  }, [content]);
+  }, [content, rewrite]);
 
-  if (!hasStructured) {
-    return <div className="text-[17px] leading-7">{renderMR(content)}</div>;
+  useEffect(() => {
+    if (showRewrite && rewrites.length > 1) {
+      setTimeout(() => {
+        newestRewriteRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 120);
+    }
+  }, [rewrites.length, showRewrite]);
+
+  function handleFormatChange(rewriteId: string, value: CopyFormat) {
+    window.localStorage.setItem("mr-copy-format", value);
+    setRewrites((prev) =>
+      prev.map((rw) =>
+        rw.id === rewriteId ? { ...rw, copyFormat: value } : rw
+      )
+    );
   }
 
-  const summary = sections.summary?.trim();
-  const depth = sections.depth?.trim();
-  const rewrite = sections.rewrite?.trim();
-  const debrief = sections.debrief?.trim();
+  function formatLabel(format: CopyFormat) {
+    return format === "landing"
+      ? "Landing Page"
+      : format === "social"
+        ? "Social"
+        : format === "document"
+          ? "Document"
+          : "Email";
+  }
 
   const revealRewrite = () => {
     setTimeout(() => {
@@ -439,13 +623,69 @@ function StructuredAssistantMessage({
     }, 450);
   };
 
-  const copyRewriteRich = async () => {
-    await copyElementRich(rewriteContentRef.current);
-    setRewriteCopied(true);
+  async function handleCopyRewrite(variant: RewriteVariant) {
+    await copyFormattedTextRich(variant.content, variant.copyFormat);
+    setCopiedRewriteId(variant.id);
     setTimeout(() => {
-      setRewriteCopied(false);
+      setCopiedRewriteId((current) => (current === variant.id ? null : current));
     }, 2000);
-  };
+  }
+
+  async function handleRewriteAgain() {
+    if (rewrites.length >= 3 || isGeneratingAlternate) return;
+
+    const parsed = parseCommand(sourceRaw);
+    if (!parsed.content.trim()) return;
+
+    setIsGeneratingAlternate(true);
+
+    const alternateInstruction =
+      "Provide only a fresh alternate rewrite of this same original text. Do not include summary, diagnosis, notes, headings, labels, or debrief. Return only the rewritten copy.";
+
+    const payload =
+      parsed.mode === "mr_heresy"
+        ? {
+            mode: "mr_heresy",
+            input: " ",
+            context: `${alternateInstruction}\n\nApply Multirrupt Mode to the following text:\n\n${parsed.content}`,
+            constraints: {},
+          }
+        : {
+            mode: "general",
+            input: parsed.content,
+            context: alternateInstruction,
+            constraints: {},
+          };
+
+    try {
+      const res = await fetch("/api/mr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      const rawOutput = (data.output || "").trim();
+      if (!rawOutput) return;
+
+      const parsedAlt = parseStructuredMR(rawOutput);
+      const alternateRewrite =
+        parsedAlt.sections.rewrite?.trim() || rawOutput;
+
+      setRewrites((prev) => {
+        if (prev.length >= 3) return prev;
+        return [...prev, makeRewriteVariant(alternateRewrite, prev.length)];
+      });
+    } catch {
+      // no-op for now
+    } finally {
+      setIsGeneratingAlternate(false);
+    }
+  }
+
+  if (!hasStructured) {
+    return <div className="text-[17px] leading-7">{renderMR(content)}</div>;
+  }
 
   return (
     <div className="space-y-5">
@@ -498,7 +738,7 @@ function StructuredAssistantMessage({
         </details>
       ) : null}
 
-      {rewrite && showRewrite ? (
+      {showRewrite && rewrites.length > 0 ? (
         <section
           ref={rewriteSectionRef}
           className={classNames(
@@ -506,70 +746,107 @@ function StructuredAssistantMessage({
             showRewrite ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
           )}
         >
-          <div
-            className={classNames(
-              "mb-6 h-[2px] rounded-full transition-all duration-500",
-              showRewrite ? "w-full opacity-100" : "w-0 opacity-0"
-            )}
-            style={{ backgroundColor: MR_GOLD }}
-          />
-
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2
-              className="text-[20px] font-semibold tracking-tight"
-              style={{ color: MR_GOLD }}
-            >
-              Rewrite
-            </h2>
-
-            <button
-              onClick={copyRewriteRich}
-              data-copy-ui="true"
-              className="rounded-xl border px-3 py-2 text-sm font-semibold transition"
-              style={{
-                color: MR_GOLD,
-                borderColor: `${MR_GOLD}99`,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = `${MR_GOLD}1A`;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "transparent";
-              }}
-            >
-              {rewriteCopied ? "✓ Copied" : "Copy rewrite"}
-            </button>
-          </div>
-
-          <div
-            ref={rewriteContentRef}
-            className={classNames(
-              "transition-all duration-700 delay-100",
-              showRewrite ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
-            )}
+          <h2
+            className="mb-2 text-[20px] font-semibold tracking-tight"
+            style={{ color: MR_GOLD }}
           >
-            {renderMR(rewrite)}
-          </div>
+            Rewrite
+          </h2>
 
-          <div className="mt-6 flex justify-end">
-            <button
-              onClick={copyRewriteRich}
-              data-copy-ui="true"
-              className="rounded-xl border px-3 py-2 text-sm font-semibold transition"
-              style={{
-                color: MR_GOLD,
-                borderColor: `${MR_GOLD}99`,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = `${MR_GOLD}1A`;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "transparent";
-              }}
+          {rewrites.map((variant, idx) => (
+            <div
+              key={variant.id}
+              ref={idx === rewrites.length - 1 ? newestRewriteRef : null}
+              className={idx === rewrites.length - 1 ? "" : "mb-10"}
             >
-              {rewriteCopied ? "✓ Copied" : "Copy rewrite"}
-            </button>
-          </div>
+              <div
+                className="mb-6 h-[2px] rounded-full"
+                style={{ backgroundColor: MR_GOLD }}
+              />
+
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3
+                  className="text-[20px] font-semibold tracking-tight"
+                  style={{ color: MR_GOLD }}
+                >
+                  {variant.label}
+                </h3>
+
+                <div className="flex items-center gap-2" data-copy-ui="true">
+                  <button
+                    onClick={() => handleCopyRewrite(variant)}
+                    className="rounded-xl border px-4 py-2 text-sm font-semibold text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
+                    style={{
+                      backgroundColor: MR_GOLD,
+                      borderColor: MR_GOLD,
+                    }}
+                  >
+                    {copiedRewriteId === variant.id
+                      ? `✓ Copied (${formatLabel(variant.copyFormat)})`
+                      : "Copy Rewrite"}
+                  </button>
+
+                  <label className="sr-only" htmlFor={`mr-copy-format-${variant.id}`}>
+                    Copy format
+                  </label>
+                  <select
+                    id={`mr-copy-format-${variant.id}`}
+                    value={variant.copyFormat}
+                    onChange={(e) =>
+                      handleFormatChange(variant.id, e.target.value as CopyFormat)
+                    }
+                    className="h-[42px] rounded-xl border border-neutral-800 bg-neutral-900 px-3 pr-8 text-sm font-medium text-neutral-200 outline-none transition hover:border-neutral-600 focus:border-neutral-500 appearance-none"
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(45deg, transparent 50%, #a3a3a3 50%), linear-gradient(135deg, #a3a3a3 50%, transparent 50%)",
+                      backgroundPosition:
+                        "calc(100% - 18px) calc(50% - 3px), calc(100% - 12px) calc(50% - 3px)",
+                      backgroundSize: "6px 6px, 6px 6px",
+                      backgroundRepeat: "no-repeat",
+                    }}
+                  >
+                    <option value="email">Email</option>
+                    <option value="landing">Landing Page</option>
+                    <option value="social">Social</option>
+                    <option value="document">Document</option>
+                  </select>
+                </div>
+              </div>
+
+              <div
+                className={classNames(
+                  "transition-all duration-700 delay-100",
+                  showRewrite ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+                )}
+              >
+                {renderMR(variant.content)}
+              </div>
+            </div>
+          ))}
+
+          {rewrites.length < 3 ? (
+            <div className="mt-8 flex justify-start" data-copy-ui="true">
+              <button
+                onClick={handleRewriteAgain}
+                className={classNames(
+                  "rounded-xl border px-4 py-2 text-sm font-semibold transition",
+                  isGeneratingAlternate && "animate-pulse"
+                )}
+                style={{
+                  color: MR_GOLD,
+                  borderColor: `${MR_GOLD}99`,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = `${MR_GOLD}1A`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                }}
+              >
+                {isGeneratingAlternate ? "Rewriting…" : "Rewrite Again"}
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -604,8 +881,12 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
+  const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const messageContentRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const router = useRouter();
+  const supabase = createClient();
+  const sendLockRef = useRef(false);
 
   const canSend = useMemo(() => draft.trim().length > 0 && !isLoading, [draft, isLoading]);
 
@@ -620,6 +901,54 @@ export default function Home() {
     scrollToBottom();
   }, [messages.length]);
 
+  useEffect(() => {
+    async function checkSubscription() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setIsSubscribed(false);
+        return;
+      }
+
+      const { data } = await supabase
+        .from("subscriptions")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .limit(1);
+
+      setIsSubscribed(!!data && data.length > 0);
+    }
+
+    checkSubscription();
+  }, [supabase]);
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
+
+  async function handleSubscribe() {
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+      });
+
+      const data = await res.json();
+
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert("Unable to start Stripe checkout.");
+      }
+    } catch {
+      alert("Something went wrong starting checkout.");
+    }
+  }
+
   async function onCopyMessage(index: number) {
     const el = messageContentRefs.current[index] ?? null;
     await copyElementRich(el);
@@ -633,6 +962,7 @@ export default function Home() {
     if (messages.length === 0) return;
 
     const wrapper = document.createElement("div");
+    let firstVisibleBlock = true;
 
     messages.forEach((m, i) => {
       if (m.role === "assistant" && m.content === THINKING_TOKEN) return;
@@ -640,17 +970,30 @@ export default function Home() {
       const el = messageContentRefs.current[i];
       if (!el) return;
 
+      if (!firstVisibleBlock) {
+        const divider = document.createElement("div");
+        divider.innerText = "———";
+        divider.style.textAlign = "center";
+        divider.style.margin = "20px 0";
+        divider.style.color = "#666";
+        divider.style.fontSize = "14px";
+        wrapper.appendChild(divider);
+      }
+
       const block = document.createElement("div");
-      block.style.marginBottom = "24px";
+      block.style.marginBottom = "28px";
 
       const body = document.createElement("div");
       body.innerHTML = el.innerHTML;
 
       block.appendChild(body);
       wrapper.appendChild(block);
+
+      firstVisibleBlock = false;
     });
 
     await copyElementRich(wrapper);
+
     setCopiedAll(true);
     setTimeout(() => {
       setCopiedAll(false);
@@ -667,13 +1010,17 @@ export default function Home() {
   }
 
   async function onSend() {
+    if (sendLockRef.current) return;
+
     const raw = draft;
     if (!raw.trim() || isLoading) return;
 
+    sendLockRef.current = true;
     const parsed = parseCommand(raw);
     const text = parsed.content;
 
     if (!text) {
+      sendLockRef.current = false;
       setDraft("");
       setMessages((m) => [
         ...m,
@@ -738,6 +1085,7 @@ export default function Home() {
         )
       );
     } finally {
+      sendLockRef.current = false;
       setIsLoading(false);
       scrollToBottom();
     }
@@ -750,6 +1098,43 @@ export default function Home() {
     }
   }
 
+  if (isSubscribed === null) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-neutral-950 text-neutral-100">
+        Checking subscription...
+      </main>
+    );
+  }
+
+  if (!isSubscribed) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-6 text-center text-neutral-100">
+        <h1 className="mb-4 text-3xl font-semibold">Gravitas</h1>
+
+        <p className="mb-6 max-w-xl text-neutral-300">
+          Gravitas requires an active subscription.
+          Subscribe to continue using the narrative diagnostics and rewrite engine.
+        </p>
+
+        <div className="flex gap-4">
+          <button
+            onClick={handleSubscribe}
+            className="rounded bg-black px-4 py-2 text-white"
+          >
+            Subscribe
+          </button>
+
+          <button
+            onClick={handleLogout}
+            className="rounded border border-neutral-600 px-6 py-3"
+          >
+            Logout
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100">
       <div className="mx-auto w-full max-w-3xl px-4 py-10">
@@ -759,7 +1144,7 @@ export default function Home() {
               Multirrupt - GRAVITAS
             </div>
             <div className="mt-1 text-sm text-neutral-400">
-             Narrative Intelligence for Momentum, Clarity, Flow, and Audience Perception.
+              Narrative Intelligence for Momentum, Flow, and Perception.
             </div>
           </div>
 
@@ -779,6 +1164,13 @@ export default function Home() {
               className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
             >
               Clear
+            </button>
+            <button
+              onClick={handleLogout}
+              data-copy-ui="true"
+              className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900"
+            >
+              Logout
             </button>
           </div>
         </header>
@@ -801,6 +1193,10 @@ export default function Home() {
               {messages.map((m, i) => {
                 const isThinking =
                   m.role === "assistant" && m.content === THINKING_TOKEN;
+                const sourceRaw =
+                  m.role === "assistant" && i > 0 && messages[i - 1]?.role === "user"
+                    ? messages[i - 1].content
+                    : "";
 
                 return (
                   <div
@@ -840,7 +1236,10 @@ export default function Home() {
                       {isThinking ? (
                         <ThinkingStatus />
                       ) : m.role === "assistant" ? (
-                        <StructuredAssistantMessage content={m.content} />
+                        <StructuredAssistantMessage
+                          content={m.content}
+                          sourceRaw={sourceRaw}
+                        />
                       ) : (
                         renderMR(m.content)
                       )}
