@@ -9,17 +9,32 @@ export default function LoginPage() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    let mounted = true;
+
     async function checkSession() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (session) {
+      if (mounted && session) {
         window.location.href = "/";
       }
     }
 
     checkSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
+        window.location.href = "/";
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [supabase]);
 
   async function handleLogin(e: React.FormEvent) {
