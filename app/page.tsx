@@ -1028,6 +1028,11 @@ export default function Home() {
     const raw = draft;
     if (!raw.trim() || isLoading) return;
 
+    if (raw.length > 8000) {
+  alert("Please limit input to 8,000 characters.");
+  return;
+}
+
     sendLockRef.current = true;
     const parsed = parseCommand(raw);
     const text = parsed.content;
