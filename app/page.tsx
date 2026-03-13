@@ -111,16 +111,29 @@ function formatForEmail(text: string) {
 
 function formatForLanding(text: string) {
   return normalizeCopyText(text)
+    .replace(/\*\*([\s\S]+?)\*\*/g, "$1")
+    .replace(/\*([\s\S]+?)\*/g, "$1")
+    .replace(/__([\s\S]+?)__/g, "$1")
+    .replace(/_([\s\S]+?)_/g, "$1")
+    .replace(/\s*[—–]\s*/g, " - ")
+    .replace(/−/g, "-")
     .replace(/\n{3,}/g, "\n\n")
-    .replace(/[ \t]+\n/g, "\n");
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
 }
-
 function formatForSocial(text: string) {
   return normalizeCopyText(text)
+    .replace(/\*\*([\s\S]+?)\*\*/g, "$1")
+    .replace(/\*([\s\S]+?)\*/g, "$1")
+    .replace(/__([\s\S]+?)__/g, "$1")
+    .replace(/_([\s\S]+?)_/g, "$1")
+    .replace(/\s*[—–]\s*/g, " - ")
+    .replace(/−/g, "-")
     .replace(/\. +/g, ".\n\n")
     .replace(/\?\s+/g, "?\n\n")
     .replace(/!\s+/g, "!\n\n")
-    .replace(/\n{3,}/g, "\n\n");
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function formatForDocument(text: string) {
