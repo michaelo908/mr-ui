@@ -893,6 +893,9 @@ export default function Home() {
   const [demoUsed, setDemoUsed] = useState(false);
   const [demoSessionGranted, setDemoSessionGranted] = useState(false);
   const [accessResolved, setAccessResolved] = useState(false);
+  const [analysisCount, setAnalysisCount] = useState(0);
+  const [baseline, setBaseline] = useState(0);
+  const [rewriteMultiplier] = useState(() => 2 + Math.random() * 0.7);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const messageContentRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const router = useRouter();
@@ -906,6 +909,24 @@ export default function Home() {
     [draft, isLoading, isDemoLocked]
   );
 
+  function getDailyBaseline() {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const storedDate = localStorage.getItem("gravitasBaselineDate");
+    const storedValue = localStorage.getItem("gravitasBaseline");
+
+    if (storedDate === today && storedValue) {
+      return parseInt(storedValue, 10);
+    }
+
+    const randomBaseline = Math.floor(Math.random() * 160) + 320; // 320–479
+
+    localStorage.setItem("gravitasBaselineDate", today);
+    localStorage.setItem("gravitasBaseline", randomBaseline.toString());
+
+    return randomBaseline;
+  }
+
   function scrollToBottom() {
     setTimeout(() => {
       const el = scrollerRef.current;
@@ -914,61 +935,64 @@ export default function Home() {
   }
 
   useEffect(() => {
+    setBaseline(getDailyBaseline());
+  }, []);
+
+  useEffect(() => {
     scrollToBottom();
   }, [messages.length]);
 
   useEffect(() => {
-  async function checkSubscription() {
+    async function checkSubscription() {
+      setAccessResolved(false);
 
-    setAccessResolved(false);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+      if (!user) {
+        setIsSubscribed(false);
+        setDemoUsed(false);
+        setDemoSessionGranted(false);
+        setAccessResolved(true);
+        return;
+      }
 
-    if (!user) {
-      setIsSubscribed(false);
-      setDemoUsed(false);
-      setDemoSessionGranted(false);
+      const { data: subscriptionRows } = await supabase
+        .from("subscriptions")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .limit(1);
+
+      const subscribed = !!subscriptionRows && subscriptionRows.length > 0;
+      setIsSubscribed(subscribed);
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("demo_used")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!profile) {
+        await supabase.from("profiles").insert({
+          id: user.id,
+          demo_used: false,
+        });
+
+        setDemoUsed(false);
+        setDemoSessionGranted(true);
+      } else {
+        const used = profile.demo_used ?? false;
+        setDemoUsed(used);
+        setDemoSessionGranted(!used);
+      }
+
       setAccessResolved(true);
-      return;
     }
 
-    const { data: subscriptionRows } = await supabase
-      .from("subscriptions")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .limit(1);
-
-    const subscribed = !!subscriptionRows && subscriptionRows.length > 0;
-    setIsSubscribed(subscribed);
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("demo_used")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (!profile) {
-      await supabase.from("profiles").insert({
-        id: user.id,
-        demo_used: false,
-      });
-
-      setDemoUsed(false);
-      setDemoSessionGranted(true);
-    } else {
-      const used = profile.demo_used ?? false;
-      setDemoUsed(used);
-      setDemoSessionGranted(!used);
-    }
-
-    setAccessResolved(true);
-  }
-
-  checkSubscription();
-}, [supabase]);
+    checkSubscription();
+  }, [supabase]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -1127,20 +1151,22 @@ export default function Home() {
         )
       );
 
+      setAnalysisCount((prev) => prev + 1);
+
       if (isSubscribed === false) {
-  setDemoUsed(true);
+        setDemoUsed(true);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-  if (user) {
-    await supabase
-      .from("profiles")
-      .update({ demo_used: true })
-      .eq("id", user.id);
-  }
-}
+        if (user) {
+          await supabase
+            .from("profiles")
+            .update({ demo_used: true })
+            .eq("id", user.id);
+        }
+      }
     } catch {
       setMessages((m) =>
         m.map((msg) =>
@@ -1162,13 +1188,18 @@ export default function Home() {
       onSend();
     }
   }
+
+  const analysesToday = baseline + analysisCount;
+  const rewritesToday = Math.floor(analysesToday * rewriteMultiplier);
+
   if (!accessResolved) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-neutral-950 text-neutral-100">
         Checking access...
       </main>
     );
-}
+  }
+
   if (isSubscribed === null) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-neutral-950 text-neutral-100">
@@ -1178,40 +1209,41 @@ export default function Home() {
   }
 
   if (!isSubscribed && demoUsed && !demoSessionGranted) {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-6 text-center text-neutral-100">
-      <h1 className="mb-4 text-3xl font-semibold">Continue with Gravitas</h1>
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-6 text-center text-neutral-100">
+        <h1 className="mb-4 text-3xl font-semibold">Continue with Gravitas</h1>
 
-      <p className="mb-3 max-w-xl text-neutral-300">
-        Your complimentary session has been completed.
-      </p>
+        <p className="mb-3 max-w-xl text-neutral-300">
+          Your complimentary session has been completed.
+        </p>
 
-      <p className="mb-6 max-w-xl text-neutral-300">
-        Subscribe to continue using the Multirrupt narrative diagnostics and rewrite engine.
-      </p>
+        <p className="mb-6 max-w-xl text-neutral-300">
+          Subscribe to continue using the Multirrupt narrative diagnostics and rewrite engine.
+        </p>
 
-      <p className="mb-8 max-w-xl text-sm text-neutral-400">
-        Analyse any message. Generate three rewrite versions instantly.
-      </p>
+        <p className="mb-8 max-w-xl text-sm text-neutral-400">
+          Analyse any message. Generate three rewrite versions instantly.
+        </p>
 
-      <div className="flex gap-4">
-        <button
-          onClick={handleSubscribe}
-          className="rounded bg-black px-4 py-2 text-white"
-        >
-          Subscribe
-        </button>
+        <div className="flex gap-4">
+          <button
+            onClick={handleSubscribe}
+            className="rounded bg-black px-4 py-2 text-white"
+          >
+            Subscribe
+          </button>
 
-        <button
-          onClick={handleLogout}
-          className="rounded border border-neutral-600 px-6 py-3"
-        >
-          Logout
-        </button>
-      </div>
-    </main>
-  );
-}
+          <button
+            onClick={handleLogout}
+            className="rounded border border-neutral-600 px-6 py-3"
+          >
+            Logout
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100">
       <div className="mx-auto w-full max-w-3xl px-4 py-10">
@@ -1223,47 +1255,50 @@ export default function Home() {
             <div className="mt-1 text-sm text-neutral-400">
               Narrative Intelligence for Momentum, Flow, and Perception.
             </div>
+            <div className="mt-1 text-xs text-neutral-500">
+              Messages analysed today: {analysesToday} · Rewrites produced today: {rewritesToday}
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
-  {isSubscribed === false ? (
-    <button
-      onClick={handleSubscribe}
-      data-copy-ui="true"
-      className="rounded-xl border px-3 py-2 text-sm font-semibold text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
-      style={{
-        backgroundColor: MR_GOLD,
-        borderColor: MR_GOLD,
-      }}
-    >
-      Subscribe
-    </button>
-  ) : null}
+            {isSubscribed === false ? (
+              <button
+                onClick={handleSubscribe}
+                data-copy-ui="true"
+                className="rounded-xl border px-3 py-2 text-sm font-semibold text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
+                style={{
+                  backgroundColor: MR_GOLD,
+                  borderColor: MR_GOLD,
+                }}
+              >
+                Subscribe
+              </button>
+            ) : null}
 
-  <button
-    onClick={onCopyAll}
-    data-copy-ui="true"
-    disabled={messages.length === 0}
-    className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
-  >
-    {copiedAll ? "✓ Copied" : "Copy all"}
-  </button>
-  <button
-    onClick={onClear}
-    data-copy-ui="true"
-    disabled={messages.length === 0 || isLoading}
-    className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
-  >
-    Clear
-  </button>
-  <button
-    onClick={handleLogout}
-    data-copy-ui="true"
-    className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900"
-  >
-    Logout
-  </button>
-</div>
+            <button
+              onClick={onCopyAll}
+              data-copy-ui="true"
+              disabled={messages.length === 0}
+              className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
+            >
+              {copiedAll ? "✓ Copied" : "Copy all"}
+            </button>
+            <button
+              onClick={onClear}
+              data-copy-ui="true"
+              disabled={messages.length === 0 || isLoading}
+              className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
+            >
+              Clear
+            </button>
+            <button
+              onClick={handleLogout}
+              data-copy-ui="true"
+              className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900"
+            >
+              Logout
+            </button>
+          </div>
         </header>
 
         <div
