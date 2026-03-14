@@ -891,6 +891,7 @@ export default function Home() {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
   const [demoUsed, setDemoUsed] = useState(false);
+  const [demoSessionGranted, setDemoSessionGranted] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const messageContentRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const router = useRouter();
@@ -944,16 +945,17 @@ export default function Home() {
     .maybeSingle();
 
   if (!profile) {
-    // create profile row
-    await supabase.from("profiles").insert({
-      id: user.id,
-      demo_used: false,
-    });
+  await supabase.from("profiles").insert({
+    id: user.id,
+    demo_used: false,
+  });
 
-    setDemoUsed(false);
-  } else {
-    setDemoUsed(profile.demo_used ?? false);
-  }
+  setDemoUsed(false);
+  setDemoSessionGranted(true);
+} else {
+  const used = profile.demo_used ?? false;
+  setDemoUsed(used);
+  setDemoSessionGranted(!used);
 }
 
     checkSubscription();
@@ -1160,7 +1162,7 @@ export default function Home() {
     );
   }
 
-  if (!isSubscribed && demoUsed) {
+  if (!isSubscribed && demoUsed && !demoSessionGranted) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-6 text-center text-neutral-100">
         <h1 className="mb-4 text-3xl font-semibold">Gravitas</h1>
