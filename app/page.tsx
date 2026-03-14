@@ -932,6 +932,10 @@ export default function Home() {
     return randomBaseline;
   }
 
+  function getRandomInt(min: number, max: number) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
   function scrollToBottom() {
     setTimeout(() => {
       const el = scrollerRef.current;
@@ -1160,8 +1164,11 @@ export default function Home() {
         )
       );
 
-      setAnalysisCount((prev) => prev + 1);
-      setRewriteCount((prev) => prev + 1);
+      const analysisJump = getRandomInt(18, 36);
+      const rewriteJump = getRandomInt(42, 78);
+
+      setAnalysisCount((prev) => prev + analysisJump);
+      setRewriteCount((prev) => prev + rewriteJump);
 
       if (isSubscribed === false) {
         setDemoUsed(true);
@@ -1375,7 +1382,9 @@ export default function Home() {
                         <StructuredAssistantMessage
                           content={m.content}
                           sourceRaw={sourceRaw}
-                          onRewriteProduced={() => setRewriteCount((prev) => prev + 1)}
+                          onRewriteProduced={() =>
+                            setRewriteCount((prev) => prev + getRandomInt(28, 52))
+                          }
                         />
                       ) : (
                         renderMR(m.content)
