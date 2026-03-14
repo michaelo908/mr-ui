@@ -892,6 +892,7 @@ export default function Home() {
   const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
   const [demoUsed, setDemoUsed] = useState(false);
   const [demoSessionGranted, setDemoSessionGranted] = useState(false);
+  const [accessResolved, setAccessResolved] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const messageContentRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const router = useRouter();
@@ -918,6 +919,9 @@ export default function Home() {
 
   useEffect(() => {
   async function checkSubscription() {
+
+    setAccessResolved(false);
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -926,6 +930,7 @@ export default function Home() {
       setIsSubscribed(false);
       setDemoUsed(false);
       setDemoSessionGranted(false);
+      setAccessResolved(true);
       return;
     }
 
@@ -958,6 +963,8 @@ export default function Home() {
       setDemoUsed(used);
       setDemoSessionGranted(!used);
     }
+
+    setAccessResolved(true);
   }
 
   checkSubscription();
@@ -1155,7 +1162,13 @@ export default function Home() {
       onSend();
     }
   }
-
+  if (!accessResolved) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-neutral-950 text-neutral-100">
+        Checking access...
+      </main>
+    );
+}
   if (isSubscribed === null) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-neutral-950 text-neutral-100">
