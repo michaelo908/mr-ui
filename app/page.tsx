@@ -93,18 +93,12 @@ function normalizeCopyText(text: string) {
 
 function formatForEmail(text: string) {
   return normalizeCopyText(text)
-
-    // remove markdown emphasis
     .replace(/\*\*([\s\S]+?)\*\*/g, "$1")
     .replace(/\*([\s\S]+?)\*/g, "$1")
     .replace(/__([\s\S]+?)__/g, "$1")
     .replace(/_([\s\S]+?)_/g, "$1")
-
-    // normalize dash spacing
     .replace(/\s*[—–]\s*/g, " - ")
     .replace(/−/g, "-")
-
-    // collapse excessive spacing
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -121,6 +115,7 @@ function formatForLanding(text: string) {
     .replace(/[ \t]+\n/g, "\n")
     .trim();
 }
+
 function formatForSocial(text: string) {
   return normalizeCopyText(text)
     .replace(/\*\*([\s\S]+?)\*\*/g, "$1")
@@ -895,13 +890,19 @@ export default function Home() {
   const [copiedAll, setCopiedAll] = useState(false);
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
+  const [demoUsed, setDemoUsed] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const messageContentRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const router = useRouter();
   const supabase = createClient();
   const sendLockRef = useRef(false);
 
-  const canSend = useMemo(() => draft.trim().length > 0 && !isLoading, [draft, isLoading]);
+  const isDemoLocked = isSubscribed === false && demoUsed;
+
+  const canSend = useMemo(
+    () => draft.trim().length > 0 && !isLoading && !isDemoLocked,
+    [draft, isLoading, isDemoLocked]
+  );
 
   function scrollToBottom() {
     setTimeout(() => {
@@ -1026,12 +1027,12 @@ export default function Home() {
     if (sendLockRef.current) return;
 
     const raw = draft;
-    if (!raw.trim() || isLoading) return;
+    if (!raw.trim() || isLoading || isDemoLocked) return;
 
     if (raw.length > 8000) {
-  alert("Please limit input to 8,000 characters.");
-  return;
-}
+      alert("Please limit input to 8,000 characters.");
+      return;
+    }
 
     sendLockRef.current = true;
     const parsed = parseCommand(raw);
@@ -1094,6 +1095,10 @@ export default function Home() {
             : msg
         )
       );
+
+      if (isSubscribed === false) {
+        setDemoUsed(true);
+      }
     } catch {
       setMessages((m) =>
         m.map((msg) =>
@@ -1275,8 +1280,12 @@ export default function Home() {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={onKeyDown}
+              disabled={isDemoLocked}
               placeholder="Paste your text here…"
-              className="h-[56px] w-full resize-none rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-[17px] leading-7 text-neutral-100 outline-none focus:border-neutral-600"
+              className={classNames(
+                "h-[56px] w-full resize-none rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-[17px] leading-7 text-neutral-100 outline-none focus:border-neutral-600",
+                isDemoLocked && "cursor-not-allowed opacity-60"
+              )}
             />
             <button
               onClick={onSend}
