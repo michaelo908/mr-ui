@@ -917,49 +917,51 @@ export default function Home() {
   }, [messages.length]);
 
   useEffect(() => {
-    async function checkSubscription() {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  async function checkSubscription() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (!user) {
-    setIsSubscribed(false);
-    return;
+    if (!user) {
+      setIsSubscribed(false);
+      setDemoUsed(false);
+      setDemoSessionGranted(false);
+      return;
+    }
+
+    const { data: subscriptionRows } = await supabase
+      .from("subscriptions")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .limit(1);
+
+    const subscribed = !!subscriptionRows && subscriptionRows.length > 0;
+    setIsSubscribed(subscribed);
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("demo_used")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (!profile) {
+      await supabase.from("profiles").insert({
+        id: user.id,
+        demo_used: false,
+      });
+
+      setDemoUsed(false);
+      setDemoSessionGranted(true);
+    } else {
+      const used = profile.demo_used ?? false;
+      setDemoUsed(used);
+      setDemoSessionGranted(!used);
+    }
   }
 
-  // Check subscription
-  const { data } = await supabase
-    .from("subscriptions")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("status", "active")
-    .limit(1);
-
-  setIsSubscribed(!!data && data.length > 0);
-
-  // Check demo usage
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("demo_used")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (!profile) {
-  await supabase.from("profiles").insert({
-    id: user.id,
-    demo_used: false,
-  });
-
-  setDemoUsed(false);
-  setDemoSessionGranted(true);
-} else {
-  const used = profile.demo_used ?? false;
-  setDemoUsed(used);
-  setDemoSessionGranted(!used);
-}
-
-    checkSubscription();
-  }, [supabase]);
+  checkSubscription();
+}, [supabase]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
