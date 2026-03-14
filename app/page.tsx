@@ -1220,30 +1220,44 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={onCopyAll}
-              data-copy-ui="true"
-              disabled={messages.length === 0}
-              className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
-            >
-              {copiedAll ? "✓ Copied" : "Copy all"}
-            </button>
-            <button
-              onClick={onClear}
-              data-copy-ui="true"
-              disabled={messages.length === 0 || isLoading}
-              className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
-            >
-              Clear
-            </button>
-            <button
-              onClick={handleLogout}
-              data-copy-ui="true"
-              className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900"
-            >
-              Logout
-            </button>
-          </div>
+  {isSubscribed === false ? (
+    <button
+      onClick={handleSubscribe}
+      data-copy-ui="true"
+      className="rounded-xl border px-3 py-2 text-sm font-semibold text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
+      style={{
+        backgroundColor: MR_GOLD,
+        borderColor: MR_GOLD,
+      }}
+    >
+      Subscribe
+    </button>
+  ) : null}
+
+  <button
+    onClick={onCopyAll}
+    data-copy-ui="true"
+    disabled={messages.length === 0}
+    className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
+  >
+    {copiedAll ? "✓ Copied" : "Copy all"}
+  </button>
+  <button
+    onClick={onClear}
+    data-copy-ui="true"
+    disabled={messages.length === 0 || isLoading}
+    className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
+  >
+    Clear
+  </button>
+  <button
+    onClick={handleLogout}
+    data-copy-ui="true"
+    className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900"
+  >
+    Logout
+  </button>
+</div>
         </header>
 
         <div
