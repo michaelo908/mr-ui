@@ -13,8 +13,18 @@ type RewriteVariant = {
   copyFormat: CopyFormat;
 };
 
+type TelemetrySeed = {
+  dateKey: string;
+  analysesStart: number;
+  rewritesStart: number;
+  analysesPerMinute: number;
+  rewritesPerMinute: number;
+};
+
 const THINKING_TOKEN = "__MR_THINKING__";
 const MR_GOLD = "#C6A75A";
+const TELEMETRY_LAUNCH_DATE = "2026-03-15";
+const TELEMETRY_STORAGE_KEY = "gravitasTelemetrySeedV1";
 
 function classNames(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
@@ -897,10 +907,10 @@ export default function Home() {
   const [demoUsed, setDemoUsed] = useState(false);
   const [demoSessionGranted, setDemoSessionGranted] = useState(false);
   const [accessResolved, setAccessResolved] = useState(false);
-  const [analysisCount, setAnalysisCount] = useState(0);
-  const [baseline, setBaseline] = useState(0);
-  const [rewriteBaseline, setRewriteBaseline] = useState(0);
-  const [rewriteCount, setRewriteCount] = useState(0);
+  const [telemetrySeed, setTelemetrySeed] = useState<TelemetrySeed | null>(null);
+  const [telemetryMinuteTick, setTelemetryMinuteTick] = useState(0);
+  const [analysisBoost, setAnalysisBoost] = useState(0);
+  const [rewriteBoost, setRewriteBoost] = useState(0);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const messageContentRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const router = useRouter();
@@ -914,26 +924,72 @@ export default function Home() {
     [draft, isLoading, isDemoLocked]
   );
 
-  function getDailyBaseline() {
-    const today = new Date().toISOString().slice(0, 10);
-
-    const storedDate = localStorage.getItem("gravitasBaselineDate");
-    const storedValue = localStorage.getItem("gravitasBaseline");
-
-    if (storedDate === today && storedValue) {
-      return parseInt(storedValue, 10);
-    }
-
-    const randomBaseline = Math.floor(Math.random() * 160) + 320; // 320–479
-
-    localStorage.setItem("gravitasBaselineDate", today);
-    localStorage.setItem("gravitasBaseline", randomBaseline.toString());
-
-    return randomBaseline;
-  }
-
   function getRandomInt(min: number, max: number) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  function getWeeksSinceLaunch() {
+    const launch = new Date(`${TELEMETRY_LAUNCH_DATE}T00:00:00`);
+    const now = new Date();
+    const diffMs = now.getTime() - launch.getTime();
+    const diffWeeks = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 7));
+    return Math.max(0, diffWeeks);
+  }
+
+  function getTodayKey() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function getMinutesSinceMidnight() {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+  }
+
+  function buildTelemetrySeed(): TelemetrySeed {
+    const weeksSinceLaunch = getWeeksSinceLaunch();
+
+    const weeklyAnalysesGrowth = weeksSinceLaunch * 55;
+    const weeklyRewritesGrowth = weeksSinceLaunch * 140;
+
+    const analysesStart =
+      getRandomInt(320, 479) + weeklyAnalysesGrowth;
+
+    const rewritesStart =
+      getRandomInt(
+        Math.floor(analysesStart * 2.0),
+        Math.floor(analysesStart * 2.7)
+      ) + weeklyRewritesGrowth;
+
+    const analysesPerMinute = getRandomInt(4, 9) / 10;
+    const rewritesPerMinute = getRandomInt(10, 18) / 10;
+
+    return {
+      dateKey: getTodayKey(),
+      analysesStart,
+      rewritesStart,
+      analysesPerMinute,
+      rewritesPerMinute,
+    };
+  }
+
+  function getTelemetrySeed(): TelemetrySeed {
+    const todayKey = getTodayKey();
+    const raw = localStorage.getItem(TELEMETRY_STORAGE_KEY);
+
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as TelemetrySeed;
+        if (parsed.dateKey === todayKey) {
+          return parsed;
+        }
+      } catch {
+        // fall through
+      }
+    }
+
+    const freshSeed = buildTelemetrySeed();
+    localStorage.setItem(TELEMETRY_STORAGE_KEY, JSON.stringify(freshSeed));
+    return freshSeed;
   }
 
   function scrollToBottom() {
@@ -944,16 +1000,20 @@ export default function Home() {
   }
 
   useEffect(() => {
-    const dailyBaseline = getDailyBaseline();
-    setBaseline(dailyBaseline);
-
-    const multiplier = 2 + Math.random() * 0.7;
-    setRewriteBaseline(Math.floor(dailyBaseline * multiplier));
+    setTelemetrySeed(getTelemetrySeed());
   }, []);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages.length]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTelemetryMinuteTick(Date.now());
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     async function checkSubscription() {
@@ -1164,11 +1224,11 @@ export default function Home() {
         )
       );
 
-      const analysisJump = getRandomInt(18, 36);
-      const rewriteJump = getRandomInt(42, 78);
+      const analysisJump = getRandomInt(14, 28);
+      const rewriteJump = getRandomInt(36, 68);
 
-      setAnalysisCount((prev) => prev + analysisJump);
-      setRewriteCount((prev) => prev + rewriteJump);
+      setAnalysisBoost((prev) => prev + analysisJump);
+      setRewriteBoost((prev) => prev + rewriteJump);
 
       if (isSubscribed === false) {
         setDemoUsed(true);
@@ -1206,10 +1266,25 @@ export default function Home() {
     }
   }
 
-  const analysesToday = baseline + analysisCount;
-  const rewritesToday = rewriteBaseline + rewriteCount;
+  const minutesSinceMidnight = getMinutesSinceMidnight();
+  const timeDrivenAnalyses = telemetrySeed
+    ? Math.floor(minutesSinceMidnight * telemetrySeed.analysesPerMinute)
+    : 0;
+  const timeDrivenRewrites = telemetrySeed
+    ? Math.floor(minutesSinceMidnight * telemetrySeed.rewritesPerMinute)
+    : 0;
 
-  if (!accessResolved) {
+  const analysesToday = telemetrySeed
+    ? telemetrySeed.analysesStart + timeDrivenAnalyses + analysisBoost
+    : 0;
+
+  const rewritesToday = telemetrySeed
+    ? telemetrySeed.rewritesStart + timeDrivenRewrites + rewriteBoost
+    : 0;
+
+  void telemetryMinuteTick;
+
+  if (!accessResolved || !telemetrySeed) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-neutral-950 text-neutral-100">
         Checking access...
@@ -1382,9 +1457,10 @@ export default function Home() {
                         <StructuredAssistantMessage
                           content={m.content}
                           sourceRaw={sourceRaw}
-                          onRewriteProduced={() =>
-                            setRewriteCount((prev) => prev + getRandomInt(28, 52))
-                          }
+                          onRewriteProduced={() => {
+                            setAnalysisBoost((prev) => prev + getRandomInt(6, 14));
+                            setRewriteBoost((prev) => prev + getRandomInt(24, 46));
+                          }}
                         />
                       ) : (
                         renderMR(m.content)
