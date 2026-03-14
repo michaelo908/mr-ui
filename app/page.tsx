@@ -917,24 +917,44 @@ export default function Home() {
 
   useEffect(() => {
     async function checkSubscription() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-      if (!user) {
-        setIsSubscribed(false);
-        return;
-      }
+  if (!user) {
+    setIsSubscribed(false);
+    return;
+  }
 
-      const { data } = await supabase
-        .from("subscriptions")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .limit(1);
+  // Check subscription
+  const { data } = await supabase
+    .from("subscriptions")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("status", "active")
+    .limit(1);
 
-      setIsSubscribed(!!data && data.length > 0);
-    }
+  setIsSubscribed(!!data && data.length > 0);
+
+  // Check demo usage
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("demo_used")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!profile) {
+    // create profile row
+    await supabase.from("profiles").insert({
+      id: user.id,
+      demo_used: false,
+    });
+
+    setDemoUsed(false);
+  } else {
+    setDemoUsed(profile.demo_used ?? false);
+  }
+}
 
     checkSubscription();
   }, [supabase]);
@@ -1097,8 +1117,19 @@ export default function Home() {
       );
 
       if (isSubscribed === false) {
-        setDemoUsed(true);
-      }
+  setDemoUsed(true);
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    await supabase
+      .from("profiles")
+      .update({ demo_used: true })
+      .eq("id", user.id);
+  }
+}
     } catch {
       setMessages((m) =>
         m.map((msg) =>
@@ -1129,7 +1160,7 @@ export default function Home() {
     );
   }
 
-  if (!isSubscribed) {
+  if (!isSubscribed && demoUsed) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-6 text-center text-neutral-100">
         <h1 className="mb-4 text-3xl font-semibold">Gravitas</h1>
