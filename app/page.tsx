@@ -1178,34 +1178,40 @@ export default function Home() {
   }
 
   if (!isSubscribed && demoUsed && !demoSessionGranted) {
-    return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-6 text-center text-neutral-100">
-        <h1 className="mb-4 text-3xl font-semibold">Gravitas</h1>
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-6 text-center text-neutral-100">
+      <h1 className="mb-4 text-3xl font-semibold">Continue with Gravitas</h1>
 
-        <p className="mb-6 max-w-xl text-neutral-300">
-          Gravitas requires an active subscription.
-          Subscribe to continue using the narrative diagnostics and rewrite engine.
-        </p>
+      <p className="mb-3 max-w-xl text-neutral-300">
+        Your complimentary session has been completed.
+      </p>
 
-        <div className="flex gap-4">
-          <button
-            onClick={handleSubscribe}
-            className="rounded bg-black px-4 py-2 text-white"
-          >
-            Subscribe
-          </button>
+      <p className="mb-6 max-w-xl text-neutral-300">
+        Subscribe to continue using the Multirrupt narrative diagnostics and rewrite engine.
+      </p>
 
-          <button
-            onClick={handleLogout}
-            className="rounded border border-neutral-600 px-6 py-3"
-          >
-            Logout
-          </button>
-        </div>
-      </main>
-    );
-  }
+      <p className="mb-8 max-w-xl text-sm text-neutral-400">
+        Analyse any message. Generate three rewrite versions instantly.
+      </p>
 
+      <div className="flex gap-4">
+        <button
+          onClick={handleSubscribe}
+          className="rounded bg-black px-4 py-2 text-white"
+        >
+          Subscribe
+        </button>
+
+        <button
+          onClick={handleLogout}
+          className="rounded border border-neutral-600 px-6 py-3"
+        >
+          Logout
+        </button>
+      </div>
+    </main>
+  );
+}
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100">
       <div className="mx-auto w-full max-w-3xl px-4 py-10">

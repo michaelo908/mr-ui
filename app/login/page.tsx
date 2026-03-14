@@ -104,9 +104,12 @@ export default function LoginPage() {
           className="flex w-full flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-950/80 p-6"
         >
           <div className="text-center">
-            <h1 className="text-xl font-semibold">Sign in to Gravitas</h1>
+            <h1 className="text-xl font-semibold">Sign in to use Gravitas</h1>
             <p className="mt-2 text-sm text-neutral-400">
-              Enter your email to continue.
+              Access the Multirrupt narrative diagnostics and rewrite engine.
+            </p>
+            <p className="mt-2 text-sm text-neutral-400">
+              New here? Your first Gravitas session is complimentary.
             </p>
           </div>
 
