@@ -546,9 +546,11 @@ function ThinkingStatus() {
 function StructuredAssistantMessage({
   content,
   sourceRaw,
+  onRewriteProduced,
 }: {
   content: string;
   sourceRaw: string;
+  onRewriteProduced?: () => void;
 }) {
   const { hasStructured, sections } = useMemo(() => parseStructuredMR(content), [content]);
   const rewriteSectionRef = useRef<HTMLElement | null>(null);
@@ -684,6 +686,8 @@ function StructuredAssistantMessage({
         if (prev.length >= 3) return prev;
         return [...prev, makeRewriteVariant(alternateRewrite, prev.length)];
       });
+
+      onRewriteProduced?.();
     } catch {
       // no-op for now
     } finally {
@@ -895,7 +899,8 @@ export default function Home() {
   const [accessResolved, setAccessResolved] = useState(false);
   const [analysisCount, setAnalysisCount] = useState(0);
   const [baseline, setBaseline] = useState(0);
-  const [rewriteMultiplier] = useState(() => 2 + Math.random() * 0.7);
+  const [rewriteBaseline, setRewriteBaseline] = useState(0);
+  const [rewriteCount, setRewriteCount] = useState(0);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const messageContentRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const router = useRouter();
@@ -935,7 +940,11 @@ export default function Home() {
   }
 
   useEffect(() => {
-    setBaseline(getDailyBaseline());
+    const dailyBaseline = getDailyBaseline();
+    setBaseline(dailyBaseline);
+
+    const multiplier = 2 + Math.random() * 0.7;
+    setRewriteBaseline(Math.floor(dailyBaseline * multiplier));
   }, []);
 
   useEffect(() => {
@@ -1152,6 +1161,7 @@ export default function Home() {
       );
 
       setAnalysisCount((prev) => prev + 1);
+      setRewriteCount((prev) => prev + 1);
 
       if (isSubscribed === false) {
         setDemoUsed(true);
@@ -1190,7 +1200,7 @@ export default function Home() {
   }
 
   const analysesToday = baseline + analysisCount;
-  const rewritesToday = Math.floor(analysesToday * rewriteMultiplier);
+  const rewritesToday = rewriteBaseline + rewriteCount;
 
   if (!accessResolved) {
     return (
@@ -1365,6 +1375,7 @@ export default function Home() {
                         <StructuredAssistantMessage
                           content={m.content}
                           sourceRaw={sourceRaw}
+                          onRewriteProduced={() => setRewriteCount((prev) => prev + 1)}
                         />
                       ) : (
                         renderMR(m.content)
