@@ -94,7 +94,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-950 px-4 text-neutral-100">
+    <main className="flex min-h-screen items-center justify-center bg-neutral-950 px-4 text-neutral-100 bg-[radial-gradient(circle_at_center,rgba(180,150,80,0.08)_0%,rgba(0,0,0,0)_60%)]">
       <div className="w-full max-w-sm">
         <div className="mb-10 flex justify-center">
           <div className="rounded-md bg-white/90 px-4 py-2">
@@ -108,19 +108,23 @@ export default function LoginPage() {
 
         <form
           onSubmit={handleLogin}
-          className="flex w-full flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-950/80 p-6"
+          className="flex w-full flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-950/80 p-6 shadow-[0_0_40px_rgba(180,150,80,0.15)]"
         >
           <div className="text-center">
-  <h1 className="text-xl font-semibold">Sign in to use Gravitas</h1>
+            <h1 className="text-xl font-semibold">Sign in to use Gravitas</h1>
 
-  <p className="mt-2 text-sm text-neutral-400">
-    See how your message will land before you send it.
-  </p>
+            <p className="mt-2 text-sm text-neutral-400">
+              Narrative analysis and rewrite engine
+            </p>
 
-  <p className="mt-2 text-sm text-neutral-500">
-    New here? Get a link and try it on your writing.
-  </p>
-</div>
+            <p className="mt-2 text-sm text-neutral-400">
+              See how your message will land before you send it.
+            </p>
+
+            <p className="mt-2 text-sm text-neutral-500">
+              New here? Get a link and try it on your writing.
+            </p>
+          </div>
 
           <input
             type="email"
