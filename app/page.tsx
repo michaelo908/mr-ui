@@ -1305,17 +1305,20 @@ export default function Home() {
       <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-6 text-center text-neutral-100">
         <h1 className="mb-4 text-3xl font-semibold">Continue with Gravitas</h1>
 
-        <p className="mb-3 max-w-xl text-neutral-300">
-          Your complimentary session has been completed.
-        </p>
+        <p className="mb-4 max-w-xl text-neutral-300">
+  You’ve just seen how your message will land before you send it.
+</p>
 
-        <p className="mb-6 max-w-xl text-neutral-300">
-          Subscribe to continue using the Multirrupt narrative diagnostics and rewrite engine.
-        </p>
+        <p className="mb-4 max-w-xl text-neutral-300">
+  Use Gravitas on any important writing —
+  to refine your message until it does the job you intended.
+</p>
 
-        <p className="mb-8 max-w-xl text-sm text-neutral-400">
-          Analyse any message. Generate three rewrite versions instantly.
-        </p>
+        <p className="mb-8 max-w-xl text-neutral-400">
+  See stronger alternatives in seconds —
+  removing the guesswork of endless rewrites
+  while keeping your natural voice intact.
+</p>
 
         <div className="flex gap-4">
           <button
