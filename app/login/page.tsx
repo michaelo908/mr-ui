@@ -7,6 +7,7 @@ export default function LoginPage() {
   const supabase = createClient();
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -71,6 +72,10 @@ export default function LoginPage() {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+    if (sending) return;
+
+    setSending(true);
+    setMessage("");
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
@@ -84,6 +89,8 @@ export default function LoginPage() {
     } else {
       setMessage("Check your email for the login link.");
     }
+
+    setSending(false);
   }
 
   return (
@@ -118,15 +125,19 @@ export default function LoginPage() {
             placeholder="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="rounded border border-neutral-700 bg-neutral-900 p-3 text-neutral-100 outline-none focus:border-neutral-500"
+            disabled={sending}
+            className="rounded border border-neutral-700 bg-neutral-900 p-3 text-neutral-100 outline-none focus:border-neutral-500 disabled:cursor-not-allowed disabled:opacity-60"
             required
           />
 
           <button
             type="submit"
-            className="rounded bg-white p-3 font-semibold text-black transition hover:bg-neutral-200"
+            disabled={sending}
+            className={`rounded p-3 font-semibold text-black transition hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-70 ${
+              sending ? "animate-pulse bg-neutral-200" : "bg-white"
+            }`}
           >
-            Send login link
+            {sending ? "Sending..." : "Send login link"}
           </button>
 
           {message && <p className="text-sm text-neutral-400">{message}</p>}
