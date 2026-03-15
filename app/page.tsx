@@ -1301,44 +1301,47 @@ export default function Home() {
   }
 
   if (!isSubscribed && demoUsed && !demoSessionGranted) {
-    return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-6 text-center text-neutral-100">
-        <h1 className="mb-4 text-3xl font-semibold">Continue with Gravitas</h1>
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-6 text-center text-neutral-100">
+      <h1 className="mb-4 text-3xl font-semibold">Continue with Gravitas</h1>
 
-        <p className="mb-4 max-w-xl text-neutral-300">
-  You’ve just seen how your message will land before you send it.
-</p>
+      <p className="mb-4 max-w-xl text-neutral-300">
+        You’ve just seen how your message will land before you send it.
+      </p>
 
-        <p className="mb-4 max-w-xl text-neutral-300">
-  Use Gravitas on any important writing —
-  to refine your message until it does the job you intended.
-</p>
+      <p className="mb-4 max-w-xl text-neutral-300">
+        Use Gravitas on any important writing —
+        to refine your message until it does the job you intended.
+      </p>
 
-        <p className="mb-8 max-w-xl text-neutral-400">
-  See stronger alternatives in seconds —
-  removing the guesswork of endless rewrites
-  while keeping your natural voice intact.
-</p>
+      <p className="mb-8 max-w-xl text-neutral-400">
+        See stronger alternatives in seconds —
+        removing the guesswork of endless rewrites
+        while keeping your natural voice intact.
+      </p>
 
-        <div className="flex gap-4">
-          <button
-            onClick={handleSubscribe}
-            className="rounded bg-black px-4 py-2 text-white"
-          >
-            Subscribe
-          </button>
+      <div className="flex gap-4">
+        <button
+          onClick={handleSubscribe}
+          className="rounded-xl border px-6 py-3 text-sm font-semibold text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
+          style={{
+            backgroundColor: MR_GOLD,
+            borderColor: MR_GOLD,
+          }}
+        >
+          Subscribe
+        </button>
 
-          <button
-            onClick={handleLogout}
-            className="rounded border border-neutral-600 px-6 py-3"
-          >
-            Logout
-          </button>
-        </div>
-      </main>
-    );
-  }
-
+        <button
+          onClick={handleLogout}
+          className="rounded border border-neutral-600 px-6 py-3"
+        >
+          Logout
+        </button>
+      </div>
+    </main>
+  );
+}
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100">
       <div className="mx-auto w-full max-w-3xl px-4 py-10">
