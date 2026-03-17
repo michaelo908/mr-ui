@@ -1158,10 +1158,10 @@ export default function Home() {
     const raw = draft;
     if (!raw.trim() || isLoading || isDemoLocked) return;
 
-    if (raw.length > 8000) {
-      alert("Please limit input to 8,000 characters.");
-      return;
-    }
+   if (raw.length > 30000) {
+  alert("That’s a large input. For best results, keep it under 30,000 characters.");
+  return;
+}
 
     sendLockRef.current = true;
     const parsed = parseCommand(raw);
@@ -1519,6 +1519,11 @@ export default function Home() {
               Review
             </button>
           </div>
+           {/* 👇 ADD IT HERE */}
+  <div className="mt-2 text-xs text-neutral-500">
+    Built for real work — longer pieces may take a little longer to process.
+          </div>
+
         </div>
       </div>
     </main>
