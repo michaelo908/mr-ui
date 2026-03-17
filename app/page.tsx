@@ -1305,7 +1305,12 @@ export default function Home() {
     );
   }
 
-  if (!isSubscribed && demoCount >= FREE_TRIAL_LIMIT && !demoSessionGranted) {
+  if (
+  !isSubscribed &&
+  demoCount >= FREE_TRIAL_LIMIT &&
+  !demoSessionGranted &&
+  messages.length === 0
+) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-6 text-center text-neutral-100">
         <h1 className="mb-4 text-3xl font-semibold">Continue with Gravitas</h1>
