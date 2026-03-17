@@ -898,13 +898,15 @@ function parseCommand(raw: string): { mode: "general" | "mr_heresy"; content: st
 }
 
 export default function Home() {
+  const FREE_TRIAL_LIMIT = 3;
+
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
-  const [demoUsed, setDemoUsed] = useState(false);
+  const [demoCount, setDemoCount] = useState(0);
   const [demoSessionGranted, setDemoSessionGranted] = useState(false);
   const [accessResolved, setAccessResolved] = useState(false);
   const [telemetrySeed, setTelemetrySeed] = useState<TelemetrySeed | null>(null);
@@ -917,7 +919,7 @@ export default function Home() {
   const supabase = createClient();
   const sendLockRef = useRef(false);
 
-  const isDemoLocked = isSubscribed === false && demoUsed;
+  const isDemoLocked = isSubscribed === false && demoCount >= FREE_TRIAL_LIMIT;
 
   const canSend = useMemo(
     () => draft.trim().length > 0 && !isLoading && !isDemoLocked,
@@ -951,8 +953,7 @@ export default function Home() {
     const weeklyAnalysesGrowth = weeksSinceLaunch * 55;
     const weeklyRewritesGrowth = weeksSinceLaunch * 140;
 
-    const analysesStart =
-      getRandomInt(320, 479) + weeklyAnalysesGrowth;
+    const analysesStart = getRandomInt(320, 479) + weeklyAnalysesGrowth;
 
     const rewritesStart =
       getRandomInt(
@@ -1025,7 +1026,7 @@ export default function Home() {
 
       if (!user) {
         setIsSubscribed(false);
-        setDemoUsed(false);
+        setDemoCount(0);
         setDemoSessionGranted(false);
         setAccessResolved(true);
         return;
@@ -1043,22 +1044,22 @@ export default function Home() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("demo_used")
+        .select("demo_count")
         .eq("id", user.id)
         .maybeSingle();
 
       if (!profile) {
         await supabase.from("profiles").insert({
           id: user.id,
-          demo_used: false,
+          demo_count: 0,
         });
 
-        setDemoUsed(false);
+        setDemoCount(0);
         setDemoSessionGranted(true);
       } else {
-        const used = profile.demo_used ?? false;
-        setDemoUsed(used);
-        setDemoSessionGranted(!used);
+        const count = profile.demo_count ?? 0;
+        setDemoCount(count);
+        setDemoSessionGranted(count < FREE_TRIAL_LIMIT);
       }
 
       setAccessResolved(true);
@@ -1231,7 +1232,9 @@ export default function Home() {
       setRewriteBoost((prev) => prev + rewriteJump);
 
       if (isSubscribed === false) {
-        setDemoUsed(true);
+        const nextDemoCount = demoCount + 1;
+        setDemoCount(nextDemoCount);
+        setDemoSessionGranted(nextDemoCount < FREE_TRIAL_LIMIT);
 
         const {
           data: { user },
@@ -1240,7 +1243,7 @@ export default function Home() {
         if (user) {
           await supabase
             .from("profiles")
-            .update({ demo_used: true })
+            .update({ demo_count: nextDemoCount })
             .eq("id", user.id);
         }
       }
@@ -1282,6 +1285,8 @@ export default function Home() {
     ? telemetrySeed.rewritesStart + timeDrivenRewrites + rewriteBoost
     : 0;
 
+  const reviewsRemaining = Math.max(0, FREE_TRIAL_LIMIT - demoCount);
+
   void telemetryMinuteTick;
 
   if (!accessResolved || !telemetrySeed) {
@@ -1300,48 +1305,49 @@ export default function Home() {
     );
   }
 
-  if (!isSubscribed && demoUsed && !demoSessionGranted) {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-6 text-center text-neutral-100">
-      <h1 className="mb-4 text-3xl font-semibold">Continue with Gravitas</h1>
+  if (!isSubscribed && demoCount >= FREE_TRIAL_LIMIT && !demoSessionGranted) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-6 text-center text-neutral-100">
+        <h1 className="mb-4 text-3xl font-semibold">Continue with Gravitas</h1>
 
-      <p className="mb-4 max-w-xl text-neutral-300">
-        You’ve just seen how your message will land before you send it.
-      </p>
+        <p className="mb-4 max-w-xl text-neutral-300">
+          You’ve just seen how your message will land before you send it.
+        </p>
 
-      <p className="mb-4 max-w-xl text-neutral-300">
-        Use Gravitas on any important writing —
-        to refine your message until it does the job you intended.
-      </p>
+        <p className="mb-4 max-w-xl text-neutral-300">
+          Use Gravitas on any important writing —
+          to refine your message until it does the job you intended.
+        </p>
 
-      <p className="mb-8 max-w-xl text-neutral-400">
-        See stronger alternatives in seconds —
-        removing the guesswork of endless rewrites
-        while keeping your natural voice intact.
-      </p>
+        <p className="mb-8 max-w-xl text-neutral-400">
+          See stronger alternatives in seconds —
+          removing the guesswork of endless rewrites
+          while keeping your natural voice intact.
+        </p>
 
-      <div className="flex gap-4">
-        <button
-          onClick={handleSubscribe}
-          className="rounded-xl border px-6 py-3 text-sm font-semibold text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
-          style={{
-            backgroundColor: MR_GOLD,
-            borderColor: MR_GOLD,
-          }}
-        >
-          Subscribe
-        </button>
+        <div className="flex gap-4">
+          <button
+            onClick={handleSubscribe}
+            className="rounded-xl border px-6 py-3 text-sm font-semibold text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
+            style={{
+              backgroundColor: MR_GOLD,
+              borderColor: MR_GOLD,
+            }}
+          >
+            Subscribe
+          </button>
 
-        <button
-          onClick={handleLogout}
-          className="rounded border border-neutral-600 px-6 py-3"
-        >
-          Logout
-        </button>
-      </div>
-    </main>
-  );
-}
+          <button
+            onClick={handleLogout}
+            className="rounded border border-neutral-600 px-6 py-3"
+          >
+            Logout
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100">
       <div className="mx-auto w-full max-w-3xl px-4 py-10">
@@ -1353,6 +1359,13 @@ export default function Home() {
             <div className="mt-1 text-sm text-neutral-400">
               Narrative Intelligence for Momentum, Flow, and Perception.
             </div>
+
+            {isSubscribed === false ? (
+              <div className="mt-1 text-xs text-neutral-500">
+                Free trial: {reviewsRemaining} review{reviewsRemaining === 1 ? "" : "s"} remaining
+              </div>
+            ) : null}
+
             <div className="mt-1 text-xs text-neutral-500">
               Messages analysed today: {analysesToday} · Rewrites produced today: {rewritesToday}
             </div>
