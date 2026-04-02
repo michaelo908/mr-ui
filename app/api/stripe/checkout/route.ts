@@ -16,7 +16,6 @@ export async function POST() {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       payment_method_types: ["card"],
-      customer_creation: "always",
       billing_address_collection: "auto",
       phone_number_collection: {
         enabled: true,
