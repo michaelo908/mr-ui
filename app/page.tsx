@@ -307,6 +307,19 @@ function normalizeSectionLabel(text: string) {
     .trim();
 }
 
+function normalizeAssistantCopyText(content: string) {
+  return content
+    .replace(/^Executive Summary$/gim, "Editor’s Summary")
+    .replace(/^Diagnosis in Depth$/gim, "Editor’s Notes in Depth")
+    .replace(/^Editors Notes in Depth$/gim, "Editor’s Notes in Depth")
+    .replace(/^Editor Notes in Depth$/gim, "Editor’s Notes in Depth")
+    .replace(/^Rewrite Debrief$/gim, "Editor’s Debrief")
+    .replace(/^Editors Debrief$/gim, "Editor’s Debrief")
+    .replace(/^Editor Debrief$/gim, "Editor’s Debrief")
+    .replace(/^Editors Final Rewrite Notes$/gim, "Editor’s Debrief")
+    .replace(/^Editor Final Rewrite Notes$/gim, "Editor’s Debrief");
+}
+
 function getSectionKind(
   line: string
 ): "summary" | "depth" | "rewrite" | "debrief" | null {
@@ -1110,9 +1123,13 @@ export default function Home() {
     if (visibleMessages.length === 0) return;
 
     const combined = visibleMessages
-      .map((m) => m.content.trim())
-      .filter(Boolean)
-      .join("\n\n———\n\n");
+  .map((m) =>
+    m.role === "assistant"
+      ? normalizeAssistantCopyText(m.content.trim())
+      : m.content.trim()
+  )
+  .filter(Boolean)
+  .join("\n\n———\n\n");
 
     await copyTextForFormat(combined, format);
 
