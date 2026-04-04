@@ -308,16 +308,35 @@ function normalizeSectionLabel(text: string) {
 }
 
 function normalizeAssistantCopyText(content: string) {
-  return content
-    .replace(/^Executive Summary$/gim, "Editor’s Summary")
-    .replace(/^Diagnosis in Depth$/gim, "Editor’s Notes in Depth")
-    .replace(/^Editors Notes in Depth$/gim, "Editor’s Notes in Depth")
-    .replace(/^Editor Notes in Depth$/gim, "Editor’s Notes in Depth")
-    .replace(/^Rewrite Debrief$/gim, "Editor’s Debrief")
-    .replace(/^Editors Debrief$/gim, "Editor’s Debrief")
-    .replace(/^Editor Debrief$/gim, "Editor’s Debrief")
-    .replace(/^Editors Final Rewrite Notes$/gim, "Editor’s Debrief")
-    .replace(/^Editor Final Rewrite Notes$/gim, "Editor’s Debrief");
+  const parsed = parseStructuredMR(content);
+
+  if (!parsed.hasStructured) {
+    return content.trim();
+  }
+
+  const parts: string[] = [];
+
+  if (parsed.sections.summary?.trim()) {
+    parts.push("Editor’s Summary");
+    parts.push(parsed.sections.summary.trim());
+  }
+
+  if (parsed.sections.depth?.trim()) {
+    parts.push("Editor’s Notes in Depth");
+    parts.push(parsed.sections.depth.trim());
+  }
+
+  if (parsed.sections.rewrite?.trim()) {
+    parts.push("Rewrite");
+    parts.push(parsed.sections.rewrite.trim());
+  }
+
+  if (parsed.sections.debrief?.trim()) {
+    parts.push("Editor’s Debrief");
+    parts.push(parsed.sections.debrief.trim());
+  }
+
+  return parts.join("\n\n").trim();
 }
 
 function getSectionKind(
