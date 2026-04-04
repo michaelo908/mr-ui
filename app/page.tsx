@@ -339,6 +339,7 @@ function normalizeAssistantCopyText(content: string) {
   return parts.join("\n\n").trim();
 }
 
+// force rebuild
 function getSectionKind(
   line: string
 ): "summary" | "depth" | "rewrite" | "debrief" | null {
