@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Msg = { role: "user" | "assistant"; content: string };
-type CopyFormat = "email" | "landing" | "social" | "document";
+type CopyFormat = "email" | "word";
 type RewriteVariant = {
   id: string;
   label: string;
@@ -21,6 +21,14 @@ type TelemetrySeed = {
   rewritesPerMinute: number;
 };
 
+type ContentNode =
+  | { type: "heading"; level: number; text: string; key: string }
+  | { type: "hr"; key: string }
+  | { type: "quote"; lines: string[]; key: string }
+  | { type: "list"; items: string[]; key: string }
+  | { type: "para"; text: string; key: string }
+  | { type: "spacer"; key: string };
+
 const THINKING_TOKEN = "__MR_THINKING__";
 const MR_GOLD = "#C6A75A";
 const TELEMETRY_LAUNCH_DATE = "2026-03-15";
@@ -33,12 +41,7 @@ function classNames(...parts: Array<string | false | null | undefined>) {
 function getSavedCopyFormat(): CopyFormat {
   if (typeof window === "undefined") return "email";
   const saved = window.localStorage.getItem("mr-copy-format");
-  if (
-    saved === "email" ||
-    saved === "landing" ||
-    saved === "social" ||
-    saved === "document"
-  ) {
+  if (saved === "email" || saved === "word") {
     return saved;
   }
   return "email";
@@ -58,36 +61,6 @@ function makeRewriteVariant(content: string, index: number): RewriteVariant {
   };
 }
 
-async function copyElementRich(element: HTMLElement | null) {
-  if (!element) return;
-
-  const clone = element.cloneNode(true) as HTMLElement;
-  clone.querySelectorAll('[data-copy-ui="true"]').forEach((node) => node.remove());
-
-  try {
-    if (
-      navigator.clipboard &&
-      "write" in navigator.clipboard &&
-      typeof ClipboardItem !== "undefined"
-    ) {
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          "text/html": new Blob([clone.innerHTML], {
-            type: "text/html",
-          }),
-          "text/plain": new Blob([clone.innerText], {
-            type: "text/plain",
-          }),
-        }),
-      ]);
-    } else {
-      await navigator.clipboard.writeText(clone.innerText);
-    }
-  } catch {
-    await navigator.clipboard.writeText(clone.innerText);
-  }
-}
-
 function escapeHtml(text: string) {
   return text
     .replaceAll("&", "&amp;")
@@ -101,85 +74,187 @@ function normalizeCopyText(text: string) {
   return text.replace(/\r\n/g, "\n").trim();
 }
 
+function stripInlineMarkdown(text: string) {
+  return text
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*\*([\s\S]+?)\*\*/g, "$1")
+    .replace(/\*([\s\S]+?)\*/g, "$1")
+    .replace(/__([\s\S]+?)__/g, "$1")
+    .replace(/_([\s\S]+?)_/g, "$1");
+}
+
 function formatForEmail(text: string) {
   return normalizeCopyText(text)
-    .replace(/\*\*([\s\S]+?)\*\*/g, "$1")
-    .replace(/\*([\s\S]+?)\*/g, "$1")
-    .replace(/__([\s\S]+?)__/g, "$1")
-    .replace(/_([\s\S]+?)_/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^>\s?/gm, "")
+    .replace(/^\s*[-•]\s+/gm, "• ")
     .replace(/\s*[—–]\s*/g, " - ")
     .replace(/−/g, "-")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-function formatForLanding(text: string) {
-  return normalizeCopyText(text)
-    .replace(/\*\*([\s\S]+?)\*\*/g, "$1")
-    .replace(/\*([\s\S]+?)\*/g, "$1")
-    .replace(/__([\s\S]+?)__/g, "$1")
-    .replace(/_([\s\S]+?)_/g, "$1")
-    .replace(/\s*[—–]\s*/g, " - ")
-    .replace(/−/g, "-")
-    .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .split("\n")
+    .map((line) => stripInlineMarkdown(line))
+    .join("\n")
     .trim();
 }
 
-function formatForSocial(text: string) {
-  return normalizeCopyText(text)
-    .replace(/\*\*([\s\S]+?)\*\*/g, "$1")
-    .replace(/\*([\s\S]+?)\*/g, "$1")
-    .replace(/__([\s\S]+?)__/g, "$1")
-    .replace(/_([\s\S]+?)_/g, "$1")
-    .replace(/\s*[—–]\s*/g, " - ")
-    .replace(/−/g, "-")
-    .replace(/\. +/g, ".\n\n")
-    .replace(/\?\s+/g, "?\n\n")
-    .replace(/!\s+/g, "!\n\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
+function parseContentNodes(content: string): ContentNode[] {
+  const lines = content.split(/\r?\n/);
+  const nodes: ContentNode[] = [];
+  let i = 0;
 
-function formatForDocument(text: string) {
-  return normalizeCopyText(text)
-    .replace(/\*\*([\s\S]+?)\*\*/g, "$1")
-    .replace(/\*([\s\S]+?)\*/g, "$1")
-    .replace(/__([\s\S]+?)__/g, "$1")
-    .replace(/_([\s\S]+?)_/g, "$1")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/([^\n])\n([^\n])/g, "$1 $2")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
+  const pushSpacerIfNeeded = () => {
+    const prev = nodes[nodes.length - 1];
+    if (prev && prev.type !== "spacer") {
+      nodes.push({ type: "spacer", key: `s-${i}-${nodes.length}` });
+    }
+  };
 
-function formatRewriteForCopy(text: string, format: CopyFormat) {
-  switch (format) {
-    case "landing":
-      return formatForLanding(text);
-    case "social":
-      return formatForSocial(text);
-    case "document":
-      return formatForDocument(text);
-    case "email":
-    default:
-      return formatForEmail(text);
+  while (i < lines.length) {
+    const line = lines[i] ?? "";
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      pushSpacerIfNeeded();
+      i++;
+      continue;
+    }
+
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      const level = h[1].length;
+      const text = (h[2] ?? "").trim();
+      nodes.push({ type: "heading", level, text, key: `h-${i}` });
+      i++;
+      continue;
+    }
+
+    if (/^(-{3,}|\*{3,})\s*$/.test(trimmed)) {
+      nodes.push({ type: "hr", key: `hr-${i}` });
+      i++;
+      continue;
+    }
+
+    if (/^>\s?/.test(trimmed)) {
+      const q: string[] = [];
+      while (i < lines.length && /^>\s?/.test((lines[i] ?? "").trim())) {
+        q.push((lines[i] ?? "").trim().replace(/^>\s?/, ""));
+        i++;
+      }
+      nodes.push({ type: "quote", lines: q, key: `q-${i}-${q.length}` });
+      continue;
+    }
+
+    if (/^(-|•)\s+/.test(trimmed)) {
+      const items: string[] = [];
+      while (i < lines.length && /^(-|•)\s+/.test((lines[i] ?? "").trim())) {
+        items.push((lines[i] ?? "").trim().replace(/^(-|•)\s+/, ""));
+        i++;
+      }
+      nodes.push({ type: "list", items, key: `ul-${i}-${items.length}` });
+      continue;
+    }
+
+    const para: string[] = [];
+    while (i < lines.length) {
+      const l = lines[i] ?? "";
+      const t = l.trim();
+      if (!t) break;
+      if (/^(#{1,6})\s+/.test(l)) break;
+      if (/^(-{3,}|\*{3,})\s*$/.test(t)) break;
+      if (/^>\s?/.test(t)) break;
+      if (/^(-|•)\s+/.test(t)) break;
+      para.push(l);
+      i++;
+    }
+    nodes.push({
+      type: "para",
+      text: para.join("\n").trim(),
+      key: `p-${i}-${para.length}`,
+    });
   }
+
+  return nodes;
 }
 
-function textToHtmlParagraphs(text: string) {
-  return text
-    .split(/\n{2,}/)
-    .map((paragraph) => {
-      const safe = escapeHtml(paragraph).replace(/\n/g, "<br>");
-      return `<p>${safe}</p>`;
+function renderInlineHtml(text: string) {
+  const tokens = text
+    .split(/(`[^`]+`|\*\*[\s\S]+?\*\*|\*[^*]+\*)/g)
+    .filter(Boolean);
+
+  return tokens
+    .map((token) => {
+      const codeMatch = token.match(/^`([^`]+)`$/);
+      if (codeMatch) {
+        return `<code>${escapeHtml(codeMatch[1])}</code>`;
+      }
+
+      const boldMatch = token.match(/^\*\*([\s\S]+)\*\*$/);
+      if (boldMatch) {
+        return `<strong>${escapeHtml(boldMatch[1])}</strong>`;
+      }
+
+      const italicMatch = token.match(/^\*([\s\S]+)\*$/);
+      if (italicMatch) {
+        return `<em>${escapeHtml(italicMatch[1])}</em>`;
+      }
+
+      return escapeHtml(token);
     })
     .join("");
 }
 
-async function copyFormattedTextRich(text: string, format: CopyFormat) {
-  const formatted = formatRewriteForCopy(text, format);
-  const html = textToHtmlParagraphs(formatted);
+function buildWordHtml(text: string) {
+  const nodes = parseContentNodes(text);
+
+  return nodes
+    .map((node) => {
+      if (node.type === "spacer") {
+        return `<div style="height: 12px;"></div>`;
+      }
+
+      if (node.type === "hr") {
+        return `<hr>`;
+      }
+
+      if (node.type === "heading") {
+        const level = Math.min(node.level, 6);
+        return `<h${level}>${renderInlineHtml(node.text)}</h${level}>`;
+      }
+
+      if (node.type === "quote") {
+        const body = node.lines
+          .map((line) => `<p>${renderInlineHtml(line)}</p>`)
+          .join("");
+        return `<blockquote>${body}</blockquote>`;
+      }
+
+      if (node.type === "list") {
+        const items = node.items
+          .map((item) => `<li>${renderInlineHtml(item)}</li>`)
+          .join("");
+        return `<ul>${items}</ul>`;
+      }
+
+      const paragraphs = node.text
+        .split("\n")
+        .map((line) => renderInlineHtml(line))
+        .join("<br>");
+
+      return `<p>${paragraphs}</p>`;
+    })
+    .join("");
+}
+
+async function copyPlainText(text: string) {
+  const plain = formatForEmail(text);
+  await navigator.clipboard.writeText(plain);
+}
+
+async function copyRichText(text: string) {
+  const plain = formatForEmail(text);
+  const html = buildWordHtml(text);
 
   try {
     if (
@@ -192,17 +267,26 @@ async function copyFormattedTextRich(text: string, format: CopyFormat) {
           "text/html": new Blob([html], {
             type: "text/html",
           }),
-          "text/plain": new Blob([formatted], {
+          "text/plain": new Blob([plain], {
             type: "text/plain",
           }),
         }),
       ]);
     } else {
-      await navigator.clipboard.writeText(formatted);
+      await navigator.clipboard.writeText(plain);
     }
   } catch {
-    await navigator.clipboard.writeText(formatted);
+    await navigator.clipboard.writeText(plain);
   }
+}
+
+async function copyTextForFormat(text: string, format: CopyFormat) {
+  if (format === "word") {
+    await copyRichText(text);
+    return;
+  }
+
+  await copyPlainText(text);
 }
 
 function stripMarkdownWrapper(text: string) {
@@ -303,89 +387,7 @@ function parseStructuredMR(content: string) {
 }
 
 function renderMR(content: string) {
-  const lines = content.split(/\r?\n/);
-
-  type Node =
-    | { type: "heading"; level: number; text: string; key: string }
-    | { type: "hr"; key: string }
-    | { type: "quote"; lines: string[]; key: string }
-    | { type: "list"; items: string[]; key: string }
-    | { type: "para"; text: string; key: string }
-    | { type: "spacer"; key: string };
-
-  const nodes: Node[] = [];
-  let i = 0;
-
-  const pushSpacerIfNeeded = () => {
-    const prev = nodes[nodes.length - 1];
-    if (prev && prev.type !== "spacer") {
-      nodes.push({ type: "spacer", key: `s-${i}-${nodes.length}` });
-    }
-  };
-
-  while (i < lines.length) {
-    const line = lines[i] ?? "";
-    const trimmed = line.trim();
-
-    if (!trimmed) {
-      pushSpacerIfNeeded();
-      i++;
-      continue;
-    }
-
-    const h = line.match(/^(#{1,6})\s+(.*)$/);
-    if (h) {
-      const level = h[1].length;
-      const text = (h[2] ?? "").trim();
-      nodes.push({ type: "heading", level, text, key: `h-${i}` });
-      i++;
-      continue;
-    }
-
-    if (/^(-{3,}|\*{3,})\s*$/.test(trimmed)) {
-      nodes.push({ type: "hr", key: `hr-${i}` });
-      i++;
-      continue;
-    }
-
-    if (/^>\s?/.test(trimmed)) {
-      const q: string[] = [];
-      while (i < lines.length && /^>\s?/.test((lines[i] ?? "").trim())) {
-        q.push((lines[i] ?? "").trim().replace(/^>\s?/, ""));
-        i++;
-      }
-      nodes.push({ type: "quote", lines: q, key: `q-${i}-${q.length}` });
-      continue;
-    }
-
-    if (/^(-|•)\s+/.test(trimmed)) {
-      const items: string[] = [];
-      while (i < lines.length && /^(-|•)\s+/.test((lines[i] ?? "").trim())) {
-        items.push((lines[i] ?? "").trim().replace(/^(-|•)\s+/, ""));
-        i++;
-      }
-      nodes.push({ type: "list", items, key: `ul-${i}-${items.length}` });
-      continue;
-    }
-
-    const para: string[] = [];
-    while (i < lines.length) {
-      const l = lines[i] ?? "";
-      const t = l.trim();
-      if (!t) break;
-      if (/^(#{1,6})\s+/.test(l)) break;
-      if (/^(-{3,}|\*{3,})\s*$/.test(t)) break;
-      if (/^>\s?/.test(t)) break;
-      if (/^(-|•)\s+/.test(t)) break;
-      para.push(l);
-      i++;
-    }
-    nodes.push({
-      type: "para",
-      text: para.join("\n").trim(),
-      key: `p-${i}-${para.length}`,
-    });
-  }
+  const nodes = parseContentNodes(content);
 
   function renderInline(text: string) {
     const tokens = text
@@ -568,7 +570,7 @@ function StructuredAssistantMessage({
   const [showRewrite, setShowRewrite] = useState(false);
   const [showRewriteButton, setShowRewriteButton] = useState(false);
   const [rewriteState, setRewriteState] = useState<"idle" | "working">("idle");
-  const [copiedRewriteId, setCopiedRewriteId] = useState<string | null>(null);
+  const [copiedRewriteKey, setCopiedRewriteKey] = useState<string | null>(null);
   const [rewrites, setRewrites] = useState<RewriteVariant[]>([]);
   const [isGeneratingAlternate, setIsGeneratingAlternate] = useState(false);
 
@@ -581,7 +583,7 @@ function StructuredAssistantMessage({
     setShowRewrite(false);
     setShowRewriteButton(false);
     setRewriteState("idle");
-    setCopiedRewriteId(null);
+    setCopiedRewriteKey(null);
     setIsGeneratingAlternate(false);
 
     if (rewrite) {
@@ -618,13 +620,7 @@ function StructuredAssistantMessage({
   }
 
   function formatLabel(format: CopyFormat) {
-    return format === "landing"
-      ? "Landing Page"
-      : format === "social"
-        ? "Social"
-        : format === "document"
-          ? "Document"
-          : "Email";
+    return format === "word" ? "Word" : "Email";
   }
 
   const revealRewrite = () => {
@@ -643,11 +639,12 @@ function StructuredAssistantMessage({
     }, 450);
   };
 
-  async function handleCopyRewrite(variant: RewriteVariant) {
-    await copyFormattedTextRich(variant.content, variant.copyFormat);
-    setCopiedRewriteId(variant.id);
+  async function handleCopyRewrite(variant: RewriteVariant, format: CopyFormat) {
+    await copyTextForFormat(variant.content, format);
+    const copyKey = `${variant.id}:${format}`;
+    setCopiedRewriteKey(copyKey);
     setTimeout(() => {
-      setCopiedRewriteId((current) => (current === variant.id ? null : current));
+      setCopiedRewriteKey((current) => (current === copyKey ? null : current));
     }, 2000);
   }
 
@@ -796,14 +793,14 @@ function StructuredAssistantMessage({
 
                 <div className="flex items-center gap-2" data-copy-ui="true">
                   <button
-                    onClick={() => handleCopyRewrite(variant)}
+                    onClick={() => handleCopyRewrite(variant, variant.copyFormat)}
                     className="rounded-xl border px-4 py-2 text-sm font-semibold text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
                     style={{
                       backgroundColor: MR_GOLD,
                       borderColor: MR_GOLD,
                     }}
                   >
-                    {copiedRewriteId === variant.id
+                    {copiedRewriteKey === `${variant.id}:${variant.copyFormat}`
                       ? `✓ Copied (${formatLabel(variant.copyFormat)})`
                       : "Copy Rewrite"}
                   </button>
@@ -827,10 +824,8 @@ function StructuredAssistantMessage({
                       backgroundRepeat: "no-repeat",
                     }}
                   >
-                    <option value="email">Email</option>
-                    <option value="landing">Landing Page</option>
-                    <option value="social">Social</option>
-                    <option value="document">Document</option>
+                    <option value="email">Email / Plain Text</option>
+                    <option value="word">Word / Rich Text</option>
                   </select>
                 </div>
               </div>
@@ -903,8 +898,8 @@ export default function Home() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [copiedAll, setCopiedAll] = useState(false);
-  const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
+  const [copiedAllKey, setCopiedAllKey] = useState<string | null>(null);
+  const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
   const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
   const [demoCount, setDemoCount] = useState(0);
   const [demoSessionGranted, setDemoSessionGranted] = useState(false);
@@ -1092,54 +1087,38 @@ export default function Home() {
     }
   }
 
-  async function onCopyMessage(index: number) {
-    const el = messageContentRefs.current[index] ?? null;
-    await copyElementRich(el);
-    setCopiedMessageIndex(index);
+  async function onCopyMessage(index: number, format: CopyFormat) {
+    const msg = messages[index];
+    if (!msg || (msg.role === "assistant" && msg.content === THINKING_TOKEN)) return;
+
+    await copyTextForFormat(msg.content, format);
+
+    const key = `${index}:${format}`;
+    setCopiedMessageKey(key);
     setTimeout(() => {
-      setCopiedMessageIndex((current) => (current === index ? null : current));
+      setCopiedMessageKey((current) => (current === key ? null : current));
     }, 2000);
   }
 
-  async function onCopyAll() {
+  async function onCopyAll(format: CopyFormat) {
     if (messages.length === 0) return;
 
-    const wrapper = document.createElement("div");
-    let firstVisibleBlock = true;
+    const visibleMessages = messages.filter(
+      (m) => !(m.role === "assistant" && m.content === THINKING_TOKEN)
+    );
 
-    messages.forEach((m, i) => {
-      if (m.role === "assistant" && m.content === THINKING_TOKEN) return;
+    if (visibleMessages.length === 0) return;
 
-      const el = messageContentRefs.current[i];
-      if (!el) return;
+    const combined = visibleMessages
+      .map((m) => m.content.trim())
+      .filter(Boolean)
+      .join("\n\n———\n\n");
 
-      if (!firstVisibleBlock) {
-        const divider = document.createElement("div");
-        divider.innerText = "———";
-        divider.style.textAlign = "center";
-        divider.style.margin = "20px 0";
-        divider.style.color = "#666";
-        divider.style.fontSize = "14px";
-        wrapper.appendChild(divider);
-      }
+    await copyTextForFormat(combined, format);
 
-      const block = document.createElement("div");
-      block.style.marginBottom = "28px";
-
-      const body = document.createElement("div");
-      body.innerHTML = el.innerHTML;
-
-      block.appendChild(body);
-      wrapper.appendChild(block);
-
-      firstVisibleBlock = false;
-    });
-
-    await copyElementRich(wrapper);
-
-    setCopiedAll(true);
+    setCopiedAllKey(format);
     setTimeout(() => {
-      setCopiedAll(false);
+      setCopiedAllKey((current) => (current === format ? null : current));
     }, 2000);
   }
 
@@ -1147,8 +1126,8 @@ export default function Home() {
     if (isLoading) return;
     setMessages([]);
     setDraft("");
-    setCopiedAll(false);
-    setCopiedMessageIndex(null);
+    setCopiedAllKey(null);
+    setCopiedMessageKey(null);
     messageContentRefs.current = {};
   }
 
@@ -1158,10 +1137,10 @@ export default function Home() {
     const raw = draft;
     if (!raw.trim() || isLoading || isDemoLocked) return;
 
-   if (raw.length > 30000) {
-  alert("That’s a large input. For best results, keep it under 30,000 characters.");
-  return;
-}
+    if (raw.length > 30000) {
+      alert("That’s a large input. For best results, keep it under 30,000 characters.");
+      return;
+    }
 
     sendLockRef.current = true;
     const parsed = parseCommand(raw);
@@ -1306,11 +1285,11 @@ export default function Home() {
   }
 
   if (
-  !isSubscribed &&
-  demoCount >= FREE_TRIAL_LIMIT &&
-  !demoSessionGranted &&
-  messages.length === 0
-) {
+    !isSubscribed &&
+    demoCount >= FREE_TRIAL_LIMIT &&
+    !demoSessionGranted &&
+    messages.length === 0
+  ) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-6 text-center text-neutral-100">
         <h1 className="mb-4 text-3xl font-semibold">Continue with Gravitas</h1>
@@ -1392,13 +1371,23 @@ export default function Home() {
             ) : null}
 
             <button
-              onClick={onCopyAll}
+              onClick={() => onCopyAll("email")}
               data-copy-ui="true"
               disabled={messages.length === 0}
               className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
             >
-              {copiedAll ? "✓ Copied" : "Copy all"}
+              {copiedAllKey === "email" ? "✓ Copied Email" : "Copy All Email"}
             </button>
+
+            <button
+              onClick={() => onCopyAll("word")}
+              data-copy-ui="true"
+              disabled={messages.length === 0}
+              className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
+            >
+              {copiedAllKey === "word" ? "✓ Copied Word" : "Copy All Word"}
+            </button>
+
             <button
               onClick={onClear}
               data-copy-ui="true"
@@ -1459,14 +1448,26 @@ export default function Home() {
                       <div className="text-xs uppercase tracking-widest text-neutral-400">
                         {m.role === "user" ? "You" : "MR"}
                       </div>
-                      <button
-                        onClick={() => onCopyMessage(i)}
-                        data-copy-ui="true"
-                        disabled={isThinking}
-                        className="rounded-lg border border-neutral-700 px-2 py-1 text-xs hover:bg-neutral-800 disabled:text-neutral-600"
-                      >
-                        {copiedMessageIndex === i ? "✓ Copied" : "Copy"}
-                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => onCopyMessage(i, "email")}
+                          data-copy-ui="true"
+                          disabled={isThinking}
+                          className="rounded-lg border border-neutral-700 px-2 py-1 text-xs hover:bg-neutral-800 disabled:text-neutral-600"
+                        >
+                          {copiedMessageKey === `${i}:email` ? "✓ Email" : "Email"}
+                        </button>
+
+                        <button
+                          onClick={() => onCopyMessage(i, "word")}
+                          data-copy-ui="true"
+                          disabled={isThinking}
+                          className="rounded-lg border border-neutral-700 px-2 py-1 text-xs hover:bg-neutral-800 disabled:text-neutral-600"
+                        >
+                          {copiedMessageKey === `${i}:word` ? "✓ Word" : "Word"}
+                        </button>
+                      </div>
                     </div>
 
                     <div
@@ -1519,11 +1520,9 @@ export default function Home() {
               Review
             </button>
           </div>
-           {/* 👇 ADD IT HERE */}
-  <div className="mt-2 text-xs text-neutral-500">
-    Built for real work — longer pieces may take a little longer to process.
+          <div className="mt-2 text-xs text-neutral-500">
+            Built for real work — longer pieces may take a little longer to process.
           </div>
-
         </div>
       </div>
     </main>
