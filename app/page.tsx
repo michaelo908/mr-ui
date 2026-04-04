@@ -307,6 +307,19 @@ function normalizeSectionLabel(text: string) {
     .trim();
 }
 
+function normalizeAssistantHeadings(content: string) {
+  return content
+    .replace(/^[\s\-–—*#]*Executive Summary[\s\-–—*#]*$/gim, "Editor’s Summary")
+    .replace(/^[\s\-–—*#]*Diagnosis in Depth[\s\-–—*#]*$/gim, "Editor’s Notes in Depth")
+    .replace(/^[\s\-–—*#]*Editors Notes in Depth[\s\-–—*#]*$/gim, "Editor’s Notes in Depth")
+    .replace(/^[\s\-–—*#]*Editor Notes in Depth[\s\-–—*#]*$/gim, "Editor’s Notes in Depth")
+    .replace(/^[\s\-–—*#]*Rewrite Debrief[\s\-–—*#]*$/gim, "Editor’s Debrief")
+    .replace(/^[\s\-–—*#]*Editors Debrief[\s\-–—*#]*$/gim, "Editor’s Debrief")
+    .replace(/^[\s\-–—*#]*Editor Debrief[\s\-–—*#]*$/gim, "Editor’s Debrief")
+    .replace(/^[\s\-–—*#]*Editors Final Rewrite Notes[\s\-–—*#]*$/gim, "Editor’s Debrief")
+    .replace(/^[\s\-–—*#]*Editor Final Rewrite Notes[\s\-–—*#]*$/gim, "Editor’s Debrief");
+}
+
 function normalizeAssistantCopyText(content: string) {
   const parsed = parseStructuredMR(content);
 
@@ -1233,13 +1246,17 @@ export default function Home() {
 
       const data = await res.json();
 
-      setMessages((m) =>
-        m.map((msg) =>
-          msg.role === "assistant" && msg.content === THINKING_TOKEN
-            ? { role: "assistant", content: data.output || "No response." }
-            : msg
-        )
-      );
+const normalizedOutput = normalizeAssistantHeadings(
+  data.output || "No response."
+);
+
+setMessages((m) =>
+  m.map((msg) =>
+    msg.role === "assistant" && msg.content === THINKING_TOKEN
+      ? { role: "assistant", content: normalizedOutput }
+      : msg
+  )
+);
 
       const analysisJump = getRandomInt(14, 28);
       const rewriteJump = getRandomInt(36, 68);
