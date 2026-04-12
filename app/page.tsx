@@ -742,16 +742,20 @@ function ThinkingStatus() {
 function StructuredAssistantMessage({
   content,
   sourceRaw,
+  demoCount,
   onRewriteProduced,
 }: {
   content: string;
   sourceRaw: string;
+  demoCount: number;
   onRewriteProduced?: () => void;
 }) {
   const { hasStructured, sections } = useMemo(() => parseStructuredMR(content), [content]);
   const rewriteSectionRef = useRef<HTMLElement | null>(null);
   const newestRewriteRef = useRef<HTMLDivElement | null>(null);
+  const continuationRef = useRef<HTMLElement | null>(null);
   const [showRewrite, setShowRewrite] = useState(false);
+  const [showContinuation, setShowContinuation] = useState(false);
   const [showRewriteButton, setShowRewriteButton] = useState(false);
   const [rewriteState, setRewriteState] = useState<"idle" | "working">("idle");
   const [copiedRewriteKey, setCopiedRewriteKey] = useState<string | null>(null);
@@ -766,6 +770,7 @@ function StructuredAssistantMessage({
 
   useEffect(() => {
     setShowRewrite(false);
+    setShowContinuation(false);
     setShowRewriteButton(false);
     setRewriteState("idle");
     setCopiedRewriteKey(null);
@@ -1058,6 +1063,123 @@ function StructuredAssistantMessage({
               </button>
             </div>
           ) : null}
+        </section>
+      ) : null}
+
+      {showRewrite && demoCount >= 2 && !showContinuation ? (
+        <div className="mt-10 flex justify-center">
+          <button
+            onClick={() => {
+              setShowContinuation(true);
+              setTimeout(() => {
+                continuationRef.current?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+              }, 100);
+            }}
+            className="rounded-xl border px-6 py-3 text-sm font-semibold text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
+            style={{
+              backgroundColor: MR_GOLD,
+              borderColor: MR_GOLD,
+            }}
+          >
+            See where this goes →
+          </button>
+        </div>
+      ) : null}
+
+      {showContinuation ? (
+        <section
+          ref={continuationRef}
+          className="mt-12 rounded-2xl border border-neutral-800 bg-neutral-950/70 px-5 py-6"
+        >
+          <h2 className="text-[20px] font-semibold tracking-tight text-neutral-100">
+            What you’ve just seen is the final pass.
+          </h2>
+
+          <p className="mt-3 text-[17px] leading-7 text-neutral-300">
+            The part most people never get to.
+          </p>
+
+          <p className="mt-4 text-[17px] leading-7 text-neutral-400">
+            Most writing is created, edited… and then sent.
+          </p>
+
+          <p className="mt-4 text-[17px] leading-7 text-neutral-400">
+            Gravitas sits at the point just before that.
+          </p>
+
+          <p className="mt-4 text-[17px] leading-7 text-neutral-400">
+            Where the message is already formed — but not yet exposed.
+          </p>
+
+          <p className="mt-4 text-[17px] leading-7 text-neutral-400">
+            It shows you where attention drops, where meaning blurs, and where the message weakens without you noticing — and corrects it before it ever reaches the reader.
+          </p>
+
+          <p className="mt-4 text-[17px] leading-7 text-neutral-400">
+            Not by rewriting for you — but by revealing what your message is actually doing.
+          </p>
+
+          <p className="mt-4 text-[17px] leading-7 text-neutral-300">
+            Once you see it, it’s very hard to go back to sending blind.
+          </p>
+
+          <p className="mt-6 text-[17px] leading-7 text-neutral-400">
+            Most people start with email.
+          </p>
+
+          <p className="mt-4 text-[17px] leading-7 text-neutral-400">
+            Then it spreads.
+          </p>
+
+          <p className="mt-4 text-[17px] leading-7 text-neutral-400">
+            Landing pages — where small shifts change outcomes.
+          </p>
+
+          <p className="mt-4 text-[17px] leading-7 text-neutral-400">
+            Reports and documents — where clarity matters more than persuasion.
+          </p>
+
+          <p className="mt-4 text-[17px] leading-7 text-neutral-400">
+            Messages that are difficult to write — where tone is everything.
+          </p>
+
+          <p className="mt-4 text-[17px] leading-7 text-neutral-300">
+            Anywhere the wording carries weight.
+          </p>
+
+          <p className="mt-6 text-[17px] leading-7 text-neutral-400">
+            You can keep using Gravitas as part of your workflow:
+          </p>
+
+          <ul className="mt-3 list-disc space-y-1 pl-6 text-[17px] leading-7 text-neutral-300">
+            <li>emails</li>
+            <li>landing pages</li>
+            <li>posts</li>
+            <li>anything you’re about to send or publish</li>
+          </ul>
+
+          <p className="mt-6 text-[17px] leading-7 text-neutral-400">
+            As a final check — before it goes out.
+          </p>
+
+          <p className="mt-8 text-lg text-neutral-100">$195 / month</p>
+          <p className="mt-1 text-sm text-neutral-500">Cancel anytime.</p>
+
+          <div className="mt-8">
+            <button
+              onClick={() => window.location.href = "/api/stripe/checkout"}
+              className="rounded-xl border px-6 py-3 text-sm font-semibold text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
+              style={{
+                backgroundColor: MR_GOLD,
+                borderColor: MR_GOLD,
+              }}
+            >
+              Subscribe
+            </button>
+          </div>
         </section>
       ) : null}
 
@@ -1684,6 +1806,7 @@ export default function Home() {
                         <StructuredAssistantMessage
                           content={m.content}
                           sourceRaw={sourceRaw}
+                          demoCount={demoCount}
                           onRewriteProduced={() => {
                             setAnalysisBoost((prev) => prev + getRandomInt(6, 14));
                             setRewriteBoost((prev) => prev + getRandomInt(24, 46));
