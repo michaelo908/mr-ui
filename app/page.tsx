@@ -744,11 +744,13 @@ function StructuredAssistantMessage({
   sourceRaw,
   demoCount,
   onRewriteProduced,
+  onSubscribe,
 }: {
   content: string;
   sourceRaw: string;
   demoCount: number;
   onRewriteProduced?: () => void;
+  onSubscribe: () => void;
 }) {
   const { hasStructured, sections } = useMemo(() => parseStructuredMR(content), [content]);
   const rewriteSectionRef = useRef<HTMLElement | null>(null);
@@ -1170,7 +1172,7 @@ function StructuredAssistantMessage({
 
           <div className="mt-8">
             <button
-              onClick={() => window.location.href = "/api/stripe/checkout"}
+              onClick={onSubscribe}
               className="rounded-xl border px-6 py-3 text-sm font-semibold text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
               style={{
                 backgroundColor: MR_GOLD,
@@ -1807,6 +1809,7 @@ export default function Home() {
                           content={m.content}
                           sourceRaw={sourceRaw}
                           demoCount={demoCount}
+                          onSubscribe={handleSubscribe}
                           onRewriteProduced={() => {
                             setAnalysisBoost((prev) => prev + getRandomInt(6, 14));
                             setRewriteBoost((prev) => prev + getRandomInt(24, 46));
