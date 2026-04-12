@@ -352,7 +352,6 @@ function normalizeAssistantCopyText(content: string) {
   return parts.join("\n\n").trim();
 }
 
-// force rebuild
 function getSectionKind(
   line: string
 ): "summary" | "depth" | "rewrite" | "debrief" | null {
@@ -432,7 +431,6 @@ function parseStructuredMR(content: string) {
   return { hasStructured, sections, order };
 }
 
-
 function capitalizeFirst(text: string) {
   if (!text) return text;
   return text.charAt(0).toUpperCase() + text.slice(1);
@@ -497,9 +495,7 @@ function pickSignalPhrase(text: string): string | null {
     return "nothing pulls the reader forward";
   }
 
-  if (
-    /(trust thins|trust weakens|skeptic|suspicion|credibility)/.test(t)
-  ) {
+  if (/(trust thins|trust weakens|skeptic|suspicion|credibility)/.test(t)) {
     return "trust weakens too early";
   }
 
@@ -571,10 +567,7 @@ function deriveOpeningStatement(summary?: string) {
     );
   }
 
-  return trimToWordLimit(
-    `${capitalizeFirst(first)} — and ${second}.`,
-    20
-  );
+  return trimToWordLimit(`${capitalizeFirst(first)} — and ${second}.`, 20);
 }
 
 function renderMR(content: string) {
@@ -639,8 +632,8 @@ function renderMR(content: string) {
             level === 1
               ? "text-[22px] font-semibold"
               : level === 2
-                ? "text-[20px] font-semibold"
-                : "text-[18px] font-semibold";
+              ? "text-[20px] font-semibold"
+              : "text-[18px] font-semibold";
 
           const Tag = `h${level}` as keyof React.JSX.IntrinsicElements;
 
@@ -904,7 +897,7 @@ function StructuredAssistantMessage({
         <section>
           {openingStatement ? (
             <div className="mb-5">
-              <p className="text-[19px] leading-7 tracking-tight text-neutral-100">
+              <p className="text-[19px] leading-7 tracking-tight text-neutral-100 italic">
                 {openingStatement}
               </p>
               <p className="mt-1 text-sm italic text-neutral-500">Read on ↓</p>
@@ -1311,13 +1304,13 @@ export default function Home() {
     if (visibleMessages.length === 0) return;
 
     const combined = visibleMessages
-  .map((m) =>
-    m.role === "assistant"
-      ? normalizeAssistantCopyText(m.content.trim())
-      : m.content.trim()
-  )
-  .filter(Boolean)
-  .join("\n\n———\n\n");
+      .map((m) =>
+        m.role === "assistant"
+          ? normalizeAssistantCopyText(m.content.trim())
+          : m.content.trim()
+      )
+      .filter(Boolean)
+      .join("\n\n———\n\n");
 
     await copyTextForFormat(combined, format);
 
@@ -1401,17 +1394,17 @@ export default function Home() {
 
       const data = await res.json();
 
-const normalizedOutput = normalizeAssistantHeadings(
-  data.output || "No response."
-);
+      const normalizedOutput = normalizeAssistantHeadings(
+        data.output || "No response."
+      );
 
-setMessages((m) =>
-  m.map((msg) =>
-    msg.role === "assistant" && msg.content === THINKING_TOKEN
-      ? { role: "assistant", content: normalizedOutput }
-      : msg
-  )
-);
+      setMessages((m) =>
+        m.map((msg) =>
+          msg.role === "assistant" && msg.content === THINKING_TOKEN
+            ? { role: "assistant", content: normalizedOutput }
+            : msg
+        )
+      );
 
       const analysisJump = getRandomInt(14, 28);
       const rewriteJump = getRandomInt(36, 68);
@@ -1646,8 +1639,8 @@ setMessages((m) =>
                       m.role === "user"
                         ? "border-neutral-800 bg-neutral-900/40"
                         : isThinking
-                          ? "border-emerald-900/60 bg-emerald-900/15"
-                          : "border-neutral-800 bg-neutral-900/20"
+                        ? "border-emerald-900/60 bg-emerald-900/15"
+                        : "border-neutral-800 bg-neutral-900/20"
                     )}
                   >
                     <div
