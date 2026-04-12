@@ -432,6 +432,151 @@ function parseStructuredMR(content: string) {
   return { hasStructured, sections, order };
 }
 
+
+function capitalizeFirst(text: string) {
+  if (!text) return text;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function normalizeOpeningSignalText(text: string) {
+  return stripInlineMarkdown(text)
+    .toLowerCase()
+    .replace(/[“”"']/g, "")
+    .replace(/[–—]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function uniqueStrings(values: Array<string | null | undefined>) {
+  return values.filter((value, index, arr): value is string => {
+    if (!value) return false;
+    return arr.indexOf(value) === index;
+  });
+}
+
+function pickSignalPhrase(text: string): string | null {
+  const t = normalizeOpeningSignalText(text);
+
+  if (
+    /(doesnt hold attention|doesn't hold attention|attention drops|attention collapses|reader drifts|reason to stay|reason to care|pull the reader forward|pulls the reader forward|fades out|falls flat|doesnt land|doesn't land|lands quiet|losing people)/.test(
+      t
+    )
+  ) {
+    return "it doesn't hold attention";
+  }
+
+  if (
+    /(asks too much|too much before|too much too early|over explain|over-explain|more complete|dense|too long|effort halfway through|this is going to be work)/.test(
+      t
+    )
+  ) {
+    return "it asks too much too early";
+  }
+
+  if (
+    /(reads clearly|clear but|clear yet|clarity|logical|reads fine|technically correct|makes sense|well explained|explains everything clearly)/.test(
+      t
+    )
+  ) {
+    return "it reads clearly";
+  }
+
+  if (
+    /(never quite understands|doesnt understand what this is|doesn't understand what this is|unclear positioning|confus|meaning blurs|what this is)/.test(
+      t
+    )
+  ) {
+    return "the reader never fully understands it";
+  }
+
+  if (
+    /(no real pull|nothing pulls|tension fails|lack of tension|urgency|desire never forms|momentum collapses|forward momentum|no reason to stay)/.test(
+      t
+    )
+  ) {
+    return "nothing pulls the reader forward";
+  }
+
+  if (
+    /(trust thins|trust weakens|skeptic|suspicion|credibility)/.test(t)
+  ) {
+    return "trust weakens too early";
+  }
+
+  if (
+    /(never fully connects|doesnt connect|doesn't connect|connection fails|contact|resonate)/.test(
+      t
+    )
+  ) {
+    return "it never fully connects";
+  }
+
+  if (/(too general|generic|vague|stays broad|problem vividness)/.test(t)) {
+    return "it stays too general";
+  }
+
+  return null;
+}
+
+function trimToWordLimit(text: string, maxWords: number) {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= maxWords) return text.trim();
+  return `${words.slice(0, maxWords).join(" ")}…`;
+}
+
+function deriveOpeningStatement(summary?: string) {
+  if (!summary?.trim()) return null;
+
+  const nodes = parseContentNodes(summary);
+  const candidates: string[] = [];
+
+  nodes.forEach((node) => {
+    if (node.type === "list") {
+      candidates.push(...node.items);
+    } else if (node.type === "para") {
+      candidates.push(...node.text.split("\n"));
+    }
+  });
+
+  const phrases = uniqueStrings(
+    candidates.slice(0, 6).map((item) => pickSignalPhrase(item))
+  );
+
+  if (phrases.length === 0) return null;
+
+  if (phrases.length === 1) {
+    return trimToWordLimit(`${capitalizeFirst(phrases[0])}.`, 20);
+  }
+
+  const [first, second] = phrases;
+
+  if (first === "it reads clearly") {
+    return trimToWordLimit(
+      `${capitalizeFirst(first)} — but ${second.replace(/^it /, "")}.`,
+      20
+    );
+  }
+
+  if (second === "it reads clearly") {
+    return trimToWordLimit(
+      `${capitalizeFirst(second)} — but ${first.replace(/^it /, "")}.`,
+      20
+    );
+  }
+
+  if (first.startsWith("it ") && second.startsWith("it ")) {
+    return trimToWordLimit(
+      `${capitalizeFirst(first)} — and ${second.slice(3)}.`,
+      20
+    );
+  }
+
+  return trimToWordLimit(
+    `${capitalizeFirst(first)} — and ${second}.`,
+    20
+  );
+}
+
 function renderMR(content: string) {
   const nodes = parseContentNodes(content);
 
@@ -624,6 +769,7 @@ function StructuredAssistantMessage({
   const depth = sections.depth?.trim();
   const rewrite = sections.rewrite?.trim();
   const debrief = sections.debrief?.trim();
+  const openingStatement = useMemo(() => deriveOpeningStatement(summary), [summary]);
 
   useEffect(() => {
     setShowRewrite(false);
@@ -756,6 +902,15 @@ function StructuredAssistantMessage({
     <div className="space-y-5">
       {summary ? (
         <section>
+          {openingStatement ? (
+            <div className="mb-5">
+              <p className="text-[19px] leading-7 tracking-tight text-neutral-100">
+                {openingStatement}
+              </p>
+              <p className="mt-1 text-sm italic text-neutral-500">Read on ↓</p>
+            </div>
+          ) : null}
+
           <h2 className="text-[20px] font-semibold tracking-tight text-neutral-100">
             Editor’s Summary
           </h2>
@@ -1466,7 +1621,7 @@ setMessages((m) =>
         >
           {messages.length === 0 ? (
             <div className="text-[17px] leading-7 text-neutral-400">
-              Start by pasting an email, landing page, ad, article, or any text you want reviewed.
+              Start by pasting something you sent recently — an email, message, landing page, ad, or article.
               <div className="mt-2 text-neutral-600">
                 Tip: <span className="text-neutral-400">Enter</span> sends,{" "}
                 <span className="text-neutral-400">Shift+Enter</span> makes a new line.
@@ -1559,7 +1714,7 @@ setMessages((m) =>
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={onKeyDown}
               disabled={isDemoLocked}
-              placeholder="Paste your text here…"
+              placeholder="Paste something you sent recently — and see what actually happened"
               className={classNames(
                 "h-[56px] w-full resize-none rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-[17px] leading-7 text-neutral-100 outline-none focus:border-neutral-600",
                 isDemoLocked && "cursor-not-allowed opacity-60"
@@ -1575,7 +1730,7 @@ setMessages((m) =>
             </button>
           </div>
           <div className="mt-2 text-xs text-neutral-500">
-            Built for real work — longer pieces may take a little longer to process.
+            Start with an email or message you’ve already sent.
           </div>
         </div>
       </div>
