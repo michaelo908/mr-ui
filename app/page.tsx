@@ -1221,6 +1221,7 @@ export default function Home() {
   const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
   const [isBookTrial, setIsBookTrial] = useState(false);
   const [bookTrialEndDate, setBookTrialEndDate] = useState<Date | null>(null);
+  const [bookTrialDaysRemaining, setBookTrialDaysRemaining] = useState<number | null>(null);
   const [demoCount, setDemoCount] = useState(0);
   const [demoSessionGranted, setDemoSessionGranted] = useState(false);
   const [accessResolved, setAccessResolved] = useState(false);
@@ -1387,6 +1388,20 @@ export default function Home() {
 
 setIsBookTrial(Boolean(trialActive));
 setBookTrialEndDate(trialActive ? trialEndDate : null);
+
+if (trialActive && trialEndDate) {
+  const daysRemaining = Math.max(
+    0,
+    Math.ceil(
+      (trialEndDate.getTime() - Date.now()) /
+      (1000 * 60 * 60 * 24)
+    )
+  );
+
+  setBookTrialDaysRemaining(daysRemaining);
+} else {
+  setBookTrialDaysRemaining(null);
+}
 
 setDemoCount(count);
 
@@ -1689,6 +1704,12 @@ setDemoSessionGranted(
             <div className="mt-1 text-sm text-neutral-400">
               Narrative Intelligence for Momentum, Flow, and Perception.
             </div>
+            {bookTrialDaysRemaining !== null && (
+  <div className="mt-1 text-xs text-neutral-500">
+    Hidden Campaign Trial • {bookTrialDaysRemaining} day
+    {bookTrialDaysRemaining === 1 ? "" : "s"} remaining
+  </div>
+)}
 
             {isSubscribed === false && !isBookTrial ? (
   <div className="mt-1 text-xs text-neutral-500">
