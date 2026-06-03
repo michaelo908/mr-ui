@@ -1219,6 +1219,8 @@ export default function Home() {
   const [copiedAllKey, setCopiedAllKey] = useState<string | null>(null);
   const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
   const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
+  const [isBookTrial, setIsBookTrial] = useState(false);
+  const [bookTrialEndDate, setBookTrialEndDate] = useState<Date | null>(null);
   const [demoCount, setDemoCount] = useState(0);
   const [demoSessionGranted, setDemoSessionGranted] = useState(false);
   const [accessResolved, setAccessResolved] = useState(false);
@@ -1378,10 +1380,13 @@ export default function Home() {
         ? new Date(profile.trial_end_date)
         : null;
 
-const trialActive =
-  accessLevel === "trial" &&
-  trialEndDate &&
-  trialEndDate > new Date();
+        const trialActive =
+        accessLevel === "trial" &&
+        trialEndDate &&
+        trialEndDate > new Date();
+
+setIsBookTrial(Boolean(trialActive));
+setBookTrialEndDate(trialActive ? trialEndDate : null);
 
 setDemoCount(count);
 
@@ -1685,11 +1690,21 @@ setDemoSessionGranted(
               Narrative Intelligence for Momentum, Flow, and Perception.
             </div>
 
-            {isSubscribed === false ? (
-              <div className="mt-1 text-xs text-neutral-500">
-                Free trial: {reviewsRemaining} review{reviewsRemaining === 1 ? "" : "s"} remaining
-              </div>
-            ) : null}
+            {isSubscribed === false && !isBookTrial ? (
+  <div className="mt-1 text-xs text-neutral-500">
+    {isBookTrial && bookTrialEndDate ? (
+      <>
+        Hidden Campaign trial active until{" "}
+        {bookTrialEndDate.toLocaleDateString()}
+      </>
+    ) : (
+      <>
+        Free trial: {reviewsRemaining} review
+        {reviewsRemaining === 1 ? "" : "s"} remaining
+      </>
+    )}
+  </div>
+) : null}
 
             <div className="mt-1 text-xs text-neutral-500">
               Messages analysed today: {analysesToday} · Rewrites produced today: {rewritesToday}
