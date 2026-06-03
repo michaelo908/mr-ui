@@ -1357,7 +1357,7 @@ export default function Home() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("demo_count")
+        .select("demo_count, access_level, trial_end_date")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -1371,8 +1371,23 @@ export default function Home() {
         setDemoSessionGranted(true);
       } else {
         const count = profile.demo_count ?? 0;
-        setDemoCount(count);
-        setDemoSessionGranted(count < FREE_TRIAL_LIMIT);
+
+        const accessLevel = profile.access_level;
+
+        const trialEndDate = profile.trial_end_date
+        ? new Date(profile.trial_end_date)
+        : null;
+
+const trialActive =
+  accessLevel === "trial" &&
+  trialEndDate &&
+  trialEndDate > new Date();
+
+setDemoCount(count);
+
+setDemoSessionGranted(
+  trialActive || count < FREE_TRIAL_LIMIT
+);
       }
 
       setAccessResolved(true);
