@@ -1,9 +1,19 @@
 import Stripe from "stripe";
+import { Resend } from "resend";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+function getResend() {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("Missing RESEND_API_KEY");
+  }
+
+  return new Resend(process.env.RESEND_API_KEY);
+}
+
 const HIDDEN_CAMPAIGN_PRICE_ID = "price_1TdYZpPEeaE0AI8SbfKD4VG6";
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-02-25.clover",
 });
@@ -34,6 +44,7 @@ export async function POST(req: Request) {
       process.env.STRIPE_WEBHOOK_SECRET!
     );
   } catch (err) {
+    console.error("Invalid webhook signature:", err);
     return NextResponse.json(
       { error: "Invalid webhook signature" },
       { status: 400 }
@@ -41,66 +52,121 @@ export async function POST(req: Request) {
   }
 
   try {
-    // ✅ CHECKOUT COMPLETED (new subscription)
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
+
       const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
-      limit: 10,
-});
+        limit: 10,
+      });
 
-const isHiddenCampaignPurchase = lineItems.data.some(
-  (item) => item.price?.id === HIDDEN_CAMPAIGN_PRICE_ID
-);
-if (isHiddenCampaignPurchase) {
-  const email = session.customer_details?.email;
+      const isHiddenCampaignPurchase = lineItems.data.some(
+        (item) => item.price?.id === HIDDEN_CAMPAIGN_PRICE_ID
+      );
 
-  console.log("Hidden Campaign purchase detected", email);
+      if (isHiddenCampaignPurchase) {
+        const email = session.customer_details?.email;
 
-  if (email) {
-    const { data: usersData, error: usersError } =
-      await supabase.auth.admin.listUsers();
+        console.log("Hidden Campaign purchase detected", email);
 
-    if (usersError) {
-      console.error("Unable to list Supabase users", usersError);
-    }
+        if (email) {
+          const { data: usersData, error: usersError } =
+            await supabase.auth.admin.listUsers();
 
-    const existingUser = usersData?.users.find(
-      (user) => user.email?.toLowerCase() === email.toLowerCase()
-    );
+          if (usersError) {
+            console.error("Unable to list Supabase users", usersError);
+          }
 
-    let userId = existingUser?.id;
+          const existingUser = usersData?.users.find(
+            (user) => user.email?.toLowerCase() === email.toLowerCase()
+          );
 
-    if (!userId) {
-      const { data: newUserData, error: createUserError } =
-        await supabase.auth.admin.createUser({
-          email,
-          email_confirm: true,
-        });
+          let userId = existingUser?.id;
 
-      if (createUserError) {
-        console.error("Unable to create Supabase user", createUserError);
+          if (!userId) {
+            const { data: newUserData, error: createUserError } =
+              await supabase.auth.admin.createUser({
+                email,
+                email_confirm: true,
+              });
+
+            if (createUserError) {
+              console.error("Unable to create Supabase user", createUserError);
+            }
+
+            userId = newUserData?.user?.id;
+          }
+
+          if (userId) {
+            const trialStartDate = new Date();
+            const trialEndDate = new Date();
+            trialEndDate.setDate(trialEndDate.getDate() + 30);
+
+            const { error: profileError } = await supabase
+              .from("profiles")
+              .upsert(
+                {
+                  id: userId,
+                  access_level: "trial",
+                  trial_start_date: trialStartDate.toISOString(),
+                  trial_end_date: trialEndDate.toISOString(),
+                },
+                { onConflict: "id" }
+              );
+
+            if (profileError) {
+              console.error("Unable to grant trial access", profileError);
+            }
+
+            const { error: emailError } = await getResend().emails.send({
+              from: "Michael <hello@multirrupt.ai>",
+              to: email,
+              subject: "Your Hidden Campaign access is ready",
+              html: `
+                <p>Hi,</p>
+
+                <p>Thanks for purchasing <strong>The Hidden Campaign Method</strong>.</p>
+
+                <p>Your access is now ready.</p>
+
+                <p>
+                  <strong>Download the guide:</strong><br />
+                  <a href="https://ixhbcjippdxzdhlerndj.supabase.co/storage/v1/object/public/downloads/hidden-campaign.pdf">Download The Hidden Campaign PDF</a>
+                </p>
+
+                <p>
+                  <strong>Watch the companion video:</strong><br />
+                  <a href="https://youtu.be/NTg_eVFycz4">Watch the companion video</a>
+                </p>
+
+                <p>
+                  <strong>Access Gravitas:</strong><br />
+                  <a href="https://www.multirrupt.ai">Open Gravitas</a>
+                </p>
+
+                <p>
+                  Use the same email address you used to purchase the book. Gravitas will send you a magic login link.
+                </p>
+
+                <p>
+                  Need help?<br />
+                  <a href="mailto:support@multirrupt.ai">support@multirrupt.ai</a>
+                </p>
+
+                <p>
+                  Enjoy,<br />
+                  Michael
+                </p>
+              `,
+            });
+
+            if (emailError) {
+              console.error("Unable to send Hidden Campaign email", emailError);
+            }
+          }
+        }
       }
 
-      userId = newUserData?.user?.id;
-    }
-
-    if (userId) {
-      const trialEndDate = new Date();
-      trialEndDate.setDate(trialEndDate.getDate() + 30);
-
-      await supabase.from("profiles").upsert(
-        {
-          id: userId,
-          access_level: "trial",
-          trial_start_date: new Date().toISOString(),
-          trial_end_date: trialEndDate.toISOString(),
-        },
-        { onConflict: "id" }
-      );
-    }
-  }
-}
-      const userID = session.metadata?.user_id;
+      const userId = session.metadata?.user_id;
       const customerId =
         typeof session.customer === "string" ? session.customer : null;
       const subscriptionId =
@@ -108,10 +174,10 @@ if (isHiddenCampaignPurchase) {
           ? session.subscription
           : null;
 
-      if (userID) {
+      if (userId) {
         await supabase.from("subscriptions").upsert(
           {
-            user_id: userID,
+            user_id: userId,
             stripe_customer_id: customerId,
             stripe_subscription_id: subscriptionId,
             status: "active",
@@ -121,29 +187,22 @@ if (isHiddenCampaignPurchase) {
       }
     }
 
-    // ✅ SUBSCRIPTION UPDATED (status changes)
     if (event.type === "customer.subscription.updated") {
       const subscription = event.data.object as Stripe.Subscription;
 
-      const subscriptionId = subscription.id;
-      const status = subscription.status;
-
       await supabase
         .from("subscriptions")
-        .update({ status })
-        .eq("stripe_subscription_id", subscriptionId);
+        .update({ status: subscription.status })
+        .eq("stripe_subscription_id", subscription.id);
     }
 
-    // ✅ SUBSCRIPTION CANCELLED / DELETED
     if (event.type === "customer.subscription.deleted") {
       const subscription = event.data.object as Stripe.Subscription;
-
-      const subscriptionId = subscription.id;
 
       await supabase
         .from("subscriptions")
         .update({ status: "cancelled" })
-        .eq("stripe_subscription_id", subscriptionId);
+        .eq("stripe_subscription_id", subscription.id);
     }
 
     return NextResponse.json({ received: true });
