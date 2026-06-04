@@ -178,7 +178,7 @@ export async function POST(req: Request) {
             }
 
             const { error: emailError } = await getResend().emails.send({
-              from: "Michael <hello@multirrupt.ai>",
+              from: "Multirrupt Gravitas <support@multirrupt.ai>",
               to: email,
               subject: "Your Hidden Campaign access is ready",
               html: `
