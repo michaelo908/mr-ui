@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import Stripe from "stripe";
 import { Resend } from "resend";
 import { headers } from "next/headers";
@@ -10,6 +11,65 @@ function getResend() {
   }
 
   return new Resend(process.env.RESEND_API_KEY);
+}
+
+async function addToMailchimp(email: string) {
+  const apiKey = process.env.MAILCHIMP_API_KEY;
+  const audienceId = process.env.MAILCHIMP_AUDIENCE_ID;
+  const serverPrefix = process.env.MAILCHIMP_SERVER_PREFIX;
+
+  if (!apiKey || !audienceId || !serverPrefix) {
+    console.error("Missing Mailchimp environment variables");
+    return;
+  }
+
+  const subscriberHash = crypto
+    .createHash("md5")
+    .update(email.toLowerCase())
+    .digest("hex");
+
+  const auth = Buffer.from(`anystring:${apiKey}`).toString("base64");
+
+  const memberResponse = await fetch(
+    `https://${serverPrefix}.api.mailchimp.com/3.0/lists/${audienceId}/members/${subscriberHash}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email_address: email,
+        status_if_new: "subscribed",
+      }),
+    }
+  );
+
+  if (!memberResponse.ok) {
+    console.error("Mailchimp member error:", await memberResponse.text());
+    return;
+  }
+
+  const tagResponse = await fetch(
+    `https://${serverPrefix}.api.mailchimp.com/3.0/lists/${audienceId}/members/${subscriberHash}/tags`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        tags: [{ name: "hidden-campaign-buyer", status: "active" }],
+      }),
+    }
+  );
+
+  if (!tagResponse.ok) {
+    console.error("Mailchimp tag error:", await tagResponse.text());
+    return;
+  }
+
+  console.log("Added Hidden Campaign buyer to Mailchimp", email);
 }
 
 const HIDDEN_CAMPAIGN_PRICE_ID = "price_1TdYZpPEeaE0AI8SbfKD4VG6";
@@ -161,6 +221,8 @@ export async function POST(req: Request) {
 
             if (emailError) {
               console.error("Unable to send Hidden Campaign email", emailError);
+            } else {
+              await addToMailchimp(email);
             }
           }
         }
