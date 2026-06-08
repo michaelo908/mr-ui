@@ -194,11 +194,6 @@ export async function POST(req: Request) {
                 </p>
 
                 <p>
-                  <strong>Watch the companion video:</strong><br />
-                  <a href="https://youtu.be/NTg_eVFycz4">Watch the companion video</a>
-                </p>
-
-                <p>
                   <strong>Access Gravitas:</strong><br />
                   <a href="https://www.multirrupt.ai">Open Gravitas</a>
                 </p>
