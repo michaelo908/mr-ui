@@ -13,7 +13,11 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
-async function addToMailchimp(email: string) {
+async function addToMailchimp(
+  email: string,
+  firstName?: string,
+  lastName?: string
+) {
   const apiKey = process.env.MAILCHIMP_API_KEY;
   const audienceId = process.env.MAILCHIMP_AUDIENCE_ID;
   const serverPrefix = process.env.MAILCHIMP_SERVER_PREFIX;
@@ -41,6 +45,10 @@ async function addToMailchimp(email: string) {
       body: JSON.stringify({
         email_address: email,
         status_if_new: "subscribed",
+        merge_fields: {
+          FNAME: firstName || "",
+          LNAME: lastName || "",
+        },
       }),
     }
   );
@@ -126,6 +134,10 @@ export async function POST(req: Request) {
       if (isHiddenCampaignPurchase) {
         const email = session.customer_details?.email;
 
+        const fullName = session.customer_details?.name || "";
+        const [firstName, ...rest] = fullName.trim().split(" ");
+        const lastName = rest.join(" ");
+
         console.log("Hidden Campaign purchase detected", email);
 
         if (email) {
@@ -159,7 +171,7 @@ export async function POST(req: Request) {
           if (userId) {
             const trialStartDate = new Date();
             const trialEndDate = new Date();
-            trialEndDate.setDate(trialEndDate.getDate() + 30);
+            trialEndDate.setDate(trialEndDate.getDate() + 7);
 
             const { error: profileError } = await supabase
               .from("profiles")
@@ -187,6 +199,8 @@ export async function POST(req: Request) {
                 <p>Thanks for purchasing <strong>The Hidden Campaign Method</strong>.</p>
 
                 <p>Your access is now ready.</p>
+
+                <p>Your 7-day Gravitas trial access is now ready.</p>
 
                 <p>
                   <strong>Download the guide:</strong><br />
@@ -217,7 +231,7 @@ export async function POST(req: Request) {
             if (emailError) {
               console.error("Unable to send Hidden Campaign email", emailError);
             } else {
-              await addToMailchimp(email);
+              await addToMailchimp(email, firstName, lastName);
             }
           }
         }
