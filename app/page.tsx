@@ -1215,6 +1215,7 @@ export default function Home() {
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [copiedAllKey, setCopiedAllKey] = useState<string | null>(null);
   const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
@@ -1492,6 +1493,9 @@ setDemoSessionGranted(
     if (sendLockRef.current) return;
 
     const raw = draft;
+    if (imageFile) {
+  console.log("Image selected:", imageFile.name);
+}
     if (!raw.trim() || isLoading || isDemoLocked) return;
 
     if (raw.length > 30000) {
@@ -1789,6 +1793,17 @@ setDemoSessionGranted(
         >
           {messages.length === 0 ? (
             <div className="text-[17px] leading-7 text-neutral-400">
+
+              <div className="mb-3">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  setImageFile(file);
+                }}
+              />
+            </div>
               Start by pasting something you sent recently — an email, message, landing page, ad, or article.
               <div className="mt-2 text-neutral-600">
                 Tip: <span className="text-neutral-400">Enter</span> sends,{" "}
@@ -1879,6 +1894,16 @@ setDemoSessionGranted(
 
         <div className="mt-4 rounded-2xl border border-neutral-800 bg-neutral-950 p-3">
           <div className="flex gap-2">
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                setImageFile(file);
+              }}
+              disabled={isDemoLocked}
+              className="mb-2 block text-sm text-neutral-400"
+            />
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
