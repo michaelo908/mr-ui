@@ -165,8 +165,29 @@ export async function POST(req: Request) {
 
   const heresyMode = isMrHeresyMode(body);
 
-  // Preserve any per-request context from the UI
+    // Preserve any per-request context from the UI
   const originalContext = typeof body?.context === "string" ? body.context : "";
+  const imageData = typeof body?.imageData === "string" ? body.imageData : null;
+
+  const visualAnalysisContext = imageData
+    ? `
+VISUAL INPUT PRESENT:
+The user has supplied an image/screenshot as part of this request.
+
+Analyse the image as a communication experience, not merely as visual design.
+Focus on:
+- first impression
+- visual hierarchy
+- likely visitor/reader conclusions
+- intended message vs experienced message
+- attention path
+- trust/friction signals
+- hidden campaign
+- structural and copy implications
+
+If text is also supplied, analyse the text and image together.
+`.trim()
+    : "";
 
   // If we already have a diagnostic in the context, avoid re-arming intake rules.
   const continuation = isContinuationContext(body);
@@ -174,14 +195,18 @@ export async function POST(req: Request) {
   // Sealed framing rules:
   // - Normal mode: MR_DOMAIN_FRAME (+ originalContext), except continuation where we keep originalContext only
   // - MR Heresy mode: MR_HERESY_CHARTER only (+ originalContext), never MR_DOMAIN_FRAME
+    const combinedOriginalContext = [originalContext, visualAnalysisContext]
+    .filter(Boolean)
+    .join("\n\n");
+
   const context = heresyMode
-    ? originalContext
-      ? `${MR_HERESY_CHARTER}\n\n${originalContext}`
+    ? combinedOriginalContext
+      ? `${MR_HERESY_CHARTER}\n\n${combinedOriginalContext}`
       : MR_HERESY_CHARTER
     : continuation
-      ? originalContext
-      : originalContext
-        ? `${MR_DOMAIN_FRAME}\n\n${originalContext}`
+      ? combinedOriginalContext
+      : combinedOriginalContext
+        ? `${MR_DOMAIN_FRAME}\n\n${combinedOriginalContext}`
         : MR_DOMAIN_FRAME;
 
   // Patch body upstream

@@ -1167,7 +1167,7 @@ function StructuredAssistantMessage({
             As a final check — before it goes out.
           </p>
 
-          <p className="mt-8 text-lg text-neutral-100">$195 / month</p>
+          <p className="mt-8 text-lg text-neutral-100">$97 / month</p>
           <p className="mt-1 text-sm text-neutral-500">Cancel anytime.</p>
 
           <div className="mt-8">
@@ -1208,6 +1208,19 @@ function parseCommand(raw: string): { mode: "general" | "mr_heresy"; content: st
   }
 
   return { mode: "general", content: text };
+}
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      resolve(reader.result as string);
+    };
+
+    reader.onerror = reject;
+
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function Home() {
@@ -1533,19 +1546,25 @@ setDemoSessionGranted(
     scrollToBottom();
 
     const isHeresy = parsed.mode === "mr_heresy";
+        let imageData: string | null = null;
 
+        if (imageFile) {
+          imageData = await fileToBase64(imageFile);
+        }
     const payload = isHeresy
       ? {
           mode: "mr_heresy",
           input: " ",
           context: `Apply Multirrupt Mode to the following text:\n\n${text}`,
           constraints: {},
+          imageData,
         }
       : {
           mode: "general",
           input: text,
           context: "",
           constraints: {},
+          imageData,
         };
 
     try {
