@@ -1995,70 +1995,76 @@ if (imageFiles.length > 0) {
         </div>
 
         <div className="mt-4 rounded-2xl border border-neutral-800 bg-neutral-950 p-3">
-          <div className="flex flex-col gap-3">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isDemoLocked}
-              className="h-[56px] rounded-xl border border-neutral-800 px-5 text-sm font-semibold text-neutral-200 hover:bg-neutral-900 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Images
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/png,image/jpeg,image/webp"
-              onChange={async (e) => {
-               const files = Array.from(e.target.files ?? []);
-               const compressedFiles = await Promise.all(
-                 files.map((file) => compressImage(file))
-              );
+  <textarea
+    value={draft}
+    onChange={(e) => setDraft(e.target.value)}
+    onKeyDown={onKeyDown}
+    disabled={isDemoLocked}
+    placeholder="Paste here"
+    className={classNames(
+      "h-[96px] w-full resize-none rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-[17px] leading-7 text-neutral-100 outline-none focus:border-neutral-600",
+      isDemoLocked && "cursor-not-allowed opacity-60"
+    )}
+  />
 
-              setImageFiles(compressedFiles);
-            }}
-              disabled={isDemoLocked}
-              className="hidden"
-            />
-            {imageFiles.length > 0 && (
-            <div className="text-xs text-neutral-500">
-            {imageFiles.length} image(s) selected
-            </div>
-          )}
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={onKeyDown}
-              disabled={isDemoLocked}
-              placeholder="Paste here"
-              className={classNames(
-                "h-[96px] w-full resize-none rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-[17px] leading-7 text-neutral-100 outline-none focus:border-neutral-600",
-                isDemoLocked && "cursor-not-allowed opacity-60"
-              )}
-            />
+  <div className="mt-3 flex gap-2">
+    <button
+      type="button"
+      onClick={() => fileInputRef.current?.click()}
+      disabled={isDemoLocked}
+      className="h-[56px] rounded-xl border border-neutral-800 px-5 text-sm font-semibold text-neutral-200 hover:bg-neutral-900 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      Images
+    </button>
+
+    <select
+      value={selectedGraviton}
+      onChange={(e) => setSelectedGraviton(e.target.value)}
+      className="h-[56px] flex-1 rounded-xl border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-200"
+    >
+      {gravitonOptions.map((option) => (
+        <option key={option} value={option}>
+          {option}
+        </option>
+      ))}
+    </select>
+
+    <button
+      onClick={onSend}
+      data-copy-ui="true"
+      disabled={!canSend}
+      className="h-[56px] rounded-xl bg-neutral-100 px-5 text-sm font-semibold text-neutral-950 hover:bg-white disabled:bg-neutral-800 disabled:text-neutral-500"
+    >
+      Gravitate
+    </button>
+  </div>
+
+  <input
+    ref={fileInputRef}
+    type="file"
+    multiple
+    accept="image/png,image/jpeg,image/webp"
+    onChange={async (e) => {
+      const files = Array.from(e.target.files ?? []);
+      const compressedFiles = await Promise.all(
+        files.map((file) => compressImage(file))
+      );
+
+      setImageFiles(compressedFiles);
+    }}
+    disabled={isDemoLocked}
+    className="hidden"
+  />
+
+  {imageFiles.length > 0 && (
+    <div className="mt-2 text-xs text-neutral-500">
+      {imageFiles.length} image(s) selected
+    </div>
+  )}
+</div>
           
-            <select
-              value={selectedGraviton}
-              onChange={(e) => setSelectedGraviton(e.target.value)}
-              className="h-[56px] w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-200"
->
-             {gravitonOptions.map((option) => (
-            <option key={option} value={option}>
-            {option}
-            </option>
-            ))}
-            </select>
-            <button
-              onClick={onSend}
-              data-copy-ui="true"
-              disabled={!canSend}
-              className="h-[56px] rounded-xl bg-neutral-100 px-5 text-sm font-semibold text-neutral-950 hover:bg-white disabled:bg-neutral-800 disabled:text-neutral-500"
-            >
-              Gravitate
-            </button>
-          </div>
           
-        </div>
+        
       </div>
     </main>
   );
