@@ -1586,6 +1586,8 @@ const finalInput = gravitonPrefix + raw;
 
     sendLockRef.current = true;
     const parsed = parseCommand(finalInput);
+    console.log("GRAVITON:", selectedGraviton);
+    console.log("FINAL INPUT:", finalInput);
     const text = parsed.content;
 
     if (!text) {
@@ -1993,7 +1995,7 @@ if (imageFiles.length > 0) {
         </div>
 
         <div className="mt-4 rounded-2xl border border-neutral-800 bg-neutral-950 p-3">
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-3">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -2038,7 +2040,7 @@ if (imageFiles.length > 0) {
             <select
               value={selectedGraviton}
               onChange={(e) => setSelectedGraviton(e.target.value)}
-              className="h-[56px] rounded-xl border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-200"
+              className="h-[56px] w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-200"
 >
              {gravitonOptions.map((option) => (
             <option key={option} value={option}>
