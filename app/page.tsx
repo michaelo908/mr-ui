@@ -1222,15 +1222,69 @@ async function fileToBase64(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+async function compressImage(file: File): Promise<File> {
+  const img = document.createElement("img");
+  const url = URL.createObjectURL(file);
 
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = reject;
+    img.src = url;
+  });
+
+  const maxWidth = 1200;
+  const scale = Math.min(1, maxWidth / img.width);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(img.width * scale);
+  canvas.height = Math.round(img.height * scale);
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not create canvas context");
+
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  URL.revokeObjectURL(url);
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("Compression failed"))),
+      "image/jpeg",
+      0.72
+    );
+  });
+
+  return new File(
+    [blob],
+    file.name.replace(/\.[^.]+$/, ".jpg"),
+    { type: "image/jpeg" }
+  );
+}
 export default function Home() {
   const FREE_TRIAL_LIMIT = 3;
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [selectedGraviton, setSelectedGraviton] =
+  useState("Full Analysis");
+
+  const gravitonOptions = [
+  "Full Analysis",
+  "Why isn't this converting?",
+  "What does the visitor experience first?",
+  "Where does attention drift?",
+  "What weakens trust?",
+  "Describe the customer journey",
+  "Should this be a multi-email campaign?"
+];
+  const imagePreviewUrls = useMemo(
+  () => imageFiles.map((file) => URL.createObjectURL(file)),
+  [imageFiles]
+);
   const [isLoading, setIsLoading] = useState(false);
   const [copiedAllKey, setCopiedAllKey] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
   const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
   const [isBookTrial, setIsBookTrial] = useState(false);
@@ -1506,18 +1560,32 @@ setDemoSessionGranted(
     if (sendLockRef.current) return;
 
     const raw = draft;
-    if (imageFile) {
-  console.log("Image selected:", imageFile.name);
+    const gravitonPrefix =
+  selectedGraviton === "Full Analysis"
+    ? ""
+    : `Analysis Lens:
+${selectedGraviton}
+
+----------------------------------------
+
+`;
+
+const finalInput = gravitonPrefix + raw;
+   if (imageFiles.length > 0) {
+  console.log(
+    "Images selected:",
+    imageFiles.map((file) => file.name)
+  );
 }
     if (!raw.trim() || isLoading || isDemoLocked) return;
 
     if (raw.length > 30000) {
-      alert("That’s a large input. For best results, keep it under 30,000 characters.");
+      alert("That’s a large input. For best results, keep it under 0,000 characters.");
       return;
     }
 
     sendLockRef.current = true;
-    const parsed = parseCommand(raw);
+    const parsed = parseCommand(finalInput);
     const text = parsed.content;
 
     if (!text) {
@@ -1546,11 +1614,13 @@ setDemoSessionGranted(
     scrollToBottom();
 
     const isHeresy = parsed.mode === "mr_heresy";
-        let imageData: string | null = null;
+       let imageData: string[] = [];
 
-        if (imageFile) {
-          imageData = await fileToBase64(imageFile);
-        }
+if (imageFiles.length > 0) {
+  imageData = await Promise.all(
+    imageFiles.map(file => fileToBase64(file))
+  );
+}
     const payload = isHeresy
       ? {
           mode: "mr_heresy",
@@ -1573,6 +1643,7 @@ setDemoSessionGranted(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      
 
       const data = await res.json();
 
@@ -1610,11 +1681,11 @@ setDemoSessionGranted(
             .eq("id", user.id);
         }
       }
-    } catch {
+    } catch (err) {
       setMessages((m) =>
         m.map((msg) =>
           msg.role === "assistant" && msg.content === THINKING_TOKEN
-            ? { role: "assistant", content: "Something went wrong while analysing." }
+           ? { role: "assistant", content: `Something went wrong while analysing: ${String(err)}` }
             : msg
         )
       );
@@ -1812,22 +1883,32 @@ setDemoSessionGranted(
         >
           {messages.length === 0 ? (
             <div className="text-[17px] leading-7 text-neutral-400">
+              {imagePreviewUrls.length > 0 && (
+            <div className="grid grid-cols-4 gap-3">
+             {imagePreviewUrls.map((url, i) => (
+  <div key={i} className="relative">
+    <img
+      src={url}
+      alt={`preview-${i}`}
+      className="h-32 w-full rounded-lg object-cover border border-neutral-800"
+    />
+    <button
+  onClick={() =>
+    setImageFiles((prev) => prev.filter((_, index) => index !== i))
+  }
+  className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/80 text-white text-xs"
+>
+  ×
+</button>
+  </div>
+))}
+  </div>
+)}
 
               <div className="mb-3">
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={(e) => {
-                  const file = e.target.files?.[0] ?? null;
-                  setImageFile(file);
-                }}
-              />
+              
             </div>
-              Start by pasting something you sent recently — an email, message, landing page, ad, or article.
-              <div className="mt-2 text-neutral-600">
-                Tip: <span className="text-neutral-400">Enter</span> sends,{" "}
-                <span className="text-neutral-400">Shift+Enter</span> makes a new line.
-              </div>
+        
               <div className="mt-2 text-neutral-700"></div>
             </div>
           ) : (
@@ -1913,39 +1994,68 @@ setDemoSessionGranted(
 
         <div className="mt-4 rounded-2xl border border-neutral-800 bg-neutral-950 p-3">
           <div className="flex gap-2">
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              onChange={(e) => {
-                const file = e.target.files?.[0] ?? null;
-                setImageFile(file);
-              }}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
               disabled={isDemoLocked}
-              className="mb-2 block text-sm text-neutral-400"
+              className="h-[56px] rounded-xl border border-neutral-800 px-5 text-sm font-semibold text-neutral-200 hover:bg-neutral-900 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Images
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/png,image/jpeg,image/webp"
+              onChange={async (e) => {
+               const files = Array.from(e.target.files ?? []);
+               const compressedFiles = await Promise.all(
+                 files.map((file) => compressImage(file))
+              );
+
+              setImageFiles(compressedFiles);
+            }}
+              disabled={isDemoLocked}
+              className="hidden"
             />
+            {imageFiles.length > 0 && (
+            <div className="text-xs text-neutral-500">
+            {imageFiles.length} image(s) selected
+            </div>
+          )}
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={onKeyDown}
               disabled={isDemoLocked}
-              placeholder="Paste something you sent recently — and see what actually happened"
+              placeholder="Paste here"
               className={classNames(
-                "h-[56px] w-full resize-none rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-[17px] leading-7 text-neutral-100 outline-none focus:border-neutral-600",
+                "h-[96px] w-full resize-none rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-[17px] leading-7 text-neutral-100 outline-none focus:border-neutral-600",
                 isDemoLocked && "cursor-not-allowed opacity-60"
               )}
             />
+          
+            <select
+              value={selectedGraviton}
+              onChange={(e) => setSelectedGraviton(e.target.value)}
+              className="h-[56px] rounded-xl border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-200"
+>
+             {gravitonOptions.map((option) => (
+            <option key={option} value={option}>
+            {option}
+            </option>
+            ))}
+            </select>
             <button
               onClick={onSend}
               data-copy-ui="true"
               disabled={!canSend}
               className="h-[56px] rounded-xl bg-neutral-100 px-5 text-sm font-semibold text-neutral-950 hover:bg-white disabled:bg-neutral-800 disabled:text-neutral-500"
             >
-              Review
+              Gravitate
             </button>
           </div>
-          <div className="mt-2 text-xs text-neutral-500">
-            Start with an email or message you’ve already sent.
-          </div>
+          
         </div>
       </div>
     </main>

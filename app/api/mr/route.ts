@@ -167,12 +167,15 @@ export async function POST(req: Request) {
 
     // Preserve any per-request context from the UI
   const originalContext = typeof body?.context === "string" ? body.context : "";
-  const imageData = typeof body?.imageData === "string" ? body.imageData : null;
+const imageData =
+  typeof body?.imageData === "string" || Array.isArray(body?.imageData)
+    ? body.imageData
+    : null;
 
   const visualAnalysisContext = imageData
     ? `
 VISUAL INPUT PRESENT:
-The user has supplied an image/screenshot as part of this request.
+The user has supplied one or more images/screenshots as part of this request.
 
 Analyse the image as a communication experience, not merely as visual design.
 Focus on:
