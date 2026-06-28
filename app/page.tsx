@@ -1306,9 +1306,12 @@ export default function Home() {
   const isDemoLocked = isSubscribed === false && demoCount >= FREE_TRIAL_LIMIT;
 
   const canSend = useMemo(
-    () => draft.trim().length > 0 && !isLoading && !isDemoLocked,
-    [draft, isLoading, isDemoLocked]
-  );
+  () =>
+    (draft.trim().length > 0 || imageFiles.length > 0) &&
+    !isLoading &&
+    !isDemoLocked,
+  [draft, imageFiles, isLoading, isDemoLocked]
+);
 
   function getRandomInt(min: number, max: number) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -1577,7 +1580,7 @@ const finalInput = gravitonPrefix + raw;
     imageFiles.map((file) => file.name)
   );
 }
-    if (!raw.trim() || isLoading || isDemoLocked) return;
+    if ((!raw.trim() && imageFiles.length === 0) || isLoading || isDemoLocked) return;
 
     if (raw.length > 30000) {
       alert("That’s a large input. For best results, keep it under 0,000 characters.");
