@@ -2343,12 +2343,12 @@ if (imageFiles.length > 0) {
     )}
   />
 
-  <div className="mt-3 flex gap-2">
+  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
     <button
       type="button"
       onClick={() => fileInputRef.current?.click()}
       disabled={isDemoLocked}
-      className="h-[56px] rounded-xl border border-neutral-800 px-5 text-sm font-semibold text-neutral-200 hover:bg-neutral-900 disabled:cursor-not-allowed disabled:opacity-60"
+      className="h-[56px] w-full rounded-xl border border-neutral-800 px-5 text-sm font-semibold text-neutral-200 hover:bg-neutral-900 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
     >
       Images
     </button>
@@ -2357,7 +2357,7 @@ if (imageFiles.length > 0) {
       value={selectedGraviton}
       onChange={(e) => setSelectedGraviton(e.target.value)}
       disabled={isDemoLocked}
-      className="h-[56px] flex-1 rounded-xl border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-200 disabled:cursor-not-allowed disabled:opacity-60"
+      className="h-[56px] w-full min-w-0 flex-1 rounded-xl border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-200 disabled:cursor-not-allowed disabled:opacity-60"
     >
       {gravitonGroups.map((group) => (
         <optgroup key={group.label} label={group.label}>
@@ -2374,7 +2374,7 @@ if (imageFiles.length > 0) {
       onClick={onSend}
       data-copy-ui="true"
       disabled={!canSend}
-      className="h-[56px] rounded-xl bg-neutral-100 px-5 text-sm font-semibold text-neutral-950 hover:bg-white disabled:bg-neutral-800 disabled:text-neutral-500"
+      className="h-[56px] w-full rounded-xl bg-neutral-100 px-5 text-sm font-semibold text-neutral-950 hover:bg-white disabled:bg-neutral-800 disabled:text-neutral-500 sm:w-auto"
     >
       Gravitate
     </button>
