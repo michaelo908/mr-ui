@@ -67,7 +67,7 @@ async function addToMailchimp(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        tags: [{ name: "hidden-campaign-buyer", status: "active" }],
+        tags: [{ name: "gravitas-day-pass-buyer", status: "active" }],
       }),
     }
   );
@@ -77,10 +77,14 @@ async function addToMailchimp(
     return;
   }
 
-  console.log("Added Hidden Campaign buyer to Mailchimp", email);
+  console.log("Added Gravitas Day Pass buyer to Mailchimp", email);
 }
 
-const HIDDEN_CAMPAIGN_PRICE_ID = "price_1TdYZpPEeaE0AI8SbfKD4VG6";
+const GRAVITAS_DAY_PASS_PRICE_IDS = new Set([
+  "price_1TxjZXPEeaE0AI8SMYUQ1WhG", // $19
+  "price_1TqwewPEeaE0AI8SEgaXHHl6", // $27
+  "price_1T9jGbPEeaE0AI8SaSofAKAH", // $39
+]);
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-02-25.clover",
@@ -127,18 +131,20 @@ export async function POST(req: Request) {
         limit: 10,
       });
 
-      const isHiddenCampaignPurchase = lineItems.data.some(
-        (item) => item.price?.id === HIDDEN_CAMPAIGN_PRICE_ID
+      const isDayPassPurchase = lineItems.data.some(
+        (item) =>
+          item.price?.id !== undefined &&
+          GRAVITAS_DAY_PASS_PRICE_IDS.has(item.price.id)
       );
 
-      if (isHiddenCampaignPurchase) {
+      if (isDayPassPurchase) {
         const email = session.customer_details?.email;
 
         const fullName = session.customer_details?.name || "";
         const [firstName, ...rest] = fullName.trim().split(" ");
         const lastName = rest.join(" ");
 
-        console.log("Hidden Campaign purchase detected", email);
+        console.log("Gravitas Day Pass purchase detected", email);
 
         if (email) {
           const { data: usersData, error: usersError } =
@@ -171,7 +177,7 @@ export async function POST(req: Request) {
           if (userId) {
             const trialStartDate = new Date();
             const trialEndDate = new Date();
-            trialEndDate.setDate(trialEndDate.getDate() + 7);
+            trialEndDate.setHours(trialEndDate.getHours() + 48);
 
             const { error: profileError } = await supabase
               .from("profiles")
@@ -186,45 +192,47 @@ export async function POST(req: Request) {
               );
 
             if (profileError) {
-              console.error("Unable to grant trial access", profileError);
+              console.error("Unable to grant Day Pass access", profileError);
             }
 
             const { error: emailError } = await getResend().emails.send({
               from: "Multirrupt Gravitas <support@multirrupt.ai>",
               to: email,
-              subject: "Your Hidden Campaign access is ready",
+              subject: "Your Gravitas Day Pass is ready",
               html: `
                 <p>Hi,</p>
 
-                <p>Thanks for purchasing <strong>The Hidden Campaign Method</strong>.</p>
+                <p>Thanks for purchasing the <strong>Gravitas Day Pass</strong>.</p>
 
-                <p>Your access is now ready.</p>
-
-                <p>Your 7-day Gravitas trial access is now ready.</p>
+                <p>Your 48-hour Gravitas access is now ready.</p>
 
                 <p>
-                  <strong>Download the guide:</strong><br />
-                  <a href="https://ixhbcjippdxzdhlerndj.supabase.co/storage/v1/object/public/downloads/hidden-campaign.pdf">Download The Hidden Campaign PDF</a>
+                <strong>Access Gravitas:</strong><br />
+                <a href="https://www.multirrupt.ai">Open Gravitas</a>
                 </p>
 
                 <p>
-                  <strong>Access Gravitas:</strong><br />
-                  <a href="https://www.multirrupt.ai">Open Gravitas</a>
+                 Use the same email address you used at checkout. Gravitas will send you a magic login link.
                 </p>
 
                 <p>
-                  Use the same email address you used to purchase the book. Gravitas will send you a magic login link.
+                <strong>Included bonus:</strong><br />
+                <a href="https://ixhbcjippdxzdhlerndj.supabase.co/storage/v1/object/public/downloads/hidden-campaign.pdf">Download The Hidden Campaign PDF</a>
                 </p>
 
                 <p>
+                   Your Day Pass runs for 48 hours from purchase.
+                </p>
+
+                 <p>
                   Need help?<br />
                   <a href="mailto:support@multirrupt.ai">support@multirrupt.ai</a>
-                </p>
+                 </p>
 
-                <p>
+                 <p>
                   Enjoy,<br />
-                  Michael
-                </p>
+                   Michael
+                 </p>
               `,
             });
 

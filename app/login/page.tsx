@@ -111,7 +111,7 @@ export default function LoginPage() {
           className="flex w-full flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-950/80 p-6 shadow-[0_0_40px_rgba(180,150,80,0.15)]"
         >
           <div className="text-center">
-            <h1 className="text-xl font-semibold">Sign in to use Gravitas</h1>
+            <h1 className="text-xl font-semibold">Sign in to Gravitas</h1>
 
             <p className="mt-2 text-sm text-neutral-400">
               Narrative analysis and rewrite engine
@@ -122,7 +122,7 @@ export default function LoginPage() {
             </p>
 
             <p className="mt-2 text-sm text-neutral-500">
-              New here? Get a link and try it on your writing.
+              Enter the email address linked to your Gravitas access.
             </p>
           </div>
 

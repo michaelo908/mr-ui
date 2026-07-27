@@ -4,7 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-type Msg = { role: "user" | "assistant"; content: string };
+type Msg = {
+  role: "user" | "assistant";
+  content: string;
+  sourceContent?: string;
+  imageData?: string[];
+};
 type CopyFormat = "email" | "word";
 type RewriteVariant = {
   id: string;
@@ -574,44 +579,72 @@ function renderMR(content: string) {
   const nodes = parseContentNodes(content);
 
   function renderInline(text: string) {
-    const tokens = text
-      .split(/(`[^`]+`|\*\*[\s\S]+?\*\*|\*[^*]+\*)/g)
-      .filter(Boolean);
+  function renderTextWithLinks(value: string, baseKey: string) {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = value.split(urlRegex).filter(Boolean);
 
-    return tokens.map((token, idx) => {
-      const codeMatch = token.match(/^`([^`]+)`$/);
-      if (codeMatch) {
+    return parts.map((part, partIdx) => {
+      if (/^https?:\/\//.test(part)) {
+        const href = part.replace(/[.,!?;:]$/, "");
+        const trailing = part.slice(href.length);
+
         return (
-          <code
-            key={idx}
-            className="rounded-md border border-neutral-800 bg-neutral-900/50 px-1.5 py-0.5 text-[0.95em] text-neutral-200"
-          >
-            {codeMatch[1]}
-          </code>
+          <span key={`${baseKey}-link-${partIdx}`}>
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-4 text-amber-300 hover:text-amber-200"
+            >
+              {href}
+            </a>
+            {trailing}
+          </span>
         );
       }
 
-      const boldMatch = token.match(/^\*\*([\s\S]+)\*\*$/);
-      if (boldMatch) {
-        return (
-          <strong key={idx} className="font-semibold text-neutral-100">
-            {boldMatch[1]}
-          </strong>
-        );
-      }
-
-      const italicMatch = token.match(/^\*([\s\S]+)\*$/);
-      if (italicMatch) {
-        return (
-          <em key={idx} className="italic">
-            {italicMatch[1]}
-          </em>
-        );
-      }
-
-      return <span key={idx}>{token}</span>;
+      return <span key={`${baseKey}-text-${partIdx}`}>{part}</span>;
     });
   }
+
+  const tokens = text
+    .split(/(`[^`]+`|\*\*[\s\S]+?\*\*|\*[^*]+\*)/g)
+    .filter(Boolean);
+
+  return tokens.map((token, idx) => {
+    const codeMatch = token.match(/^`([^`]+)`$/);
+    if (codeMatch) {
+      return (
+        <code
+          key={idx}
+          className="rounded-md border border-neutral-800 bg-neutral-900/50 px-1.5 py-0.5 text-[0.95em] text-neutral-200"
+        >
+          {codeMatch[1]}
+        </code>
+      );
+    }
+
+    const boldMatch = token.match(/^\*\*([\s\S]+)\*\*$/);
+    if (boldMatch) {
+      return (
+        <strong key={idx} className="font-semibold text-neutral-100">
+          {boldMatch[1]}
+        </strong>
+      );
+    }
+
+    const italicMatch = token.match(/^\*([\s\S]+)\*$/);
+    if (italicMatch) {
+      return (
+        <em key={idx} className="italic">
+          {italicMatch[1]}
+        </em>
+      );
+    }
+
+    return <span key={idx}>{renderTextWithLinks(token, `token-${idx}`)}</span>;
+  });
+}
 
   return (
     <div className="space-y-0">
@@ -742,12 +775,14 @@ function ThinkingStatus() {
 function StructuredAssistantMessage({
   content,
   sourceRaw,
+  sourceImageData,
   demoCount,
   onRewriteProduced,
   onSubscribe,
 }: {
   content: string;
   sourceRaw: string;
+  sourceImageData: string[];
   demoCount: number;
   onRewriteProduced?: () => void;
   onSubscribe: () => void;
@@ -844,26 +879,33 @@ function StructuredAssistantMessage({
     if (rewrites.length >= 3 || isGeneratingAlternate) return;
 
     const parsed = parseCommand(sourceRaw);
-    if (!parsed.content.trim()) return;
+    if (!parsed.content.trim() && sourceImageData.length === 0) return;
 
     setIsGeneratingAlternate(true);
 
     const alternateInstruction =
       "Provide only a fresh alternate rewrite of this same original text. Do not include summary, diagnosis, notes, headings, labels, or debrief. Return only the rewritten copy.";
+    const sourceText =
+      parsed.content.trim() ||
+      `Create a fresh alternate rewrite based on the attached image${
+        sourceImageData.length === 1 ? "" : "s"
+      }.`;
 
     const payload =
       parsed.mode === "mr_heresy"
         ? {
             mode: "mr_heresy",
             input: " ",
-            context: `${alternateInstruction}\n\nApply Multirrupt Mode to the following text:\n\n${parsed.content}`,
+            context: `${alternateInstruction}\n\nApply Multirrupt Mode to the following source:\n\n${sourceText}`,
             constraints: {},
+            imageData: sourceImageData,
           }
         : {
             mode: "general",
-            input: parsed.content,
+            input: sourceText,
             context: alternateInstruction,
             constraints: {},
+            imageData: sourceImageData,
           };
 
     try {
@@ -1043,28 +1085,44 @@ function StructuredAssistantMessage({
           ))}
 
           {rewrites.length < 3 ? (
-            <div className="mt-8 flex justify-start" data-copy-ui="true">
-              <button
-                onClick={handleRewriteAgain}
-                className={classNames(
-                  "rounded-xl border px-4 py-2 text-sm font-semibold transition",
-                  isGeneratingAlternate && "animate-pulse"
-                )}
-                style={{
-                  color: MR_GOLD,
-                  borderColor: `${MR_GOLD}99`,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = `${MR_GOLD}1A`;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "transparent";
-                }}
-              >
-                {isGeneratingAlternate ? "Rewriting…" : "Rewrite Again"}
-              </button>
-            </div>
-          ) : null}
+  <div className="mt-8 flex justify-start" data-copy-ui="true">
+    {isGeneratingAlternate ? (
+      <button
+        key="rewrite-again-working"
+        type="button"
+        disabled
+        className="inline-flex min-w-[150px] items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold opacity-70"
+        style={{
+          color: MR_GOLD,
+          borderColor: `${MR_GOLD}99`,
+          backgroundColor: "transparent",
+        }}
+      >
+        Working…
+      </button>
+    ) : (
+      <button
+        key="rewrite-again-idle"
+        type="button"
+        onClick={handleRewriteAgain}
+        className="inline-flex min-w-[150px] items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold transition"
+        style={{
+          color: MR_GOLD,
+          borderColor: `${MR_GOLD}99`,
+          backgroundColor: "transparent",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = `${MR_GOLD}1A`;
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = "transparent";
+        }}
+      >
+        Rewrite Again
+      </button>
+    )}
+  </div>
+) : null}
         </section>
       ) : null}
 
@@ -1269,19 +1327,82 @@ export default function Home() {
   const [selectedGraviton, setSelectedGraviton] =
   useState("Full Analysis");
 
-  const gravitonOptions = [
-  "Full Analysis",
-  "Why isn't this converting?",
-  "What does the visitor experience first?",
-  "Where does attention drift?",
-  "What weakens trust?",
-  "Describe the customer journey",
-  "Should this be a multi-email campaign?"
+const gravitonGroups = [
+  {
+    label: "Default",
+    options: [
+      "Full Analysis",
+    ],
+  },
+  {
+    label: "Customer Experience",
+    options: [
+      "What does the visitor experience first?",
+      "Describe the customer journey.",
+      "What conclusions will readers draw?",
+    ],
+  },
+  {
+    label: "Attention",
+    options: [
+      "Where does attention drift?",
+      "What weakens engagement?",
+      "What would readers remember?",
+    ],
+  },
+  {
+    label: "Trust",
+    options: [
+      "What weakens trust?",
+      "What builds credibility?",
+      "What creates resistance?",
+    ],
+  },
+  {
+    label: "Conversion",
+    options: [
+      "Why isn't this converting?",
+      "What prevents action?",
+      "What creates hesitation?",
+    ],
+  },
+  {
+    label: "Email",
+    options: [
+      "Should this be a multi-email campaign?",
+      "Is this asking for too much?",
+      "What is the primary message?",
+    ],
+  },
+  {
+    label: "Summary",
+    options: [
+      "Summarise the sales approach.",
+      "Summarise the positioning.",
+      "Summarise the key messages.",
+    ],
+  },
+  {
+    label: "Image Set",
+    options: [
+      "Describe this/these images.",
+      "What recurring themes are present?",
+      "What emotional tone emerges?",
+      "What common motifs appear?",
+      "What narrative is implied?",
+      "Is there a sense of progression?",
+      "How do these images relate to one another?",
+      "What is the likely intent behind this collection?",
+    ],
+  },
+  {
+    label: "Visual Fit",
+    options: [
+      "Which images best fit the narrative and emotional context?",
+    ],
+  },
 ];
-  const imagePreviewUrls = useMemo(
-  () => imageFiles.map((file) => URL.createObjectURL(file)),
-  [imageFiles]
-);
+
   const [isLoading, setIsLoading] = useState(false);
   const [copiedAllKey, setCopiedAllKey] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1303,7 +1424,7 @@ export default function Home() {
   const supabase = createClient();
   const sendLockRef = useRef(false);
 
-  const isDemoLocked = isSubscribed === false && demoCount >= FREE_TRIAL_LIMIT;
+  const isDemoLocked = false; // old 3-analysis trial disabled
 
   const canSend = useMemo(
   () =>
@@ -1312,6 +1433,16 @@ export default function Home() {
     !isDemoLocked,
   [draft, imageFiles, isLoading, isDemoLocked]
 );
+
+const imagePreviewUrls = useMemo(() => {
+  return imageFiles.map((file) => URL.createObjectURL(file));
+}, [imageFiles]);
+
+useEffect(() => {
+  return () => {
+    imagePreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+  };
+}, [imagePreviewUrls]);
 
   function getRandomInt(min: number, max: number) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -1562,6 +1693,26 @@ setDemoSessionGranted(
   async function onSend() {
     if (sendLockRef.current) return;
 
+     if (!isSubscribed && !isBookTrial) {
+
+    setMessages([
+
+      {
+
+        role: "assistant",
+
+        content:
+
+          "Full Gravitas access requires an active Day Pass or subscription.\n\nIf you only need another working session, you can get a new 48-hour Day Pass here:\n\nhttps://multirrupt.com/day-pass",
+
+      },
+
+    ]);
+
+    return;
+
+  }
+
     const raw = draft;
     const gravitonPrefix =
   selectedGraviton === "Full Analysis"
@@ -1593,7 +1744,7 @@ const finalInput = gravitonPrefix + raw;
     console.log("FINAL INPUT:", finalInput);
     const text = parsed.content;
 
-    if (!text) {
+    if (!text && imageFiles.length === 0) {
       sendLockRef.current = false;
       setDraft("");
       setMessages((m) => [
@@ -1626,17 +1777,33 @@ if (imageFiles.length > 0) {
     imageFiles.map(file => fileToBase64(file))
   );
 }
+    const effectiveText =
+      text ||
+      `Analyse the attached image${imageFiles.length === 1 ? "" : "s"} using the selected Gravitas lens: ${selectedGraviton}.`;
+
+    setMessages((current) =>
+      current.map((message, index) =>
+        index === current.length - 2 && message.role === "user"
+          ? {
+              ...message,
+              sourceContent: effectiveText,
+              imageData,
+            }
+          : message
+      )
+    );
+
     const payload = isHeresy
       ? {
           mode: "mr_heresy",
           input: " ",
-          context: `Apply Multirrupt Mode to the following text:\n\n${text}`,
+          context: `Apply Multirrupt Mode to the following text:\n\n${effectiveText}`,
           constraints: {},
           imageData,
         }
       : {
           mode: "general",
-          input: text,
+          input: effectiveText,
           context: "",
           constraints: {},
           imageData,
@@ -1744,54 +1911,6 @@ if (imageFiles.length > 0) {
     );
   }
 
-  if (
-    !isSubscribed &&
-    demoCount >= FREE_TRIAL_LIMIT &&
-    !demoSessionGranted &&
-    messages.length === 0
-  ) {
-    return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-6 text-center text-neutral-100">
-        <h1 className="mb-4 text-3xl font-semibold">Continue with Gravitas</h1>
-
-        <p className="mb-4 max-w-xl text-neutral-300">
-          You’ve just seen how your message will land before you send it.
-        </p>
-
-        <p className="mb-4 max-w-xl text-neutral-300">
-          Use Gravitas on any important writing —
-          to refine your message until it does the job you intended.
-        </p>
-
-        <p className="mb-8 max-w-xl text-neutral-400">
-          See stronger alternatives in seconds —
-          removing the guesswork of endless rewrites
-          while keeping your natural voice intact.
-        </p>
-
-        <div className="flex gap-4">
-          <button
-            onClick={handleSubscribe}
-            className="rounded-xl border px-6 py-3 text-sm font-semibold text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
-            style={{
-              backgroundColor: MR_GOLD,
-              borderColor: MR_GOLD,
-            }}
-          >
-            Subscribe
-          </button>
-
-          <button
-            onClick={handleLogout}
-            className="rounded border border-neutral-600 px-6 py-3"
-          >
-            Logout
-          </button>
-        </div>
-      </main>
-    );
-  }
-
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100">
       <div className="mx-auto w-full max-w-3xl px-4 py-10">
@@ -1805,26 +1924,10 @@ if (imageFiles.length > 0) {
             </div>
             {bookTrialDaysRemaining !== null && (
   <div className="mt-1 text-xs text-neutral-500">
-    Hidden Campaign Trial • {bookTrialDaysRemaining} day
+    Gravitas Day Pass active • {bookTrialDaysRemaining} day
     {bookTrialDaysRemaining === 1 ? "" : "s"} remaining
   </div>
 )}
-
-            {isSubscribed === false && !isBookTrial ? (
-  <div className="mt-1 text-xs text-neutral-500">
-    {isBookTrial && bookTrialEndDate ? (
-      <>
-        Hidden Campaign trial active until{" "}
-        {bookTrialEndDate.toLocaleDateString()}
-      </>
-    ) : (
-      <>
-        Free trial: {reviewsRemaining} review
-        {reviewsRemaining === 1 ? "" : "s"} remaining
-      </>
-    )}
-  </div>
-) : null}
 
             <div className="mt-1 text-xs text-neutral-500">
               Messages analysed today: {analysesToday} · Rewrites produced today: {rewritesToday}
@@ -1911,7 +2014,7 @@ if (imageFiles.length > 0) {
 )}
 
               <div className="mb-3">
-              
+
             </div>
         
               <div className="mt-2 text-neutral-700"></div>
@@ -1921,29 +2024,43 @@ if (imageFiles.length > 0) {
               {messages.map((m, i) => {
                 const isThinking =
                   m.role === "assistant" && m.content === THINKING_TOKEN;
+
+                const visibleUserContent =
+                  m.role === "user"
+                    ? m.content.includes("----------------------------------------")
+                      ? m.content.split("----------------------------------------").slice(1).join("----------------------------------------").trim()
+                      : m.content.trim()
+                    : "";
+
+                if (m.role === "user" && visibleUserContent.length === 0) return null;
+
                 const sourceRaw =
                   m.role === "assistant" && i > 0 && messages[i - 1]?.role === "user"
-                    ? messages[i - 1].content
+                    ? messages[i - 1].sourceContent ?? messages[i - 1].content
                     : "";
+                const sourceImageData =
+                  m.role === "assistant" && i > 0 && messages[i - 1]?.role === "user"
+                    ? messages[i - 1].imageData ?? []
+                    : [];
 
                 return (
                   <div
                     key={i}
-                    className={classNames(
-                      "group rounded-2xl border px-4 py-4",
-                      m.role === "user"
-                        ? "border-neutral-800 bg-neutral-900/40"
-                        : isThinking
-                        ? "border-emerald-900/60 bg-emerald-900/15"
-                        : "border-neutral-800 bg-neutral-900/20"
-                    )}
+                   className={classNames(
+                     "group rounded-2xl border px-4 py-4",
+                    m.role === "user"
+                      ? "border-neutral-800 bg-neutral-950/60"
+                      : isThinking
+                      ? "border-emerald-900/60 bg-emerald-900/15"
+                      : "border-neutral-800 bg-neutral-900/20"
+                   )}
                   >
                     <div
                       data-copy-ui="true"
                       className="mb-3 flex items-center justify-between"
                     >
                       <div className="text-xs uppercase tracking-widest text-neutral-400">
-                        {m.role === "user" ? "You" : "MR"}
+                        {m.role === "user" ? "Content Analysed" : "MR"}
                       </div>
 
                       <div className="flex items-center gap-2">
@@ -1979,6 +2096,7 @@ if (imageFiles.length > 0) {
                         <StructuredAssistantMessage
                           content={m.content}
                           sourceRaw={sourceRaw}
+                          sourceImageData={sourceImageData}
                           demoCount={demoCount}
                           onSubscribe={handleSubscribe}
                           onRewriteProduced={() => {
@@ -1987,7 +2105,9 @@ if (imageFiles.length > 0) {
                           }}
                         />
                       ) : (
-                        renderMR(m.content)
+                      <div className="max-h-48 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-neutral-300">
+                        {visibleUserContent}
+                      </div>
                       )}
                     </div>
                   </div>
@@ -2000,7 +2120,13 @@ if (imageFiles.length > 0) {
         <div className="mt-4 rounded-2xl border border-neutral-800 bg-neutral-950 p-3">
   <textarea
     value={draft}
-    onChange={(e) => setDraft(e.target.value)}
+    onChange={(e) => {
+  setDraft(e.target.value);
+
+  if (e.target.value.trim().length > 0 && imageFiles.length > 0) {
+    setImageFiles([]);
+  }
+}}
     onKeyDown={onKeyDown}
     disabled={isDemoLocked}
     placeholder="Paste here"
@@ -2025,11 +2151,15 @@ if (imageFiles.length > 0) {
       onChange={(e) => setSelectedGraviton(e.target.value)}
       className="h-[56px] flex-1 rounded-xl border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-200"
     >
-      {gravitonOptions.map((option) => (
-        <option key={option} value={option}>
-          {option}
-        </option>
+      {gravitonGroups.map((group) => (
+        <optgroup key={group.label} label={group.label}>
+          {group.options.map((option) => (
+            <option key={option} value={option}>
+             {option}
+           </option>
       ))}
+    </optgroup>
+))}
     </select>
 
     <button
@@ -2054,6 +2184,7 @@ if (imageFiles.length > 0) {
       );
 
       setImageFiles(compressedFiles);
+      setDraft("");
     }}
     disabled={isDemoLocked}
     className="hidden"
@@ -2065,7 +2196,37 @@ if (imageFiles.length > 0) {
     </div>
   )}
 </div>
-          
+
+  {imageFiles.length > 0 && (
+  <div className="mt-4 rounded-2xl border border-neutral-800 bg-neutral-950 p-3">
+    <div className="mb-3 flex items-center justify-between">
+      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">
+        Content Under Review
+      </div>
+
+      <div className="text-xs text-neutral-500">
+        {imageFiles.length} image{imageFiles.length === 1 ? "" : "s"}
+      </div>
+    </div>
+
+    <div className="flex gap-2 overflow-x-auto pb-1">
+      {imagePreviewUrls.map((src, index) => (
+        <div key={src} className="shrink-0">
+          <img
+            src={src}
+            alt={`Evidence ${index + 1}`}
+            className="h-24 w-24 rounded-xl border border-neutral-800 object-cover"
+          />
+
+          <div className="mt-1 text-center text-[11px] text-neutral-500">
+            Image {index + 1}
+          </div>
+        </div>
+      ))}
+    </div>
+
+  </div>
+)}
           
         
       </div>

@@ -19,6 +19,7 @@ All references to "diagnosis" refer to structural, narrative, tonal, and persuas
 analysis of written material — not medical, health, legal, or clinical diagnosis.
 
 CRITICAL BEHAVIOUR:
+- Do not mention whether images, visual input, files, attachments, screenshots, or other modalities were or were not supplied. If no images are supplied, simply analyse the available text. Never include meta-commentary about missing images, visual flags, prompt format, API state, or input modality.
 - If the user has NOT pasted the text yet (they ask "can we do a diagnosis?" etc),
   respond briefly and professionally. Ask for the text.
   Use this exact style of wording:
@@ -165,17 +166,24 @@ export async function POST(req: Request) {
 
   const heresyMode = isMrHeresyMode(body);
 
-    // Preserve any per-request context from the UI
+  // Preserve any per-request context from the UI
   const originalContext = typeof body?.context === "string" ? body.context : "";
-const imageData =
-  typeof body?.imageData === "string" || Array.isArray(body?.imageData)
-    ? body.imageData
-    : null;
 
-  const visualAnalysisContext = imageData
+  const imageData =
+    typeof body?.imageData === "string" || Array.isArray(body?.imageData)
+      ? body.imageData
+      : null;
+
+  const hasImageData = Array.isArray(imageData)
+    ? imageData.length > 0
+    : typeof imageData === "string" && imageData.trim().length > 0;
+
+  const visualAnalysisContext = hasImageData
     ? `
 VISUAL INPUT PRESENT:
 The user has supplied one or more images/screenshots as part of this request.
+
+Do not refer to images, screenshots, visual input, or modality as a technical condition. Analyse them naturally as part of the communication experience.
 
 Analyse the image as a communication experience, not merely as visual design.
 Focus on:
@@ -198,7 +206,7 @@ If text is also supplied, analyse the text and image together.
   // Sealed framing rules:
   // - Normal mode: MR_DOMAIN_FRAME (+ originalContext), except continuation where we keep originalContext only
   // - MR Heresy mode: MR_HERESY_CHARTER only (+ originalContext), never MR_DOMAIN_FRAME
-    const combinedOriginalContext = [originalContext, visualAnalysisContext]
+  const combinedOriginalContext = [originalContext, visualAnalysisContext]
     .filter(Boolean)
     .join("\n\n");
 
