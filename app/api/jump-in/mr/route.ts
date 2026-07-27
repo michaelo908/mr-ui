@@ -12,6 +12,14 @@ export async function POST(req: Request) {
   const cookieStore = await cookies();
   const existing = readJumpInToken(cookieStore.get(JUMP_IN_COOKIE_NAME)?.value);
   const now = Date.now();
+  const requestedSessionId = req.headers.get("X-Jump-In-Session-Id");
+  const safeRequestedSessionId =
+    requestedSessionId &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      requestedSessionId
+    )
+      ? requestedSessionId
+      : null;
 
   if (existing && isJumpInTokenExpired(existing, now)) {
     console.log("Jump In analytics", {
@@ -27,7 +35,7 @@ export async function POST(req: Request) {
   const session =
     existing ?? {
       startedAt: now,
-      sessionId: crypto.randomUUID(),
+      sessionId: safeRequestedSessionId ?? crypto.randomUUID(),
     };
 
   const response = await handleMrRequest(req);

@@ -1786,7 +1786,7 @@ const finalInput = gravitonPrefix + raw;
       return;
     }
 
-    startJumpInSession();
+    const activeJumpInSession = startJumpInSession();
 
     setDraft("");
     setIsLoading(true);
@@ -1842,7 +1842,12 @@ if (imageFiles.length > 0) {
     try {
       const res = await fetch(apiEndpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(activeJumpInSession
+            ? { "X-Jump-In-Session-Id": activeJumpInSession.sessionId }
+            : {}),
+        },
         body: JSON.stringify(payload),
       });
       
