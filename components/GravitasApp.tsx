@@ -48,6 +48,99 @@ const MR_GOLD = "#C6A75A";
 const TELEMETRY_LAUNCH_DATE = "2026-03-15";
 const TELEMETRY_STORAGE_KEY = "gravitasTelemetrySeedV1";
 
+function JumpInWelcome() {
+  return (
+    <div
+      className="flex min-h-[420px] items-center justify-center px-4 py-10 text-center sm:min-h-[500px] sm:px-10"
+      aria-label="How to begin your Gravitas session"
+    >
+      <div className="w-full max-w-xl">
+        <p className="jump-in-reveal jump-in-reveal-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#C6A75A]">
+          Your message. Seen from the other side.
+        </p>
+
+        <h2 className="jump-in-reveal jump-in-reveal-2 mt-5 text-3xl font-semibold tracking-tight text-neutral-100 sm:text-4xl">
+          Paste something that matters.
+        </h2>
+
+        <div className="jump-in-reveal jump-in-reveal-3 mt-7 space-y-2 text-lg leading-8 text-neutral-300">
+          <p>Something you&apos;re about to send.</p>
+          <p>Or something you just sent out.</p>
+        </div>
+
+        <p className="jump-in-reveal jump-in-reveal-4 mx-auto mt-7 max-w-lg text-sm leading-7 text-neutral-500 sm:text-base">
+          An email, proposal, landing page, report, homepage, LinkedIn post,
+          newsletter or sales page.
+        </p>
+
+        <div className="jump-in-reveal jump-in-reveal-5 mx-auto mt-8 max-w-lg border-y border-neutral-800 py-7">
+          <p className="text-base leading-7 text-neutral-400">
+            Gravitas won&apos;t tell you what you wrote.
+          </p>
+          <p className="mt-2 text-xl font-medium leading-8 text-neutral-100">
+            It will show you what your reader experiences.
+          </p>
+        </div>
+
+        <p className="jump-in-reveal jump-in-reveal-6 mt-8 text-base font-semibold text-neutral-100">
+          Paste it below. Then press Gravitate.
+        </p>
+        <p className="jump-in-reveal jump-in-reveal-6 mt-2 text-xs text-neutral-600">
+          Your 20-minute session starts with your first analysis.
+        </p>
+      </div>
+
+      <style jsx>{`
+        .jump-in-reveal {
+          opacity: 0;
+          transform: translateY(10px);
+          animation: jump-in-reveal 700ms cubic-bezier(0.22, 1, 0.36, 1)
+            forwards;
+        }
+
+        .jump-in-reveal-1 {
+          animation-delay: 120ms;
+        }
+
+        .jump-in-reveal-2 {
+          animation-delay: 520ms;
+        }
+
+        .jump-in-reveal-3 {
+          animation-delay: 1050ms;
+        }
+
+        .jump-in-reveal-4 {
+          animation-delay: 1650ms;
+        }
+
+        .jump-in-reveal-5 {
+          animation-delay: 2250ms;
+        }
+
+        .jump-in-reveal-6 {
+          animation-delay: 2950ms;
+        }
+
+        @keyframes jump-in-reveal {
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .jump-in-reveal {
+            opacity: 1;
+            transform: none;
+            animation: none;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function classNames(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
 }
@@ -2018,7 +2111,7 @@ if (imageFiles.length > 0) {
           </div>
 
           <div className="flex items-center gap-2">
-            {isJumpIn ? (
+            {isJumpIn && jumpInExpired ? (
               <a
                 href={JUMP_IN_DAY_PASS_URL}
                 onClick={handleDayPassClick}
@@ -2030,7 +2123,7 @@ if (imageFiles.length > 0) {
               >
                 Get the $19 Day Pass
               </a>
-            ) : isSubscribed === false ? (
+            ) : !isJumpIn && isSubscribed === false ? (
               <button
                 onClick={handleSubscribe}
                 data-copy-ui="true"
@@ -2107,7 +2200,12 @@ if (imageFiles.length > 0) {
 
         <div
           ref={scrollerRef}
-          className="h-[60vh] overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-950 p-4"
+          className={classNames(
+            "rounded-2xl border border-neutral-800 bg-neutral-950 p-4",
+            isJumpIn && messages.length === 0
+              ? "min-h-[460px] overflow-visible sm:min-h-[540px]"
+              : "h-[60vh] overflow-y-auto"
+          )}
         >
           {messages.length === 0 ? (
             <div className="text-[17px] leading-7 text-neutral-400">
@@ -2133,11 +2231,9 @@ if (imageFiles.length > 0) {
   </div>
 )}
 
-              <div className="mb-3">
-
-            </div>
-        
-              <div className="mt-2 text-neutral-700"></div>
+              {isJumpIn && imagePreviewUrls.length === 0 ? (
+                <JumpInWelcome />
+              ) : null}
             </div>
           ) : (
             <div className="space-y-4">
