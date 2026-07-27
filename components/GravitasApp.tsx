@@ -1499,6 +1499,22 @@ useEffect(() => {
     if (!isJumpIn || !jumpInExpired || !jumpInSession) return;
     if (jumpInSession.expiredEventSent) return;
 
+    const saved = window.localStorage.getItem(JUMP_IN_STORAGE_KEY);
+    if (saved) {
+      try {
+        const persisted = JSON.parse(saved) as JumpInSessionState;
+        if (
+          persisted.sessionId === jumpInSession.sessionId &&
+          persisted.expiredEventSent
+        ) {
+          setJumpInSession(persisted);
+          return;
+        }
+      } catch {
+        // Replace malformed local state below.
+      }
+    }
+
     const expiredSession = {
       ...jumpInSession,
       expiredEventSent: true,
