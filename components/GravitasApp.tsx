@@ -2111,19 +2111,7 @@ if (imageFiles.length > 0) {
           </div>
 
           <div className="flex items-center gap-2">
-            {isJumpIn && jumpInExpired ? (
-              <a
-                href={JUMP_IN_DAY_PASS_URL}
-                onClick={handleDayPassClick}
-                className="rounded-xl border px-3 py-2 text-sm font-semibold text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
-                style={{
-                  backgroundColor: MR_GOLD,
-                  borderColor: MR_GOLD,
-                }}
-              >
-                Get the $19 Day Pass
-              </a>
-            ) : !isJumpIn && isSubscribed === false ? (
+            {!isJumpIn && isSubscribed === false ? (
               <button
                 onClick={handleSubscribe}
                 data-copy-ui="true"
@@ -2202,7 +2190,7 @@ if (imageFiles.length > 0) {
           ref={scrollerRef}
           className={classNames(
             "rounded-2xl border border-neutral-800 bg-neutral-950 p-4",
-            isJumpIn && messages.length === 0
+            isJumpIn && messages.length === 0 && !jumpInExpired
               ? "min-h-[460px] overflow-visible sm:min-h-[540px]"
               : "h-[60vh] overflow-y-auto"
           )}
@@ -2231,7 +2219,7 @@ if (imageFiles.length > 0) {
   </div>
 )}
 
-              {isJumpIn && imagePreviewUrls.length === 0 ? (
+              {isJumpIn && !jumpInExpired && imagePreviewUrls.length === 0 ? (
                 <JumpInWelcome />
               ) : null}
             </div>
