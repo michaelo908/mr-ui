@@ -2072,7 +2072,7 @@ if (imageFiles.length > 0) {
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100">
       <div className="mx-auto w-full max-w-3xl px-4 py-10">
-        <header className="mb-6 flex items-center justify-between">
+        <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="text-2xl font-semibold tracking-tight">
               {isJumpIn ? "Jump Into Gravitas" : "Multirrupt - GRAVITAS"}
@@ -2110,7 +2110,7 @@ if (imageFiles.length > 0) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {!isJumpIn && isSubscribed === false ? (
               <button
                 onClick={handleSubscribe}
@@ -2125,32 +2125,34 @@ if (imageFiles.length > 0) {
               </button>
             ) : null}
 
-            <button
-              onClick={() => onCopyAll("email")}
-              data-copy-ui="true"
-              disabled={messages.length === 0}
-              className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
-            >
-              {copiedAllKey === "email" ? "✓ Copied Email" : "Copy All Email"}
-            </button>
+            {messages.length > 0 ? (
+              <>
+                <button
+                  onClick={() => onCopyAll("email")}
+                  data-copy-ui="true"
+                  className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900"
+                >
+                  {copiedAllKey === "email" ? "✓ Copied Email" : "Copy All Email"}
+                </button>
 
-            <button
-              onClick={() => onCopyAll("word")}
-              data-copy-ui="true"
-              disabled={messages.length === 0}
-              className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
-            >
-              {copiedAllKey === "word" ? "✓ Copied Word" : "Copy All Word"}
-            </button>
+                <button
+                  onClick={() => onCopyAll("word")}
+                  data-copy-ui="true"
+                  className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900"
+                >
+                  {copiedAllKey === "word" ? "✓ Copied Word" : "Copy All Word"}
+                </button>
 
-            <button
-              onClick={onClear}
-              data-copy-ui="true"
-              disabled={messages.length === 0 || isLoading}
-              className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
-            >
-              Clear
-            </button>
+                <button
+                  onClick={onClear}
+                  data-copy-ui="true"
+                  disabled={isLoading}
+                  className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-600"
+                >
+                  Clear
+                </button>
+              </>
+            ) : null}
             {!isJumpIn ? (
               <button
                 onClick={handleLogout}
