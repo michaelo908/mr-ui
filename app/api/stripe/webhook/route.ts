@@ -80,11 +80,7 @@ async function addToMailchimp(
   console.log("Added Gravitas Day Pass buyer to Mailchimp", email);
 }
 
-const GRAVITAS_DAY_PASS_PRICE_IDS = new Set([
-  "price_1TxjZXPEeaE0AI8SMYUQ1WhG", // $19
-  "price_1TqwewPEeaE0AI8SEgaXHHl6", // $27
-  "price_1T9jGbPEeaE0AI8SaSofAKAH", // $39
-]);
+const GRAVITAS_DAY_PASS_PRICE_ID = "price_1TxjZXPEeaE0AI8SMYUQ1WhG";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-02-25.clover",
@@ -132,9 +128,7 @@ export async function POST(req: Request) {
       });
 
       const isDayPassPurchase = lineItems.data.some(
-        (item) =>
-          item.price?.id !== undefined &&
-          GRAVITAS_DAY_PASS_PRICE_IDS.has(item.price.id)
+        (item) => item.price?.id === GRAVITAS_DAY_PASS_PRICE_ID
       );
 
       if (isDayPassPurchase) {
