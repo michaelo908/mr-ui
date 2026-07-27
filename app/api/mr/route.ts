@@ -145,7 +145,7 @@ function isContinuationContext(body: any): boolean {
   );
 }
 
-export async function POST(req: Request) {
+export async function handleMrRequest(req: Request) {
   const MR_API_URL = process.env.MR_API_URL;
   const MR_API_KEY = process.env.MR_API_KEY;
 
@@ -267,4 +267,8 @@ If text is also supplied, analyse the text and image together.
       { status: 502 }
     );
   }
+}
+
+export async function POST(req: Request) {
+  return handleMrRequest(req);
 }

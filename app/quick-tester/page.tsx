@@ -1,9 +1,5 @@
-import QuickTester from "@/components/QuickTester";
+import { redirect } from "next/navigation";
 
-export default function QuickTesterPage() {
-  return (
-    <main className="bg-transparent p-0 text-neutral-100">
-      <QuickTester />
-    </main>
-  );
+export default function LegacyFreeRoute() {
+  redirect("/jump-in");
 }
