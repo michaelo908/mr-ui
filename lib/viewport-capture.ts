@@ -141,7 +141,13 @@ async function fetchPublicHtml(initialUrl: URL) {
       if (!location || redirect === MAX_HTML_REDIRECTS) {
         throw new Error("The page redirected too many times.");
       }
-      currentUrl = new URL(location, currentUrl);
+      const nextUrl = new URL(location, currentUrl);
+      console.warn("Fetched webpage redirected", {
+        from: currentUrl.toString(),
+        to: nextUrl.toString(),
+        status: response.status,
+      });
+      currentUrl = nextUrl;
       continue;
     }
     if (!response.ok) {
