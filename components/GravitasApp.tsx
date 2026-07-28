@@ -1501,18 +1501,18 @@ useEffect(() => {
     const weeksSinceLaunch = getWeeksSinceLaunch();
 
     const weeklyAnalysesGrowth = weeksSinceLaunch * 55;
-    const weeklyRewritesGrowth = weeksSinceLaunch * 140;
 
     const analysesStart = getRandomInt(320, 479) + weeklyAnalysesGrowth;
 
     const rewritesStart =
       getRandomInt(
-        Math.floor(analysesStart * 2.0),
-        Math.floor(analysesStart * 2.7)
-      ) + weeklyRewritesGrowth;
+        Math.floor(analysesStart * 1.08),
+        Math.floor(analysesStart * 1.18)
+      );
 
     const analysesPerMinute = getRandomInt(4, 9) / 10;
-    const rewritesPerMinute = getRandomInt(10, 18) / 10;
+    const rewritesPerMinute =
+      analysesPerMinute * (getRandomInt(108, 118) / 100);
 
     return {
       dateKey: getTodayKey(),
@@ -2153,6 +2153,10 @@ if (urlSourceImages.length > 0) {
   const rewritesToday = telemetrySeed
     ? telemetrySeed.rewritesStart + timeDrivenRewrites + rewriteBoost
     : 0;
+  const narrativesRefinedToday = Math.min(
+    rewritesToday,
+    Math.floor(analysesToday * 1.2)
+  );
 
   void telemetryMinuteTick;
 
@@ -2178,12 +2182,12 @@ if (urlSourceImages.length > 0) {
         <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="text-2xl font-semibold tracking-tight">
-              {isJumpIn ? "Jump Into Gravitas" : "Multirrupt - GRAVITAS"}
+              {isJumpIn ? "Jump Into Gravitas" : "Multirrupt – GRAVITAS"}
             </div>
             <div className="mt-1 text-sm text-neutral-400">
               {isJumpIn
                 ? "Full Gravitas. 20 minutes. No signup required."
-                : "Narrative Intelligence for Momentum, Flow, and Perception."}
+                : "Narrative Intelligence Workstation"}
             </div>
             {isJumpIn ? (
               <div
@@ -2208,8 +2212,9 @@ if (urlSourceImages.length > 0) {
   </div>
 )}
 
-            <div className="mt-1 text-xs text-neutral-500">
-              Messages analysed today: {analysesToday} · Rewrites produced today: {rewritesToday}
+            <div className="mt-1 space-y-0.5 text-xs text-neutral-500">
+              <div>Analyses today: {analysesToday}</div>
+              <div>Narratives refined: {narrativesRefinedToday}</div>
             </div>
           </div>
 
