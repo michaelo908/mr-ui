@@ -1,7 +1,11 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import chromium from "@sparticuz/chromium";
-import { chromium as playwrightChromium, type Page } from "playwright-core";
+import {
+  chromium as playwrightChromium,
+  type Page,
+  type Response,
+} from "playwright-core";
 import {
   calculateViewportPositions,
   type SourceImage,
@@ -133,12 +137,21 @@ export async function captureRenderedPage(initialUrl: URL) {
       }
     });
 
-    const response = await page.goto(initialUrl.toString(), {
-      waitUntil: "domcontentloaded",
-      timeout: 35_000,
-    });
-    if (!response || !response.ok()) {
-      throw new Error(`The page returned HTTP ${response?.status() ?? "unknown"}.`);
+    let response: Response | null = null;
+    try {
+      response = await page.goto(initialUrl.toString(), {
+        waitUntil: "domcontentloaded",
+        timeout: 35_000,
+      });
+    } catch (error) {
+      const timedOut =
+        error instanceof Error &&
+        /(?:timeout|ERR_TIMED_OUT)/i.test(error.message);
+      if (!timedOut || page.url() === "about:blank") throw error;
+      await page.waitForSelector("body", { timeout: 5_000 });
+    }
+    if (response && !response.ok()) {
+      throw new Error(`The page returned HTTP ${response.status()}.`);
     }
     await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
     await preparePage(page);
