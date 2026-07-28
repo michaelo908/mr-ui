@@ -538,145 +538,6 @@ function parseStructuredMR(content: string) {
   return { hasStructured, sections, order };
 }
 
-function capitalizeFirst(text: string) {
-  if (!text) return text;
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-function normalizeOpeningSignalText(text: string) {
-  return stripInlineMarkdown(text)
-    .toLowerCase()
-    .replace(/[“”"']/g, "")
-    .replace(/[–—]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function uniqueStrings(values: Array<string | null | undefined>) {
-  return values.filter((value, index, arr): value is string => {
-    if (!value) return false;
-    return arr.indexOf(value) === index;
-  });
-}
-
-function pickSignalPhrase(text: string): string | null {
-  const t = normalizeOpeningSignalText(text);
-
-  if (
-    /(doesnt hold attention|doesn't hold attention|attention drops|attention collapses|reader drifts|reason to stay|reason to care|pull the reader forward|pulls the reader forward|fades out|falls flat|doesnt land|doesn't land|lands quiet|losing people)/.test(
-      t
-    )
-  ) {
-    return "it doesn't hold attention";
-  }
-
-  if (
-    /(asks too much|too much before|too much too early|over explain|over-explain|more complete|dense|too long|effort halfway through|this is going to be work)/.test(
-      t
-    )
-  ) {
-    return "it asks too much too early";
-  }
-
-  if (
-    /(reads clearly|clear but|clear yet|clarity|logical|reads fine|technically correct|makes sense|well explained|explains everything clearly)/.test(
-      t
-    )
-  ) {
-    return "it reads clearly";
-  }
-
-  if (
-    /(never quite understands|doesnt understand what this is|doesn't understand what this is|unclear positioning|confus|meaning blurs|what this is)/.test(
-      t
-    )
-  ) {
-    return "the reader never fully understands it";
-  }
-
-  if (
-    /(no real pull|nothing pulls|tension fails|lack of tension|urgency|desire never forms|momentum collapses|forward momentum|no reason to stay)/.test(
-      t
-    )
-  ) {
-    return "nothing pulls the reader forward";
-  }
-
-  if (/(trust thins|trust weakens|skeptic|suspicion|credibility)/.test(t)) {
-    return "trust weakens too early";
-  }
-
-  if (
-    /(never fully connects|doesnt connect|doesn't connect|connection fails|contact|resonate)/.test(
-      t
-    )
-  ) {
-    return "it never fully connects";
-  }
-
-  if (/(too general|generic|vague|stays broad|problem vividness)/.test(t)) {
-    return "it stays too general";
-  }
-
-  return null;
-}
-
-function trimToWordLimit(text: string, maxWords: number) {
-  const words = text.trim().split(/\s+/);
-  if (words.length <= maxWords) return text.trim();
-  return `${words.slice(0, maxWords).join(" ")}…`;
-}
-
-function deriveOpeningStatement(summary?: string) {
-  if (!summary?.trim()) return null;
-
-  const nodes = parseContentNodes(summary);
-  const candidates: string[] = [];
-
-  nodes.forEach((node) => {
-    if (node.type === "list") {
-      candidates.push(...node.items);
-    } else if (node.type === "para") {
-      candidates.push(...node.text.split("\n"));
-    }
-  });
-
-  const phrases = uniqueStrings(
-    candidates.slice(0, 6).map((item) => pickSignalPhrase(item))
-  );
-
-  if (phrases.length === 0) return null;
-
-  if (phrases.length === 1) {
-    return trimToWordLimit(`${capitalizeFirst(phrases[0])}.`, 20);
-  }
-
-  const [first, second] = phrases;
-
-  if (first === "it reads clearly") {
-    return trimToWordLimit(
-      `${capitalizeFirst(first)} — but ${second.replace(/^it /, "")}.`,
-      20
-    );
-  }
-
-  if (second === "it reads clearly") {
-    return trimToWordLimit(
-      `${capitalizeFirst(second)} — but ${first.replace(/^it /, "")}.`,
-      20
-    );
-  }
-
-  if (first.startsWith("it ") && second.startsWith("it ")) {
-    return trimToWordLimit(
-      `${capitalizeFirst(first)} — and ${second.slice(3)}.`,
-      20
-    );
-  }
-
-  return trimToWordLimit(`${capitalizeFirst(first)} — and ${second}.`, 20);
-}
-
 function renderMR(content: string) {
   const nodes = parseContentNodes(content);
 
@@ -905,8 +766,6 @@ function StructuredAssistantMessage({
   const depth = sections.depth?.trim();
   const rewrite = sections.rewrite?.trim();
   const debrief = sections.debrief?.trim();
-  const openingStatement = useMemo(() => deriveOpeningStatement(summary), [summary]);
-
   useEffect(() => {
     setShowRewrite(false);
     setShowRewriteButton(false);
@@ -1056,12 +915,31 @@ function StructuredAssistantMessage({
     <div className="space-y-5">
       {summary ? (
         <section>
-          {openingStatement ? (
+          {sourceImageData.length > 0 ? (
             <div className="mb-5">
-              <p className="text-[19px] leading-7 tracking-tight text-neutral-100 italic">
-                {openingStatement}
-              </p>
-              <p className="mt-1 text-sm italic text-neutral-500">Read on ↓</p>
+              <div className="flex flex-wrap gap-3">
+                {sourceImageData.map((image, index) => (
+                  <figure
+                    key={`${image.slice(0, 48)}-${index}`}
+                    className="w-24"
+                  >
+                    <img
+                      src={image}
+                      alt={
+                        sourceImageData.length === 1
+                          ? "Image analysed"
+                          : `Image ${index + 1} of ${sourceImageData.length} analysed`
+                      }
+                      className="h-20 w-24 rounded-lg border border-neutral-700 object-cover"
+                    />
+                    <figcaption className="mt-1 text-center text-[10px] uppercase tracking-wider text-neutral-500">
+                      {sourceImageData.length === 1
+                        ? "Image analysed"
+                        : `Image ${index + 1} of ${sourceImageData.length}`}
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
             </div>
           ) : null}
 
@@ -1104,11 +982,14 @@ function StructuredAssistantMessage({
 
       {depth ? (
         <details className="rounded-2xl border border-neutral-800 bg-neutral-900/20">
-          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-neutral-300 marker:hidden">
+          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold marker:hidden">
             <div className="flex items-center justify-between gap-4">
-              <span>Editor’s Notes in Depth</span>
-              <span className="text-xs uppercase tracking-widest text-neutral-500">
-                Click to expand
+              <span style={{ color: MR_GOLD }}>Editor’s Notes in Depth</span>
+              <span
+                className="inline-flex items-center gap-1 text-xs uppercase tracking-widest"
+                style={{ color: MR_GOLD }}
+              >
+                Click to expand <span aria-hidden="true">▾</span>
               </span>
             </div>
           </summary>
@@ -2176,6 +2057,7 @@ if (imageFiles.length > 0) {
             </p>
             <a
               href={JUMP_IN_DAY_PASS_URL}
+              target="_top"
               onClick={handleDayPassClick}
               className="mt-4 inline-flex rounded-xl border px-5 py-3 text-sm font-semibold text-black shadow-sm transition hover:brightness-110"
               style={{
