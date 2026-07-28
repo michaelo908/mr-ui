@@ -23,10 +23,15 @@ import {
   JUMP_IN_STORAGE_KEY,
   type JumpInSessionState,
 } from "@/lib/jump-in";
+import {
+  shouldShowAnalysisEasterEgg,
+  type AnalysisStatus,
+} from "@/lib/analysis-personality";
 
 type Msg = {
   role: "user" | "assistant";
   content: string;
+  analysisStatus?: AnalysisStatus;
   sourceContent?: string;
   imageData?: string[];
   sourceImages?: SourceImage[];
@@ -2087,7 +2092,11 @@ if (urlSourceImages.length > 0) {
       setMessages((m) =>
         m.map((msg) =>
           msg.role === "assistant" && msg.content === THINKING_TOKEN
-            ? { role: "assistant", content: normalizedOutput }
+            ? {
+                role: "assistant",
+                content: normalizedOutput,
+                analysisStatus: "success",
+              }
             : msg
         )
       );
@@ -2107,7 +2116,11 @@ if (urlSourceImages.length > 0) {
       setMessages((m) =>
         m.map((msg) =>
           msg.role === "assistant" && msg.content === THINKING_TOKEN
-           ? { role: "assistant", content: `Something went wrong while analysing: ${String(err)}` }
+           ? {
+               role: "assistant",
+               content: `Something went wrong while analysing: ${String(err)}`,
+               analysisStatus: "error",
+             }
             : msg
         )
       );
@@ -2398,21 +2411,31 @@ if (urlSourceImages.length > 0) {
                       {isThinking ? (
                         <ThinkingStatus />
                       ) : m.role === "assistant" ? (
-                        <StructuredAssistantMessage
-                          content={m.content}
-                          sourceRaw={sourceRaw}
-                          sourceImageData={sourceImageData}
-                          sourceImages={sourceImages}
-                          sourceIdentity={sourceIdentity}
-                          cadence={cadence}
-                          apiEndpoint={apiEndpoint}
-                          interactionLocked={isDemoLocked}
-                          onSessionExpired={markJumpInExpired}
-                          onRewriteProduced={() => {
-                            setAnalysisBoost((prev) => prev + getRandomInt(6, 14));
-                            setRewriteBoost((prev) => prev + getRandomInt(24, 46));
-                          }}
-                        />
+                        <>
+                          <StructuredAssistantMessage
+                            content={m.content}
+                            sourceRaw={sourceRaw}
+                            sourceImageData={sourceImageData}
+                            sourceImages={sourceImages}
+                            sourceIdentity={sourceIdentity}
+                            cadence={cadence}
+                            apiEndpoint={apiEndpoint}
+                            interactionLocked={isDemoLocked}
+                            onSessionExpired={markJumpInExpired}
+                            onRewriteProduced={() => {
+                              setAnalysisBoost((prev) => prev + getRandomInt(6, 14));
+                              setRewriteBoost((prev) => prev + getRandomInt(24, 46));
+                            }}
+                          />
+                          {shouldShowAnalysisEasterEgg(m.analysisStatus) ? (
+                            <p
+                              data-analysis-easter-egg="true"
+                              className="mt-5 text-center text-[11px] italic tracking-wide text-neutral-600"
+                            >
+                              No Gravitons were injured during this analysis.
+                            </p>
+                          ) : null}
+                        </>
                       ) : (
                       <div className="max-h-48 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-neutral-300">
                         {visibleUserContent}
