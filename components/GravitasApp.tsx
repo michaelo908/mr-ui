@@ -1392,6 +1392,7 @@ const gravitonGroups = [
 ];
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isCapturingUrl, setIsCapturingUrl] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState<string | null>(null);
   const [copiedAllKey, setCopiedAllKey] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1899,9 +1900,10 @@ if (trialActive && trialEndDate) {
     if (!runCoordinatorRef.current.tryStart(runId)) return;
     sendLockRef.current = true;
     setIsLoading(true);
+    setIsCapturingUrl(inputMode === "url");
     setAnalysisProgress(
       inputMode === "url"
-        ? "Opening the page and capturing the reader journey…"
+        ? null
         : "Preparing your analysis…"
     );
     setUrlError(null);
@@ -1945,6 +1947,7 @@ if (trialActive && trialEndDate) {
         );
         sourceIdentity = source;
         urlSourceImages = source.images;
+        setIsCapturingUrl(false);
       } catch {
         if (!runCoordinatorRef.current.isCurrent(runId)) return;
         setUrlError("The webpage could not be imported. Check the address and try again.");
@@ -2003,7 +2006,7 @@ const finalInput = gravitonPrefix + raw;
 
     setAnalysisProgress(
       inputMode === "url"
-        ? "Analysing the captured journey from the reader’s side…"
+        ? null
         : "Analysing the source from the reader’s side…"
     );
 
@@ -2187,6 +2190,7 @@ if (urlSourceImages.length > 0) {
       if (!runCoordinatorRef.current.finish(runId)) return;
       sendLockRef.current = false;
       setIsLoading(false);
+      setIsCapturingUrl(false);
       setAnalysisProgress(null);
       scrollToBottom();
     }
@@ -2545,6 +2549,29 @@ if (urlSourceImages.length > 0) {
       </button>
     ))}
   </div>
+
+  {inputMode === "url" ? (
+    <div className="min-h-[38px]">
+      {isCapturingUrl ? (
+        <div
+          data-url-capture-progress="true"
+          className="pb-3"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="mb-2 text-sm font-medium text-[#C6A75A]">
+            Capturing page viewports…
+          </p>
+          <div
+            className="h-2 overflow-hidden rounded-full bg-neutral-800"
+            aria-hidden="true"
+          >
+            <div className="gravitas-capture-progress h-full w-1/3 rounded-full bg-[#C6A75A]" />
+          </div>
+        </div>
+      ) : null}
+    </div>
+  ) : null}
 
   {inputMode === "url" ? (
     <div>

@@ -38,10 +38,41 @@ test("URL submission enters processing synchronously and scopes results by run I
   const app = read("components/GravitasApp.tsx");
   assert.match(app, /runCoordinatorRef\.current\.tryStart\(runId\)/);
   assert.match(app, /setIsLoading\(true\)/);
-  assert.match(app, /Opening the page and capturing the reader journey/);
+  assert.match(app, /setIsCapturingUrl\(inputMode === "url"\)/);
   assert.match(app, /msg\.runId === runId/);
   assert.match(app, /runCoordinatorRef\.current\.finish\(runId\)/);
   assert.match(app, /setUrlError\(null\)/);
+});
+
+test("URL capture progress hands off cleanly to the existing analysis progress", () => {
+  const app = read("components/GravitasApp.tsx");
+  const styles = read("app/globals.css");
+
+  assert.match(app, /inputMode === "url" \? \([\s\S]*isCapturingUrl \? \(/);
+  assert.match(app, /Capturing page viewports…/);
+  assert.match(app, /data-url-capture-progress="true"/);
+  assert.doesNotMatch(
+    app,
+    /inputMode === "text"[\s\S]{0,200}data-url-capture-progress/
+  );
+  assert.doesNotMatch(
+    app,
+    /inputMode === "images"[\s\S]{0,200}data-url-capture-progress/
+  );
+  assert.match(
+    app,
+    /sourceIdentity = source;\s*urlSourceImages = source\.images;\s*setIsCapturingUrl\(false\)/s
+  );
+  assert.match(
+    app,
+    /setMessages\(\(m\) => \[\s*\.\.\.m,[\s\S]*THINKING_TOKEN/s
+  );
+  assert.match(app, /finally \{[\s\S]*setIsCapturingUrl\(false\)/);
+  assert.match(app, /setIsCapturingUrl\(false\)[\s\S]*setAnalysisProgress\(null\)/);
+  assert.match(app, /sendLockRef\.current \|\| isRepeatedGraviton/);
+  assert.match(app, /runCoordinatorRef\.current\.tryStart\(runId\)/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(styles, /\.gravitas-capture-progress/);
 });
 
 test("confirmed scroll offsets must strictly progress", () => {
