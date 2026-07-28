@@ -20,6 +20,26 @@ import {
 const VIEWPORT = { width: 1280, height: 800 };
 const MAX_VIEWPORTS = 10;
 const MAX_TOTAL_SCREENSHOT_BYTES = 3_000_000;
+const NAVIGATION_COMMIT_TIMEOUT_MS = 20_000;
+const DOCUMENT_READY_TIMEOUT_MS = 12_000;
+
+function publicUrlValidationCache() {
+  const validations = new Map<string, Promise<void>>();
+
+  return (url: URL) => {
+    const key = `${url.protocol}//${url.hostname.toLowerCase()}`;
+    const existing = validations.get(key);
+    if (existing) return existing;
+
+    const validation = validatePublicBrowserUrl(url).catch((error) => {
+      validations.delete(key);
+      throw error;
+    });
+    validations.set(key, validation);
+    return validation;
+  };
+}
+
 async function launchBrowser(): Promise<Browser> {
   const launch = async () =>
     playwrightChromium.launch({
@@ -133,15 +153,21 @@ export async function captureRenderedPage(initialUrl: URL) {
       viewport: VIEWPORT,
       deviceScaleFactor: 1,
     });
+    const validateRequestUrl = publicUrlValidationCache();
 
     await page.route("**/*", async (route) => {
-      const requestUrl = new URL(route.request().url());
+      const request = route.request();
+      const requestUrl = new URL(request.url());
       if (!["http:", "https:"].includes(requestUrl.protocol)) {
         await route.continue();
         return;
       }
+      if (request.resourceType() === "media" || request.resourceType() === "font") {
+        await route.abort("blockedbyclient");
+        return;
+      }
       try {
-        await validatePublicBrowserUrl(requestUrl);
+        await validateRequestUrl(requestUrl);
         await route.continue();
       } catch {
         await route.abort("blockedbyclient");
@@ -151,16 +177,27 @@ export async function captureRenderedPage(initialUrl: URL) {
     let response: Response | null = null;
     try {
       response = await page.goto(initialUrl.toString(), {
-        waitUntil: "domcontentloaded",
-        timeout: 35_000,
+        waitUntil: "commit",
+        timeout: NAVIGATION_COMMIT_TIMEOUT_MS,
       });
     } catch (error) {
       const timedOut =
         error instanceof Error &&
         /(?:timeout|ERR_TIMED_OUT)/i.test(error.message);
       if (!timedOut || page.url() === "about:blank") throw error;
-      await page.waitForSelector("body", { timeout: 5_000 });
     }
+    await page.waitForSelector("body", {
+      state: "attached",
+      timeout: DOCUMENT_READY_TIMEOUT_MS,
+    });
+    await page.waitForFunction(
+      () =>
+        document.readyState === "interactive" ||
+        document.readyState === "complete" ||
+        Boolean(document.body?.children.length),
+      undefined,
+      { timeout: DOCUMENT_READY_TIMEOUT_MS }
+    );
     if (response && !response.ok()) {
       throw new Error(`The page returned HTTP ${response.status()}.`);
     }

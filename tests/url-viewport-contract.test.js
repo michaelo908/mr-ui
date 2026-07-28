@@ -55,3 +55,15 @@ test("browser launch retries transient executable-busy failures", () => {
   assert.match(capture, /waitBeforeBrowserLaunchRetry/);
   assert.match(capture, /return launch\(\)/);
 });
+
+test("URL rendering avoids DNS exhaustion and does not wait indefinitely for scripts", () => {
+  const capture = read("lib/viewport-capture.ts");
+
+  assert.match(capture, /publicUrlValidationCache/);
+  assert.match(capture, /validations = new Map/);
+  assert.match(capture, /waitUntil:\s*"commit"/);
+  assert.match(capture, /waitForSelector\("body"/);
+  assert.match(capture, /DOCUMENT_READY_TIMEOUT_MS/);
+  assert.match(capture, /resourceType\(\) === "media"/);
+  assert.match(capture, /resourceType\(\) === "font"/);
+});
