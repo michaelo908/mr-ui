@@ -71,3 +71,16 @@ test("URL rendering avoids DNS exhaustion and does not wait indefinitely for scr
   assert.match(capture, /locale:\s*"en-AU"/);
   assert.match(route, /preferredRegion\s*=\s*"syd1"/);
 });
+
+test("a navigation that cannot commit falls back to safely fetched HTML", () => {
+  const capture = read("lib/viewport-capture.ts");
+
+  assert.match(capture, /fetchPublicHtml/);
+  assert.match(capture, /redirect:\s*"manual"/);
+  assert.match(capture, /MAX_HTML_REDIRECTS/);
+  assert.match(capture, /MAX_HTML_BYTES/);
+  assert.match(capture, /validatePublicBrowserUrl\(currentUrl\)/);
+  assert.match(capture, /addDocumentBase/);
+  assert.match(capture, /page\.setContent\(fallback\.html/);
+  assert.match(capture, /page\.url\(\) === "about:blank"/);
+});

@@ -22,6 +22,9 @@ const MAX_VIEWPORTS = 10;
 const MAX_TOTAL_SCREENSHOT_BYTES = 3_000_000;
 const NAVIGATION_COMMIT_TIMEOUT_MS = 20_000;
 const DOCUMENT_READY_TIMEOUT_MS = 12_000;
+const HTML_FALLBACK_TIMEOUT_MS = 15_000;
+const MAX_HTML_BYTES = 5_000_000;
+const MAX_HTML_REDIRECTS = 5;
 const DESKTOP_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36";
@@ -110,6 +113,58 @@ export async function validatePublicBrowserUrl(url: URL) {
   }
 }
 
+function addDocumentBase(html: string, url: URL) {
+  const base = `<base href="${url.toString().replaceAll('"', "&quot;")}">`;
+  if (/<head(?:\s[^>]*)?>/i.test(html)) {
+    return html.replace(/<head(?:\s[^>]*)?>/i, (head) => `${head}${base}`);
+  }
+  return `${base}${html}`;
+}
+
+async function fetchPublicHtml(initialUrl: URL) {
+  let currentUrl = initialUrl;
+
+  for (let redirect = 0; redirect <= MAX_HTML_REDIRECTS; redirect += 1) {
+    await validatePublicBrowserUrl(currentUrl);
+    const response = await fetch(currentUrl, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(HTML_FALLBACK_TIMEOUT_MS),
+      headers: {
+        "user-agent": DESKTOP_USER_AGENT,
+        accept: "text/html,application/xhtml+xml",
+        "accept-language": "en-AU,en;q=0.9",
+      },
+    });
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location || redirect === MAX_HTML_REDIRECTS) {
+        throw new Error("The page redirected too many times.");
+      }
+      currentUrl = new URL(location, currentUrl);
+      continue;
+    }
+    if (!response.ok) {
+      throw new Error(`The page returned HTTP ${response.status}.`);
+    }
+    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+    if (!contentType.includes("text/html") && !contentType.includes("application/xhtml+xml")) {
+      throw new Error("That address did not return a webpage.");
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length > MAX_HTML_BYTES) {
+      throw new Error("The webpage is too large to render safely.");
+    }
+
+    return {
+      finalUrl: currentUrl,
+      html: addDocumentBase(bytes.toString("utf8"), currentUrl),
+    };
+  }
+
+  throw new Error("The page redirected too many times.");
+}
+
 async function preparePage(page: Page) {
   await page.addStyleTag({
     content: `
@@ -180,6 +235,7 @@ export async function captureRenderedPage(initialUrl: URL) {
     });
 
     let response: Response | null = null;
+    let renderedUrl = initialUrl;
     try {
       response = await page.goto(initialUrl.toString(), {
         waitUntil: "commit",
@@ -189,7 +245,25 @@ export async function captureRenderedPage(initialUrl: URL) {
       const timedOut =
         error instanceof Error &&
         /(?:timeout|ERR_TIMED_OUT)/i.test(error.message);
-      if (!timedOut || page.url() === "about:blank") throw error;
+      if (!timedOut) throw error;
+      if (page.url() === "about:blank") {
+        await page.evaluate(() => window.stop()).catch(() => undefined);
+        console.warn("Browser navigation did not commit; rendering fetched HTML instead", {
+          url: initialUrl.toString(),
+          error,
+        });
+        const fallback = await fetchPublicHtml(initialUrl);
+        renderedUrl = fallback.finalUrl;
+        await page.setContent(fallback.html, {
+          waitUntil: "domcontentloaded",
+          timeout: DOCUMENT_READY_TIMEOUT_MS,
+        }).catch((setContentError) => {
+          console.warn("Fetched HTML reached its readiness timeout", {
+            url: renderedUrl.toString(),
+            error: setContentError,
+          });
+        });
+      }
     }
     await page.waitForSelector("body", {
       state: "attached",
@@ -209,7 +283,8 @@ export async function captureRenderedPage(initialUrl: URL) {
     await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
     await preparePage(page);
 
-    const finalUrl = new URL(page.url());
+    const finalUrl =
+      page.url() === "about:blank" ? renderedUrl : new URL(page.url());
     await validatePublicBrowserUrl(finalUrl);
 
     const pageDetails = await page.evaluate(() => ({
