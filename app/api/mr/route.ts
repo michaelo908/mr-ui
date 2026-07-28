@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cadenceInstruction, type CadenceMode } from "@/lib/cadence";
 
 /**
  * Default domain frame (normal Multirrupt operation).
@@ -165,6 +166,8 @@ export async function handleMrRequest(req: Request) {
   }
 
   const heresyMode = isMrHeresyMode(body);
+  const cadence: CadenceMode =
+    body?.cadence === "sustained" ? "sustained" : "dynamic";
 
   // Preserve any per-request context from the UI
   const originalContext = typeof body?.context === "string" ? body.context : "";
@@ -206,7 +209,12 @@ If text is also supplied, analyse the text and image together.
   // Sealed framing rules:
   // - Normal mode: MR_DOMAIN_FRAME (+ originalContext), except continuation where we keep originalContext only
   // - MR Heresy mode: MR_HERESY_CHARTER only (+ originalContext), never MR_DOMAIN_FRAME
-  const combinedOriginalContext = [originalContext, visualAnalysisContext]
+  const rewriteCadenceContext = heresyMode ? "" : cadenceInstruction(cadence);
+  const combinedOriginalContext = [
+    originalContext,
+    visualAnalysisContext,
+    rewriteCadenceContext,
+  ]
     .filter(Boolean)
     .join("\n\n");
 

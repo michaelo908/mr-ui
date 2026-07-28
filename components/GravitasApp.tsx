@@ -4,6 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
+  CADENCE_OPTIONS,
+  cadenceInstruction,
+  type CadenceMode,
+} from "@/lib/cadence";
+import type { SourceIdentity, UrlSource } from "@/lib/sources";
+import {
   formatJumpInRemaining,
   getJumpInRemainingMs,
   isJumpInExpired,
@@ -18,6 +24,7 @@ type Msg = {
   content: string;
   sourceContent?: string;
   imageData?: string[];
+  sourceIdentity?: SourceIdentity;
 };
 type CopyFormat = "email" | "word";
 type RewriteVariant = {
@@ -739,6 +746,8 @@ function StructuredAssistantMessage({
   content,
   sourceRaw,
   sourceImageData,
+  sourceIdentity,
+  cadence,
   apiEndpoint,
   interactionLocked,
   onSessionExpired,
@@ -747,6 +756,8 @@ function StructuredAssistantMessage({
   content: string;
   sourceRaw: string;
   sourceImageData: string[];
+  sourceIdentity?: SourceIdentity;
+  cadence: CadenceMode;
   apiEndpoint: string;
   interactionLocked: boolean;
   onSessionExpired?: () => void;
@@ -850,8 +861,9 @@ function StructuredAssistantMessage({
 
     setIsGeneratingAlternate(true);
 
-    const alternateInstruction =
-      "Provide only a fresh alternate rewrite of this same original text. Do not include summary, diagnosis, notes, headings, labels, or debrief. Return only the rewritten copy.";
+    const alternateInstruction = `Provide only a fresh alternate rewrite of this same original text. Do not include summary, diagnosis, notes, headings, labels, or debrief. Return only the rewritten copy.
+
+${cadenceInstruction(cadence)}`;
     const sourceText =
       parsed.content.trim() ||
       `Create a fresh alternate rewrite based on the attached image${
@@ -866,6 +878,7 @@ function StructuredAssistantMessage({
             context: `${alternateInstruction}\n\nApply Multirrupt Mode to the following source:\n\n${sourceText}`,
             constraints: {},
             imageData: sourceImageData,
+            cadence,
           }
         : {
             mode: "general",
@@ -873,6 +886,7 @@ function StructuredAssistantMessage({
             context: alternateInstruction,
             constraints: {},
             imageData: sourceImageData,
+            cadence,
           };
 
     try {
@@ -915,6 +929,26 @@ function StructuredAssistantMessage({
     <div className="space-y-5">
       {summary ? (
         <section>
+          {sourceIdentity?.type === "url" ? (
+            <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-950/60 px-4 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-500">
+                Source
+              </div>
+              <div className="mt-1 text-sm font-semibold text-neutral-200">
+                {sourceIdentity.title}
+              </div>
+              {sourceIdentity.originalLocation ? (
+                <a
+                  href={sourceIdentity.originalLocation}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 block truncate text-xs text-[#C6A75A] hover:underline"
+                >
+                  {sourceIdentity.originalLocation}
+                </a>
+              ) : null}
+            </div>
+          ) : null}
           {sourceImageData.length > 0 ? (
             <div className="mb-5">
               <div className="flex flex-wrap gap-3">
@@ -1209,6 +1243,14 @@ export default function GravitasApp({
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
+  const [inputMode, setInputMode] = useState<"text" | "url" | "images">("text");
+  const [urlDraft, setUrlDraft] = useState("");
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [importedUrl, setImportedUrl] = useState<{
+    requestedUrl: string;
+    source: UrlSource;
+  } | null>(null);
+  const [cadence, setCadence] = useState<CadenceMode>("dynamic");
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [selectedGraviton, setSelectedGraviton] =
   useState("Full Analysis");
@@ -1323,10 +1365,12 @@ const gravitonGroups = [
 
   const canSend = useMemo(
   () =>
-    (draft.trim().length > 0 || imageFiles.length > 0) &&
+    ((inputMode === "text" && draft.trim().length > 0) ||
+      (inputMode === "url" && urlDraft.trim().length > 0) ||
+      (inputMode === "images" && imageFiles.length > 0)) &&
     !isLoading &&
     !isDemoLocked,
-  [draft, imageFiles, isLoading, isDemoLocked]
+  [draft, urlDraft, imageFiles, inputMode, isLoading, isDemoLocked]
 );
 
 const imagePreviewUrls = useMemo(() => {
@@ -1703,6 +1747,9 @@ if (trialActive && trialEndDate) {
     if (isLoading) return;
     setMessages([]);
     setDraft("");
+    setUrlDraft("");
+    setUrlError(null);
+    setImportedUrl(null);
     setCopiedAllKey(null);
     setCopiedMessageKey(null);
     messageContentRefs.current = {};
@@ -1731,7 +1778,43 @@ if (trialActive && trialEndDate) {
 
   }
 
-    const raw = draft;
+    let raw = draft;
+    let sourceIdentity: SourceIdentity | undefined;
+
+    if (inputMode === "url") {
+      setUrlError(null);
+      try {
+        let source = importedUrl?.requestedUrl === urlDraft.trim()
+          ? importedUrl.source
+          : null;
+
+        if (!source) {
+          const sourceResponse = await fetch("/api/sources/url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: urlDraft }),
+          });
+          const sourceData = (await sourceResponse.json()) as {
+            source?: UrlSource;
+            error?: string;
+          };
+          if (!sourceResponse.ok || !sourceData.source) {
+            setUrlError(sourceData.error || "The webpage could not be imported.");
+            return;
+          }
+          source = sourceData.source;
+          setImportedUrl({
+            requestedUrl: urlDraft.trim(),
+            source,
+          });
+        }
+        raw = source.extractedText;
+        sourceIdentity = source;
+      } catch {
+        setUrlError("The webpage could not be imported. Check the address and try again.");
+        return;
+      }
+    }
     const gravitonPrefix =
   selectedGraviton === "Full Analysis"
     ? ""
@@ -1749,10 +1832,15 @@ const finalInput = gravitonPrefix + raw;
     imageFiles.map((file) => file.name)
   );
 }
-    if ((!raw.trim() && imageFiles.length === 0) || isLoading || isDemoLocked) return;
+    if (
+      (!raw.trim() && imageFiles.length === 0) ||
+      isLoading ||
+      isDemoLocked
+    )
+      return;
 
     if (raw.length > 30000) {
-      alert("That’s a large input. For best results, keep it under 0,000 characters.");
+      alert("That’s a large input. For best results, keep it under 30,000 characters.");
       return;
     }
 
@@ -1778,12 +1866,18 @@ const finalInput = gravitonPrefix + raw;
 
     const activeJumpInSession = startJumpInSession();
 
-    setDraft("");
     setIsLoading(true);
 
     setMessages((m) => [
       ...m,
-      { role: "user", content: raw.trim() },
+      {
+        role: "user",
+        content:
+          sourceIdentity?.type === "url"
+            ? `${sourceIdentity.title}\n${sourceIdentity.originalLocation ?? ""}`
+            : raw.trim(),
+        sourceIdentity,
+      },
       { role: "assistant", content: THINKING_TOKEN },
     ]);
 
@@ -1808,6 +1902,7 @@ if (imageFiles.length > 0) {
               ...message,
               sourceContent: effectiveText,
               imageData,
+              sourceIdentity,
             }
           : message
       )
@@ -1820,6 +1915,7 @@ if (imageFiles.length > 0) {
           context: `Apply Multirrupt Mode to the following text:\n\n${effectiveText}`,
           constraints: {},
           imageData,
+          cadence,
         }
       : {
           mode: "general",
@@ -1827,6 +1923,7 @@ if (imageFiles.length > 0) {
           context: "",
           constraints: {},
           imageData,
+          cadence,
         };
 
     try {
@@ -2130,6 +2227,10 @@ if (imageFiles.length > 0) {
                   m.role === "assistant" && i > 0 && messages[i - 1]?.role === "user"
                     ? messages[i - 1].imageData ?? []
                     : [];
+                const sourceIdentity =
+                  m.role === "assistant" && i > 0 && messages[i - 1]?.role === "user"
+                    ? messages[i - 1].sourceIdentity
+                    : undefined;
 
                 return (
                   <div
@@ -2185,6 +2286,8 @@ if (imageFiles.length > 0) {
                           content={m.content}
                           sourceRaw={sourceRaw}
                           sourceImageData={sourceImageData}
+                          sourceIdentity={sourceIdentity}
+                          cadence={cadence}
                           apiEndpoint={apiEndpoint}
                           interactionLocked={isDemoLocked}
                           onSessionExpired={markJumpInExpired}
@@ -2207,6 +2310,80 @@ if (imageFiles.length > 0) {
         </div>
 
         <div className="mt-4 rounded-2xl border border-neutral-800 bg-neutral-950 p-3">
+  <div className="mb-3 flex flex-wrap gap-2" aria-label="Source type">
+    {([
+      ["text", "Text"],
+      ["url", "URL"],
+      ["images", "Images"],
+    ] as const).map(([value, label]) => (
+      <button
+        key={value}
+        type="button"
+        onClick={() => {
+          setInputMode(value);
+          setUrlError(null);
+          if (value !== "images") setImageFiles([]);
+          if (value !== "text") setDraft("");
+        }}
+        disabled={isDemoLocked}
+        className={classNames(
+          "rounded-lg border px-3 py-2 text-xs font-semibold transition",
+          inputMode === value
+            ? "border-[#C6A75A] bg-[#C6A75A]/10 text-[#C6A75A]"
+            : "border-neutral-800 text-neutral-400 hover:bg-neutral-900",
+          isDemoLocked && "cursor-not-allowed opacity-60"
+        )}
+      >
+        {label}
+      </button>
+    ))}
+  </div>
+
+  {inputMode === "url" ? (
+    <div>
+      <input
+        type="url"
+        value={urlDraft}
+        onChange={(event) => {
+          setUrlDraft(event.target.value);
+          setUrlError(null);
+          setImportedUrl(null);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void onSend();
+          }
+        }}
+        disabled={isDemoLocked}
+        placeholder="Paste a webpage URL"
+        className={classNames(
+          "h-[56px] w-full rounded-xl border border-neutral-800 bg-neutral-950 px-4 text-[17px] text-neutral-100 outline-none focus:border-neutral-600",
+          isDemoLocked && "cursor-not-allowed opacity-60"
+        )}
+      />
+      <p className="mt-2 text-xs text-neutral-500">
+        Gravitas will extract the readable page content and keep the page identified with its analysis.
+      </p>
+      {importedUrl?.source.truncated ? (
+        <p className="mt-2 text-xs text-neutral-500">
+          This is a long page. Gravitas will analyse the first complete working section in this pass.
+        </p>
+      ) : null}
+      {urlError ? (
+        <p className="mt-2 text-sm text-amber-300">{urlError}</p>
+      ) : null}
+    </div>
+  ) : inputMode === "images" ? (
+    <button
+      type="button"
+      onClick={() => fileInputRef.current?.click()}
+      disabled={isDemoLocked}
+      className="h-[56px] w-full rounded-xl border border-neutral-800 px-5 text-sm font-semibold text-neutral-200 hover:bg-neutral-900 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      Select up to 10 images
+    </button>
+  ) : (
   <textarea
     value={draft}
     onChange={(e) => {
@@ -2224,32 +2401,42 @@ if (imageFiles.length > 0) {
       isDemoLocked && "cursor-not-allowed opacity-60"
     )}
   />
+  )}
 
   <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-    <button
-      type="button"
-      onClick={() => fileInputRef.current?.click()}
-      disabled={isDemoLocked}
-      className="h-[56px] w-full rounded-xl border border-neutral-800 px-5 text-sm font-semibold text-neutral-200 hover:bg-neutral-900 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-    >
-      Images
-    </button>
-
     <select
       value={selectedGraviton}
       onChange={(e) => setSelectedGraviton(e.target.value)}
       disabled={isDemoLocked}
+      aria-label="Gravitons"
       className="h-[56px] w-full min-w-0 flex-1 rounded-xl border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-200 disabled:cursor-not-allowed disabled:opacity-60"
     >
       {gravitonGroups.map((group) => (
         <optgroup key={group.label} label={group.label}>
           {group.options.map((option) => (
             <option key={option} value={option}>
-             {option}
+             {option === "Full Analysis"
+               ? "Gravitons: Full Analysis (Default)"
+               : option}
            </option>
       ))}
     </optgroup>
 ))}
+    </select>
+
+    <select
+      value={cadence}
+      onChange={(event) => setCadence(event.target.value as CadenceMode)}
+      disabled={isDemoLocked}
+      aria-label="Cadence"
+      title={CADENCE_OPTIONS.find((option) => option.value === cadence)?.description}
+      className="h-[56px] w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-200 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+    >
+      {CADENCE_OPTIONS.map((option) => (
+        <option key={option.value} value={option.value}>
+          Cadence: {option.label}
+        </option>
+      ))}
     </select>
 
     <button
@@ -2269,11 +2456,13 @@ if (imageFiles.length > 0) {
     accept="image/png,image/jpeg,image/webp"
     onChange={async (e) => {
       const files = Array.from(e.target.files ?? []);
+      const limitedFiles = files.slice(0, 10);
       const compressedFiles = await Promise.all(
-        files.map((file) => compressImage(file))
+        limitedFiles.map((file) => compressImage(file))
       );
 
       setImageFiles(compressedFiles);
+      setInputMode("images");
       setDraft("");
     }}
     disabled={isDemoLocked}

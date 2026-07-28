@@ -8,6 +8,7 @@ export async function proxy(request: NextRequest) {
     "/jump-in",
     "/quick-tester",
     "/api/jump-in",
+    "/api/sources/url",
   ];
 
   const isPublicRoute = publicRoutes.some((route) =>
