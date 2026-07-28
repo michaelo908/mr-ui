@@ -2,14 +2,19 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { NextResponse } from "next/server";
 import {
+  extractHtmlImageCandidates,
   extractHtmlTitle,
   stripHtmlToReadableText,
+  type SourceImage,
   type UrlSource,
 } from "@/lib/sources";
 
 const MAX_RESPONSE_BYTES = 2_000_000;
+const MAX_IMAGE_BYTES = 2_000_000;
+const MAX_TOTAL_IMAGE_BYTES = 8_000_000;
 const MAX_EXTRACTED_CHARACTERS = 28_000;
 const MAX_REDIRECTS = 4;
+const MAX_SOURCE_IMAGES = 10;
 
 function isPrivateAddress(address: string) {
   if (address === "::1" || address === "0.0.0.0") return true;
@@ -112,6 +117,93 @@ async function fetchPublicPage(initialUrl: URL) {
   throw new Error("The page redirected too many times.");
 }
 
+async function fetchPublicImage(initialUrl: URL) {
+  let currentUrl = initialUrl;
+
+  for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
+    await validatePublicUrl(currentUrl);
+
+    const response = await fetch(currentUrl, {
+      cache: "no-store",
+      headers: {
+        Accept: "image/avif,image/webp,image/png,image/jpeg;q=0.9",
+        "User-Agent": "Gravitas Source Reader/1.0",
+      },
+      redirect: "manual",
+      signal: AbortSignal.timeout(8_000),
+    });
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) throw new Error("Invalid image redirect.");
+      currentUrl = new URL(location, currentUrl);
+      continue;
+    }
+    if (!response.ok) throw new Error(`Image returned HTTP ${response.status}.`);
+
+    const contentType = response.headers.get("content-type")?.split(";")[0].toLowerCase();
+    if (!contentType || !["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
+      throw new Error("Unsupported image format.");
+    }
+
+    const declaredSize = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declaredSize) && declaredSize > MAX_IMAGE_BYTES) {
+      throw new Error("Image is too large.");
+    }
+
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length === 0 || bytes.length > MAX_IMAGE_BYTES) {
+      throw new Error("Image is empty or too large.");
+    }
+
+    return {
+      byteLength: bytes.length,
+      dataUrl: `data:${contentType};base64,${bytes.toString("base64")}`,
+      finalUrl: currentUrl.toString(),
+    };
+  }
+
+  throw new Error("Image redirected too many times.");
+}
+
+async function importPageImages(html: string, pageUrl: URL) {
+  const candidates = extractHtmlImageCandidates(html, pageUrl.toString(), 20);
+  const images: SourceImage[] = [];
+  let totalBytes = 0;
+
+  const results = await Promise.all(
+    candidates.map(async (candidate) => {
+      try {
+        return {
+          candidate,
+          imported: await fetchPublicImage(new URL(candidate.url)),
+        };
+      } catch {
+        return null;
+      }
+    })
+  );
+
+  for (const result of results) {
+    if (!result) continue;
+    if (images.length >= MAX_SOURCE_IMAGES || totalBytes >= MAX_TOTAL_IMAGE_BYTES) break;
+    if (totalBytes + result.imported.byteLength > MAX_TOTAL_IMAGE_BYTES) continue;
+
+    totalBytes += result.imported.byteLength;
+    images.push({
+      id: crypto.randomUUID(),
+      type: "image",
+      title: result.candidate.altText || `Page image ${images.length + 1}`,
+      originalLocation: result.imported.finalUrl,
+      dataUrl: result.imported.dataUrl,
+      altText: result.candidate.altText,
+      order: images.length,
+    });
+  }
+
+  return images;
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as { url?: unknown };
@@ -131,11 +223,14 @@ export async function POST(req: Request) {
         ? html
         : stripHtmlToReadableText(html)
     );
+    const images = finalUrl.pathname.endsWith(".txt")
+      ? []
+      : await importPageImages(html, finalUrl);
     const extractedText = completeText.slice(0, MAX_EXTRACTED_CHARACTERS);
 
-    if (extractedText.length < 80) {
+    if (extractedText.length < 80 && images.length === 0) {
       throw new Error(
-        "Gravitas could not find enough readable page content. The page may require a login or browser scripting."
+        "Gravitas could not find enough readable page content or usable images. The page may require a login or browser scripting."
       );
     }
 
@@ -152,6 +247,7 @@ export async function POST(req: Request) {
       extractedText,
       wordCount: completeText.split(/\s+/).filter(Boolean).length,
       truncated: completeText.length > MAX_EXTRACTED_CHARACTERS,
+      images,
     };
 
     return NextResponse.json({ source });

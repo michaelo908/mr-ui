@@ -8,7 +8,7 @@ import {
   cadenceInstruction,
   type CadenceMode,
 } from "@/lib/cadence";
-import type { SourceIdentity, UrlSource } from "@/lib/sources";
+import type { SourceIdentity, SourceImage, UrlSource } from "@/lib/sources";
 import {
   formatJumpInRemaining,
   getJumpInRemainingMs,
@@ -24,6 +24,7 @@ type Msg = {
   content: string;
   sourceContent?: string;
   imageData?: string[];
+  sourceImages?: SourceImage[];
   sourceIdentity?: SourceIdentity;
 };
 type CopyFormat = "email" | "word";
@@ -746,6 +747,7 @@ function StructuredAssistantMessage({
   content,
   sourceRaw,
   sourceImageData,
+  sourceImages,
   sourceIdentity,
   cadence,
   apiEndpoint,
@@ -756,6 +758,7 @@ function StructuredAssistantMessage({
   content: string;
   sourceRaw: string;
   sourceImageData: string[];
+  sourceImages: SourceImage[];
   sourceIdentity?: SourceIdentity;
   cadence: CadenceMode;
   apiEndpoint: string;
@@ -777,6 +780,16 @@ function StructuredAssistantMessage({
   const depth = sections.depth?.trim();
   const rewrite = sections.rewrite?.trim();
   const debrief = sections.debrief?.trim();
+  const displayImages =
+    sourceImages.length > 0
+      ? sourceImages
+      : sourceImageData.map((dataUrl, index) => ({
+          id: `legacy-image-${index}`,
+          type: "image" as const,
+          title: `Image ${index + 1}`,
+          dataUrl,
+          order: index,
+        }));
   useEffect(() => {
     setShowRewrite(false);
     setShowRewriteButton(false);
@@ -949,31 +962,9 @@ ${cadenceInstruction(cadence)}`;
               ) : null}
             </div>
           ) : null}
-          {sourceImageData.length > 0 ? (
+          {displayImages.length > 0 ? (
             <div className="mb-5">
-              <div className="flex flex-wrap gap-3">
-                {sourceImageData.map((image, index) => (
-                  <figure
-                    key={`${image.slice(0, 48)}-${index}`}
-                    className="w-24"
-                  >
-                    <img
-                      src={image}
-                      alt={
-                        sourceImageData.length === 1
-                          ? "Image analysed"
-                          : `Image ${index + 1} of ${sourceImageData.length} analysed`
-                      }
-                      className="h-20 w-24 rounded-lg border border-neutral-700 object-cover"
-                    />
-                    <figcaption className="mt-1 text-center text-[10px] uppercase tracking-wider text-neutral-500">
-                      {sourceImageData.length === 1
-                        ? "Image analysed"
-                        : `Image ${index + 1} of ${sourceImageData.length}`}
-                    </figcaption>
-                  </figure>
-                ))}
-              </div>
+              <SourceImageStrip images={displayImages} compact />
             </div>
           ) : null}
 
@@ -1183,6 +1174,49 @@ function parseCommand(raw: string): { mode: "general" | "mr_heresy"; content: st
 
   return { mode: "general", content: text };
 }
+
+function SourceImageStrip({
+  images,
+  compact = false,
+}: {
+  images: SourceImage[];
+  compact?: boolean;
+}) {
+  return (
+    <div className={compact ? "flex flex-wrap gap-3" : "flex gap-2 overflow-x-auto pb-1"}>
+      {images.map((image, index) => (
+        <figure key={image.id} className={compact ? "w-24" : "shrink-0"}>
+          <img
+            src={image.dataUrl}
+            alt={image.altText || image.title || `Image ${index + 1}`}
+            title={image.altText}
+            className={
+              compact
+                ? "h-20 w-24 rounded-lg border border-neutral-700 object-cover"
+                : "h-24 w-24 rounded-xl border border-neutral-800 object-cover"
+            }
+          />
+          <figcaption
+            className={
+              compact
+                ? "mt-1 text-center text-[10px] uppercase tracking-wider text-neutral-500"
+                : "mt-1 max-w-24 truncate text-center text-[11px] text-neutral-500"
+            }
+            title={image.altText}
+          >
+            {images.length === 1
+              ? compact
+                ? "Image analysed"
+                : "Image 1"
+              : compact
+                ? `Image ${index + 1} of ${images.length}`
+                : `Image ${index + 1}`}
+          </figcaption>
+        </figure>
+      ))}
+    </div>
+  );
+}
 async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1376,6 +1410,18 @@ const gravitonGroups = [
 const imagePreviewUrls = useMemo(() => {
   return imageFiles.map((file) => URL.createObjectURL(file));
 }, [imageFiles]);
+
+const selectedSourceImages = useMemo<SourceImage[]>(() => {
+  if (inputMode === "url") return importedUrl?.source.images ?? [];
+  return imagePreviewUrls.map((dataUrl, index) => ({
+    id: `uploaded-image-${index}-${imageFiles[index]?.name ?? "image"}`,
+    type: "image",
+    title: imageFiles[index]?.name || `Image ${index + 1}`,
+    dataUrl,
+    altText: imageFiles[index]?.name,
+    order: index,
+  }));
+}, [imageFiles, imagePreviewUrls, importedUrl, inputMode]);
 
 useEffect(() => {
   return () => {
@@ -1780,6 +1826,7 @@ if (trialActive && trialEndDate) {
 
     let raw = draft;
     let sourceIdentity: SourceIdentity | undefined;
+    let urlSourceImages: SourceImage[] = [];
 
     if (inputMode === "url") {
       setUrlError(null);
@@ -1810,6 +1857,7 @@ if (trialActive && trialEndDate) {
         }
         raw = source.extractedText;
         sourceIdentity = source;
+        urlSourceImages = source.images;
       } catch {
         setUrlError("The webpage could not be imported. Check the address and try again.");
         return;
@@ -1833,7 +1881,7 @@ const finalInput = gravitonPrefix + raw;
   );
 }
     if (
-      (!raw.trim() && imageFiles.length === 0) ||
+      (!raw.trim() && imageFiles.length === 0 && urlSourceImages.length === 0) ||
       isLoading ||
       isDemoLocked
     )
@@ -1850,7 +1898,7 @@ const finalInput = gravitonPrefix + raw;
     console.log("FINAL INPUT:", finalInput);
     const text = parsed.content;
 
-    if (!text && imageFiles.length === 0) {
+    if (!text && imageFiles.length === 0 && urlSourceImages.length === 0) {
       sendLockRef.current = false;
       setDraft("");
       setMessages((m) => [
@@ -1886,14 +1934,16 @@ const finalInput = gravitonPrefix + raw;
     const isHeresy = parsed.mode === "mr_heresy";
        let imageData: string[] = [];
 
-if (imageFiles.length > 0) {
+if (urlSourceImages.length > 0) {
+  imageData = urlSourceImages.map((image) => image.dataUrl);
+} else if (imageFiles.length > 0) {
   imageData = await Promise.all(
     imageFiles.map(file => fileToBase64(file))
   );
 }
     const effectiveText =
       text ||
-      `Analyse the attached image${imageFiles.length === 1 ? "" : "s"} using the selected Gravitas lens: ${selectedGraviton}.`;
+      `Analyse the attached image${imageData.length === 1 ? "" : "s"} using the selected Gravitas lens: ${selectedGraviton}.`;
 
     setMessages((current) =>
       current.map((message, index) =>
@@ -1902,6 +1952,17 @@ if (imageFiles.length > 0) {
               ...message,
               sourceContent: effectiveText,
               imageData,
+              sourceImages:
+                urlSourceImages.length > 0
+                  ? urlSourceImages
+                  : imageData.map((dataUrl, imageIndex) => ({
+                      id: `uploaded-analysis-${imageIndex}`,
+                      type: "image" as const,
+                      title: imageFiles[imageIndex]?.name || `Image ${imageIndex + 1}`,
+                      dataUrl,
+                      altText: imageFiles[imageIndex]?.name,
+                      order: imageIndex,
+                    })),
               sourceIdentity,
             }
           : message
@@ -2231,6 +2292,10 @@ if (imageFiles.length > 0) {
                   m.role === "assistant" && i > 0 && messages[i - 1]?.role === "user"
                     ? messages[i - 1].sourceIdentity
                     : undefined;
+                const sourceImages =
+                  m.role === "assistant" && i > 0 && messages[i - 1]?.role === "user"
+                    ? messages[i - 1].sourceImages ?? []
+                    : [];
 
                 return (
                   <div
@@ -2286,6 +2351,7 @@ if (imageFiles.length > 0) {
                           content={m.content}
                           sourceRaw={sourceRaw}
                           sourceImageData={sourceImageData}
+                          sourceImages={sourceImages}
                           sourceIdentity={sourceIdentity}
                           cadence={cadence}
                           apiEndpoint={apiEndpoint}
@@ -2476,7 +2542,7 @@ if (imageFiles.length > 0) {
   )}
 </div>
 
-  {imageFiles.length > 0 && (
+  {selectedSourceImages.length > 0 && (
   <div className="mt-4 rounded-2xl border border-neutral-800 bg-neutral-950 p-3">
     <div className="mb-3 flex items-center justify-between">
       <div className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">
@@ -2484,25 +2550,11 @@ if (imageFiles.length > 0) {
       </div>
 
       <div className="text-xs text-neutral-500">
-        {imageFiles.length} image{imageFiles.length === 1 ? "" : "s"}
+        {selectedSourceImages.length} image{selectedSourceImages.length === 1 ? "" : "s"}
       </div>
     </div>
 
-    <div className="flex gap-2 overflow-x-auto pb-1">
-      {imagePreviewUrls.map((src, index) => (
-        <div key={src} className="shrink-0">
-          <img
-            src={src}
-            alt={`Evidence ${index + 1}`}
-            className="h-24 w-24 rounded-xl border border-neutral-800 object-cover"
-          />
-
-          <div className="mt-1 text-center text-[11px] text-neutral-500">
-            Image {index + 1}
-          </div>
-        </div>
-      ))}
-    </div>
+    <SourceImageStrip images={selectedSourceImages} />
 
   </div>
 )}
