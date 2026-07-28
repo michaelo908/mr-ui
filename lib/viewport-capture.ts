@@ -135,7 +135,7 @@ export async function captureRenderedPage(initialUrl: URL) {
 
     const response = await page.goto(initialUrl.toString(), {
       waitUntil: "domcontentloaded",
-      timeout: 20_000,
+      timeout: 35_000,
     });
     if (!response || !response.ok()) {
       throw new Error(`The page returned HTTP ${response?.status() ?? "unknown"}.`);
