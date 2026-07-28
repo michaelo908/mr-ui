@@ -3,9 +3,15 @@ import { isIP } from "node:net";
 import chromium from "@sparticuz/chromium";
 import {
   chromium as playwrightChromium,
+  type Browser,
   type Page,
   type Response,
 } from "playwright-core";
+import {
+  getBrowserExecutablePath,
+  isRetryableBrowserLaunchError,
+  waitBeforeBrowserLaunchRetry,
+} from "@/lib/browser-runtime";
 import {
   calculateViewportPositions,
   type SourceImage,
@@ -14,15 +20,24 @@ import {
 const VIEWPORT = { width: 1280, height: 800 };
 const MAX_VIEWPORTS = 10;
 const MAX_TOTAL_SCREENSHOT_BYTES = 3_000_000;
-const LOCAL_MAC_CHROME =
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+async function launchBrowser(): Promise<Browser> {
+  const launch = async () =>
+    playwrightChromium.launch({
+      args: process.platform === "darwin" ? [] : chromium.args,
+      executablePath: await getBrowserExecutablePath(),
+      headless: true,
+    });
 
-async function browserExecutablePath() {
-  if (process.env.GRAVITAS_BROWSER_EXECUTABLE_PATH) {
-    return process.env.GRAVITAS_BROWSER_EXECUTABLE_PATH;
+  try {
+    return await launch();
+  } catch (error) {
+    if (!isRetryableBrowserLaunchError(error)) throw error;
+    console.warn("Retrying webpage renderer launch after a transient failure", {
+      error,
+    });
+    await waitBeforeBrowserLaunchRetry();
+    return launch();
   }
-  if (process.platform === "darwin") return LOCAL_MAC_CHROME;
-  return chromium.executablePath();
 }
 
 function isPrivateAddress(address: string) {
@@ -111,11 +126,7 @@ async function suppressRepeatedStickyElements(page: Page) {
 export async function captureRenderedPage(initialUrl: URL) {
   await validatePublicBrowserUrl(initialUrl);
 
-  const browser = await playwrightChromium.launch({
-    args: process.platform === "darwin" ? [] : chromium.args,
-    executablePath: await browserExecutablePath(),
-    headless: true,
-  });
+  const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage({

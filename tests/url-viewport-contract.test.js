@@ -29,3 +29,29 @@ test("client persists captured viewports and identifies rendered URL requests", 
   assert.match(app, /sourceMode: sourceIdentity\?\.type === "url" \? "rendered-url"/);
   assert.match(app, /Viewport \$\{index \+ 1\} of \$\{images\.length\}/);
 });
+
+test("server serialises Chromium preparation and sanitises launch failures", () => {
+  const runtime = read("lib/browser-runtime.ts");
+  const route = read("app/api/sources/url/route.ts");
+
+  assert.match(runtime, /gravitas-chromium\.prepare\.lock/);
+  assert.match(runtime, /open\(PREPARATION_LOCK,\s*"wx"/);
+  assert.match(runtime, /executablePromise \?\?=/);
+  assert.match(runtime, /MINIMUM_BROWSER_BYTES/);
+  assert.match(route, /Gravitas URL rendering failed/);
+  assert.match(
+    route,
+    /Gravitas could not render this page\. Please try again\./
+  );
+  assert.doesNotMatch(route, /error instanceof Error \? error\.message/);
+});
+
+test("browser launch retries transient executable-busy failures", () => {
+  const runtime = read("lib/browser-runtime.ts");
+  const capture = read("lib/viewport-capture.ts");
+
+  assert.match(runtime, /ETXTBSY\|text file busy/);
+  assert.match(capture, /isRetryableBrowserLaunchError/);
+  assert.match(capture, /waitBeforeBrowserLaunchRetry/);
+  assert.match(capture, /return launch\(\)/);
+});

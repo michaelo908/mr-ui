@@ -35,8 +35,13 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ source });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "The webpage could not be rendered.";
-    return NextResponse.json({ error: message }, { status: 422 });
+    console.error("Gravitas URL rendering failed", {
+      error,
+      cause: error instanceof Error ? error.cause : undefined,
+    });
+    return NextResponse.json(
+      { error: "Gravitas could not render this page. Please try again." },
+      { status: 422 }
+    );
   }
 }
