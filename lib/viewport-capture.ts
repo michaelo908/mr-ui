@@ -242,6 +242,7 @@ export async function captureRenderedPage(initialUrl: URL) {
 
     let response: Response | null = null;
     let renderedUrl = initialUrl;
+    let usedHtmlFallback = false;
     try {
       response = await page.goto(initialUrl.toString(), {
         waitUntil: "commit",
@@ -260,6 +261,7 @@ export async function captureRenderedPage(initialUrl: URL) {
         });
         const fallback = await fetchPublicHtml(initialUrl);
         renderedUrl = fallback.finalUrl;
+        usedHtmlFallback = true;
         await page.setContent(fallback.html, {
           waitUntil: "domcontentloaded",
           timeout: DOCUMENT_READY_TIMEOUT_MS,
@@ -289,8 +291,7 @@ export async function captureRenderedPage(initialUrl: URL) {
     await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
     await preparePage(page);
 
-    const finalUrl =
-      page.url() === "about:blank" ? renderedUrl : new URL(page.url());
+    const finalUrl = usedHtmlFallback ? renderedUrl : new URL(page.url());
     await validatePublicBrowserUrl(finalUrl);
 
     const pageDetails = await page.evaluate(() => ({

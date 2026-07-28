@@ -83,5 +83,5 @@ test("a navigation that cannot commit falls back to safely fetched HTML", () => 
   assert.match(capture, /validatePublicBrowserUrl\(currentUrl\)/);
   assert.match(capture, /addDocumentBase/);
   assert.match(capture, /page\.setContent\(fallback\.html/);
-  assert.match(capture, /page\.url\(\) === "about:blank"/);
+  assert.match(capture, /usedHtmlFallback \? renderedUrl : new URL\(page\.url\(\)\)/);
 });
