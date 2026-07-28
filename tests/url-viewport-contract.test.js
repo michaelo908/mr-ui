@@ -58,6 +58,7 @@ test("browser launch retries transient executable-busy failures", () => {
 
 test("URL rendering avoids DNS exhaustion and does not wait indefinitely for scripts", () => {
   const capture = read("lib/viewport-capture.ts");
+  const route = read("app/api/sources/url/route.ts");
 
   assert.match(capture, /publicUrlValidationCache/);
   assert.match(capture, /validations = new Map/);
@@ -66,4 +67,7 @@ test("URL rendering avoids DNS exhaustion and does not wait indefinitely for scr
   assert.match(capture, /DOCUMENT_READY_TIMEOUT_MS/);
   assert.match(capture, /resourceType\(\) === "media"/);
   assert.match(capture, /resourceType\(\) === "font"/);
+  assert.match(capture, /DESKTOP_USER_AGENT/);
+  assert.match(capture, /locale:\s*"en-AU"/);
+  assert.match(route, /preferredRegion\s*=\s*"syd1"/);
 });

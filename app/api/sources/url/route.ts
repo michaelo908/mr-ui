@@ -4,6 +4,7 @@ import { captureRenderedPage } from "@/lib/viewport-capture";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
+export const preferredRegion = "syd1";
 
 export async function POST(req: Request) {
   try {

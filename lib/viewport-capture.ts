@@ -22,6 +22,9 @@ const MAX_VIEWPORTS = 10;
 const MAX_TOTAL_SCREENSHOT_BYTES = 3_000_000;
 const NAVIGATION_COMMIT_TIMEOUT_MS = 20_000;
 const DOCUMENT_READY_TIMEOUT_MS = 12_000;
+const DESKTOP_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36";
 
 function publicUrlValidationCache() {
   const validations = new Map<string, Promise<void>>();
@@ -152,6 +155,8 @@ export async function captureRenderedPage(initialUrl: URL) {
     const page = await browser.newPage({
       viewport: VIEWPORT,
       deviceScaleFactor: 1,
+      userAgent: DESKTOP_USER_AGENT,
+      locale: "en-AU",
     });
     const validateRequestUrl = publicUrlValidationCache();
 
