@@ -13,7 +13,12 @@ import {
   getAnalysisRunKey,
   hasCompletedAnalysis,
 } from "@/lib/graviton-runs";
-import type { SourceIdentity, SourceImage, UrlSource } from "@/lib/sources";
+import {
+  buildRenderedUrlAnalysisInput,
+  type SourceIdentity,
+  type SourceImage,
+  type UrlSource,
+} from "@/lib/sources";
 import {
   formatJumpInRemaining,
   getJumpInRemainingMs,
@@ -902,6 +907,7 @@ ${cadenceInstruction(cadence)}`;
             constraints: {},
             imageData: sourceImageData,
             cadence,
+            sourceMode: sourceIdentity?.type === "url" ? "rendered-url" : undefined,
           }
         : {
             mode: "general",
@@ -910,6 +916,7 @@ ${cadenceInstruction(cadence)}`;
             constraints: {},
             imageData: sourceImageData,
             cadence,
+            sourceMode: sourceIdentity?.type === "url" ? "rendered-url" : undefined,
           };
 
     try {
@@ -1214,13 +1221,15 @@ function SourceImageStrip({
             }
             title={image.altText}
           >
-            {images.length === 1
-              ? compact
-                ? "Image analysed"
-                : "Image 1"
-              : compact
-                ? `Image ${index + 1} of ${images.length}`
-                : `Image ${index + 1}`}
+            {image.role === "viewport"
+              ? `Viewport ${index + 1} of ${images.length}`
+              : images.length === 1
+                ? compact
+                  ? "Image analysed"
+                  : "Image 1"
+                : compact
+                  ? `Image ${index + 1} of ${images.length}`
+                  : `Image ${index + 1}`}
           </figcaption>
         </figure>
       ))}
@@ -1902,7 +1911,10 @@ if (trialActive && trialEndDate) {
             source,
           });
         }
-        raw = source.extractedText;
+        raw = buildRenderedUrlAnalysisInput(
+          source.extractedText,
+          selectedGraviton
+        );
         sourceIdentity = source;
         urlSourceImages = source.images;
       } catch {
@@ -2024,6 +2036,7 @@ if (urlSourceImages.length > 0) {
           constraints: {},
           imageData,
           cadence,
+          sourceMode: sourceIdentity?.type === "url" ? "rendered-url" : undefined,
         }
       : {
           mode: "general",
@@ -2032,6 +2045,7 @@ if (urlSourceImages.length > 0) {
           constraints: {},
           imageData,
           cadence,
+          sourceMode: sourceIdentity?.type === "url" ? "rendered-url" : undefined,
         };
 
     try {
@@ -2508,7 +2522,8 @@ if (urlSourceImages.length > 0) {
         )}
       />
       <p className="mt-2 text-xs text-neutral-500">
-        Gravitas will extract the readable page content and keep the page identified with its analysis.
+        Gravitas renders the page and analyses its ordered viewport experience.
+        Extracted text is used only to clarify wording that is difficult to read in the captures.
       </p>
       {importedUrl?.source.truncated ? (
         <p className="mt-2 text-xs text-neutral-500">
@@ -2634,7 +2649,9 @@ if (urlSourceImages.length > 0) {
       </div>
 
       <div className="text-xs text-neutral-500">
-        {selectedSourceImages.length} image{selectedSourceImages.length === 1 ? "" : "s"}
+        {importedUrl?.source.captureMode === "rendered-viewports"
+          ? `${selectedSourceImages.length} viewport${selectedSourceImages.length === 1 ? "" : "s"}`
+          : `${selectedSourceImages.length} image${selectedSourceImages.length === 1 ? "" : "s"}`}
       </div>
     </div>
 

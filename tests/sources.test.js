@@ -2,7 +2,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
-  extractHtmlImageCandidates,
+  buildRenderedUrlAnalysisInput,
+  calculateViewportPositions,
   extractHtmlTitle,
   stripHtmlToReadableText,
 } = require("../lib/sources.ts");
@@ -27,51 +28,23 @@ test("falls back to body content when main is absent", () => {
   assert.equal(stripHtmlToReadableText(html), "Article text.");
 });
 
-test("extracts meaningful relative and protocol-relative image URLs", () => {
-  const html = `
-    <img src="/images/hero.jpg" alt="Product in use" width="1200" height="800">
-    <img src="//cdn.example.com/gallery/second.webp" alt=" Second view ">
-    <img src="/icons/menu.png" width="24" height="24">
-    <img src="data:image/png;base64,abc">
-    <img src="/images/hero.jpg" alt="duplicate">
-  `;
-
-  assert.deepEqual(
-    extractHtmlImageCandidates(html, "https://example.com/products/item"),
-    [
-      {
-        url: "https://example.com/images/hero.jpg",
-        altText: "Product in use",
-        order: 0,
-      },
-      {
-        url: "https://cdn.example.com/gallery/second.webp",
-        altText: "Second view",
-        order: 1,
-      },
-    ]
-  );
+test("captures short pages as ordered contiguous viewports including the exit", () => {
+  assert.deepEqual(calculateViewportPositions(1900, 800, 10), [0, 800, 1100]);
 });
 
-test("uses lazy and srcset image sources when src is absent", () => {
-  const html = `
-    <img src="data:image/gif;base64,abc" data-src="../photos/lazy.jpg" alt="Lazy image">
-    <img srcset="/photos/small.jpg 480w, /photos/large.jpg 1200w">
-  `;
+test("samples long pages from opening to exit without duplicate offsets", () => {
+  const positions = calculateViewportPositions(20_000, 800, 10);
+  assert.equal(positions.length, 10);
+  assert.equal(positions[0], 0);
+  assert.equal(positions.at(-1), 19_200);
+  assert.equal(new Set(positions).size, positions.length);
+  assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
+});
 
-  assert.deepEqual(
-    extractHtmlImageCandidates(html, "https://example.com/articles/post/"),
-    [
-      {
-        url: "https://example.com/articles/photos/lazy.jpg",
-        altText: "Lazy image",
-        order: 0,
-      },
-      {
-        url: "https://example.com/photos/small.jpg",
-        altText: undefined,
-        order: 1,
-      },
-    ]
-  );
+test("rendered URL prompt makes viewports primary and text supporting only", () => {
+  const input = buildRenderedUrlAnalysisInput("Menu\nHard-to-read heading", "Full Analysis");
+  assert.match(input, /sole primary evidence/i);
+  assert.match(input, /supporting legibility assistance only/i);
+  assert.match(input, /Do not use it to infer page structure/i);
+  assert.match(input, /Hard-to-read heading/);
 });

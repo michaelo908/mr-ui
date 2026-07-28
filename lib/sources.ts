@@ -10,6 +10,7 @@ export type SourceIdentity = {
 export type SourceImage = {
   id: string;
   type: "image";
+  role?: "uploaded-image" | "viewport";
   title: string;
   originalLocation?: string;
   dataUrl: string;
@@ -23,73 +24,8 @@ export type UrlSource = SourceIdentity & {
   wordCount: number;
   truncated: boolean;
   images: SourceImage[];
+  captureMode: "rendered-viewports";
 };
-
-export type HtmlImageCandidate = {
-  url: string;
-  altText?: string;
-  order: number;
-};
-
-const UNSUITABLE_IMAGE_HINT =
-  /(?:^|[\/_.-])(avatar|badge|favicon|icon|logo|pixel|spinner|sprite|tracking)(?:[\/_.-]|$)/i;
-
-export function extractHtmlImageCandidates(
-  html: string,
-  pageUrl: string,
-  limit = 30
-): HtmlImageCandidate[] {
-  const candidates: HtmlImageCandidate[] = [];
-  const seen = new Set<string>();
-  const imgPattern = /<img\b([^>]*)>/gi;
-  let match: RegExpExecArray | null;
-  let order = 0;
-
-  while ((match = imgPattern.exec(html)) && candidates.length < limit) {
-    const attributes = match[1] ?? "";
-    const width = numericAttribute(attributes, "width");
-    const height = numericAttribute(attributes, "height");
-    if ((width !== null && width < 48) || (height !== null && height < 48)) {
-      continue;
-    }
-
-    const ordinarySource = stringAttribute(attributes, "src");
-    const rawSource =
-      (ordinarySource &&
-      !ordinarySource.startsWith("data:") &&
-      !ordinarySource.startsWith("blob:")
-        ? ordinarySource
-        : "") ||
-      stringAttribute(attributes, "data-src") ||
-      firstSrcsetUrl(stringAttribute(attributes, "srcset"));
-    if (!rawSource || rawSource.startsWith("data:") || rawSource.startsWith("blob:")) {
-      continue;
-    }
-
-    let resolved: URL;
-    try {
-      resolved = new URL(rawSource, pageUrl);
-    } catch {
-      continue;
-    }
-    if (!["http:", "https:"].includes(resolved.protocol)) continue;
-
-    const normalized = resolved.toString();
-    if (UNSUITABLE_IMAGE_HINT.test(resolved.pathname) || seen.has(normalized)) {
-      continue;
-    }
-
-    seen.add(normalized);
-    candidates.push({
-      url: normalized,
-      altText: cleanAttributeText(stringAttribute(attributes, "alt")),
-      order,
-    });
-    order += 1;
-  }
-
-  return candidates;
-}
 
 export function stripHtmlToReadableText(html: string) {
   const withoutNoise = html
@@ -122,6 +58,50 @@ export function extractHtmlTitle(html: string) {
     .trim();
 }
 
+export function calculateViewportPositions(
+  documentHeight: number,
+  viewportHeight: number,
+  maxCaptures = 10
+) {
+  const height = Math.max(viewportHeight, Math.floor(documentHeight));
+  const lastPosition = Math.max(0, height - viewportHeight);
+  if (lastPosition === 0) return [0];
+
+  const contiguous = Math.ceil(height / viewportHeight);
+  if (contiguous <= maxCaptures) {
+    const positions = Array.from(
+      { length: contiguous },
+      (_, index) => Math.min(index * viewportHeight, lastPosition)
+    );
+    positions[positions.length - 1] = lastPosition;
+    return [...new Set(positions)];
+  }
+
+  return Array.from({ length: maxCaptures }, (_, index) =>
+    Math.round((lastPosition * index) / (maxCaptures - 1))
+  );
+}
+
+export function buildRenderedUrlAnalysisInput(
+  extractedText: string,
+  selectedGraviton: string
+) {
+  const support = extractedText.trim();
+  return `Analyse the ordered rendered webpage viewports using the selected Gravitas lens: ${selectedGraviton}.
+
+The viewport screenshots are the sole primary evidence for the substantive analysis. Treat them as the visitor's ordered visual experience from the top of the page to the bottom.
+
+${
+  support
+    ? `The following rendered-page text is supporting legibility assistance only. Use it solely to clarify wording that is visibly present but difficult to read in the supplied viewports. Do not use it to infer page structure, introduce navigation/footer/mechanical content, or make findings not grounded in the viewport sequence.
+
+--- SUPPORTING READABILITY TEXT ---
+${support}
+--- END SUPPORTING READABILITY TEXT ---`
+    : "No supporting text is available. Base the analysis entirely on the ordered viewport screenshots."
+}`;
+}
+
 function decodeHtmlEntities(value: string) {
   const named: Record<string, string> = {
     amp: "&",
@@ -145,34 +125,4 @@ function decodeHtmlEntities(value: string) {
       return named[code.toLowerCase()] ?? entity;
     }
   );
-}
-
-function stringAttribute(attributes: string, name: string) {
-  const quoted = attributes.match(
-    new RegExp(`(?:^|\\s)${name}\\s*=\\s*(["'])([\\s\\S]*?)\\1`, "i")
-  )?.[2];
-  if (quoted !== undefined) return decodeHtmlEntities(quoted).trim();
-
-  return (
-    attributes.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*([^\\s"'=<>]+)`, "i"))?.[1] ??
-    ""
-  ).trim();
-}
-
-function numericAttribute(attributes: string, name: string) {
-  const value = stringAttribute(attributes, name);
-  if (!value || !/^\d+$/.test(value)) return null;
-  return Number(value);
-}
-
-function firstSrcsetUrl(srcset: string) {
-  return srcset
-    .split(",")
-    .map((entry) => entry.trim().split(/\s+/)[0])
-    .find(Boolean) ?? "";
-}
-
-function cleanAttributeText(value: string) {
-  const cleaned = value.replace(/\s+/g, " ").trim();
-  return cleaned || undefined;
 }

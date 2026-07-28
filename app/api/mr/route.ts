@@ -203,6 +203,21 @@ If text is also supplied, analyse the text and image together.
 `.trim()
     : "";
 
+  const renderedUrlContext =
+    body?.sourceMode === "rendered-url"
+      ? `
+RENDERED WEBPAGE VIEWPORT HIERARCHY:
+The supplied ordered viewport screenshots are the sole primary evidence for the substantive webpage analysis.
+
+Analyse the viewport sequence first and as the actual visitor experience:
+- preserve its top-to-bottom order
+- judge first impression, hierarchy, attention, trust, flow, friction, and image/copy relationships from what is visibly rendered
+- ground every substantive finding in the viewport sequence
+
+Any extracted page text in the input is supporting readability assistance only. Use it solely to clarify wording that is visibly present but difficult to read in a supplied viewport. Do not let extracted text determine structure, introduce menus/footer/mechanical noise, or support findings that are not visible in the viewport sequence.
+`.trim()
+      : "";
+
   // If we already have a diagnostic in the context, avoid re-arming intake rules.
   const continuation = isContinuationContext(body);
 
@@ -213,6 +228,7 @@ If text is also supplied, analyse the text and image together.
   const combinedOriginalContext = [
     originalContext,
     visualAnalysisContext,
+    renderedUrlContext,
     rewriteCadenceContext,
   ]
     .filter(Boolean)
