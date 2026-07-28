@@ -84,4 +84,5 @@ test("a navigation that cannot commit falls back to safely fetched HTML", () => 
   assert.match(capture, /addDocumentBase/);
   assert.match(capture, /page\.setContent\(fallback\.html/);
   assert.match(capture, /usedHtmlFallback \? renderedUrl : new URL\(page\.url\(\)\)/);
+  assert.match(capture, /target host returned bot verification/i);
 });

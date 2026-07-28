@@ -302,6 +302,15 @@ export async function captureRenderedPage(initialUrl: URL) {
         document.documentElement.scrollHeight
       ),
     }));
+    if (
+      /bot verification|verify (?:that )?you are not a robot/i.test(
+        `${pageDetails.title}\n${pageDetails.text.slice(0, 1_000)}`
+      )
+    ) {
+      throw new Error(
+        `The target host returned bot verification instead of page content: ${finalUrl.hostname}.`
+      );
+    }
 
     const positions = calculateViewportPositions(
       pageDetails.height,
