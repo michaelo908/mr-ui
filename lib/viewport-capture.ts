@@ -14,6 +14,8 @@ import {
 } from "@/lib/browser-runtime";
 import {
   calculateViewportPositions,
+  haveStrictlyProgressingOffsets,
+  isNearDuplicateViewport,
   type SourceImage,
 } from "@/lib/sources";
 
@@ -28,6 +30,14 @@ const MAX_HTML_REDIRECTS = 5;
 const DESKTOP_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36";
+const SCROLL_CONTAINER_ATTRIBUTE = "data-gravitas-scroll-container";
+
+type ScrollSurface = {
+  kind: "window" | "element";
+  viewportHeight: number;
+  scrollHeight: number;
+  maxScroll: number;
+};
 
 function publicUrlValidationCache() {
   const validations = new Map<string, Promise<void>>();
@@ -174,20 +184,216 @@ async function fetchPublicHtml(initialUrl: URL) {
 async function preparePage(page: Page) {
   await page.addStyleTag({
     content: `
-      html { scroll-behavior: auto !important; }
-      *, *::before, *::after { animation: none !important; transition: none !important; }
+      html, body {
+        scroll-behavior: auto !important;
+        overflow-y: auto !important;
+      }
+      *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+        caret-color: transparent !important;
+      }
     `,
   });
 
-  await page.evaluate(async () => {
-    const distance = Math.max(400, Math.floor(window.innerHeight * 0.8));
-    for (let y = 0; y < document.documentElement.scrollHeight; y += distance) {
-      window.scrollTo(0, y);
-      await new Promise((resolve) => setTimeout(resolve, 80));
+  await page.evaluate(() => {
+    const body = document.body;
+    const renderedContentBottom = body
+      ? Array.from(body.querySelectorAll<HTMLElement>("main, section, footer, article"))
+          .reduce(
+            (maximum, element) =>
+              Math.max(maximum, element.getBoundingClientRect().bottom),
+            0
+          )
+      : 0;
+    if (
+      body &&
+      window.getComputedStyle(body).position === "fixed" &&
+      Math.max(body.scrollHeight, renderedContentBottom) >
+        window.innerHeight * 1.5
+    ) {
+      body.style.setProperty("position", "static", "important");
+      body.style.setProperty("inset", "auto", "important");
+      body.style.setProperty("width", "auto", "important");
     }
-    window.scrollTo(0, 0);
+    for (const animation of document.getAnimations()) {
+      animation.pause();
+      try {
+        animation.currentTime = 0;
+      } catch {
+        // Some browser-owned animations do not expose a writable timeline.
+      }
+    }
+    for (const media of Array.from(document.querySelectorAll("video, audio"))) {
+      (media as HTMLMediaElement).pause();
+    }
   });
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(150);
+}
+
+async function findScrollSurface(page: Page): Promise<ScrollSurface> {
+  return page.evaluate((attribute) => {
+    document
+      .querySelectorAll(`[${attribute}]`)
+      .forEach((element) => element.removeAttribute(attribute));
+
+    const root = document.scrollingElement ?? document.documentElement;
+    const rootRange = Math.max(0, root.scrollHeight - window.innerHeight);
+    const candidates = [
+      document.body,
+      ...Array.from(document.querySelectorAll<HTMLElement>("body *")),
+    ]
+      .map((element) => {
+        const style = window.getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        const range = element.scrollHeight - element.clientHeight;
+        const scrollableOverflow = /^(?:auto|scroll|overlay)$/.test(style.overflowY);
+        const visible =
+          rect.width >= window.innerWidth * 0.55 &&
+          rect.height >= window.innerHeight * 0.45;
+        if (range < 200 || !scrollableOverflow || !visible) return null;
+        const coverage =
+          Math.min(1, rect.width / window.innerWidth) *
+          Math.min(1, rect.height / window.innerHeight);
+        return { element, range, score: range * coverage };
+      })
+      .filter(
+        (
+          candidate
+        ): candidate is {
+          element: HTMLElement;
+          range: number;
+          score: number;
+        } => Boolean(candidate)
+      )
+      .sort((left, right) => right.score - left.score);
+
+    const nested = candidates[0];
+    if (nested && nested.score > rootRange * 1.15) {
+      nested.element.setAttribute(attribute, "true");
+      return {
+        kind: "element" as const,
+        viewportHeight: nested.element.clientHeight,
+        scrollHeight: nested.element.scrollHeight,
+        maxScroll: nested.element.scrollHeight - nested.element.clientHeight,
+      };
+    }
+
+    return {
+      kind: "window" as const,
+      viewportHeight: window.innerHeight,
+      scrollHeight: root.scrollHeight,
+      maxScroll: rootRange,
+    };
+  }, SCROLL_CONTAINER_ATTRIBUTE);
+}
+
+async function scrollSurfaceTo(
+  page: Page,
+  surface: ScrollSurface,
+  requestedOffset: number
+) {
+  return page.evaluate(
+    ({ attribute, kind, requested }) => {
+      const target =
+        kind === "element"
+          ? document.querySelector<HTMLElement>(`[${attribute}]`)
+          : null;
+      if (kind === "element" && !target) {
+        return { actual: -1, maxScroll: -1 };
+      }
+      if (target) {
+        target.scrollTop = requested;
+        return {
+          actual: target.scrollTop,
+          maxScroll: Math.max(0, target.scrollHeight - target.clientHeight),
+        };
+      }
+      window.scrollTo(0, requested);
+      const root = document.scrollingElement ?? document.documentElement;
+      return {
+        actual: window.scrollY,
+        maxScroll: Math.max(0, root.scrollHeight - window.innerHeight),
+      };
+    },
+    {
+      attribute: SCROLL_CONTAINER_ATTRIBUTE,
+      kind: surface.kind,
+      requested: requestedOffset,
+    }
+  );
+}
+
+async function warmLazyContent(page: Page, surface: ScrollSurface) {
+  const distance = Math.max(400, Math.floor(surface.viewportHeight * 0.8));
+  for (let offset = 0; offset <= surface.maxScroll; offset += distance) {
+    await scrollSurfaceTo(page, surface, offset);
+    await page.waitForTimeout(70);
+  }
+  await scrollSurfaceTo(page, surface, 0);
+  await page.waitForTimeout(180);
+}
+
+async function getViewportSignature(page: Page) {
+  return page.evaluate(() => {
+    return Array.from(
+      document.querySelectorAll<HTMLElement>(
+        "h1, h2, h3, h4, p, li, button, a, img, video, input, textarea"
+      )
+    )
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+        if (
+          rect.bottom <= 0 ||
+          rect.top >= window.innerHeight ||
+          rect.right <= 0 ||
+          rect.left >= window.innerWidth ||
+          rect.width < 8 ||
+          rect.height < 8 ||
+          style.visibility === "hidden" ||
+          style.display === "none" ||
+          Number(style.opacity) === 0
+        ) {
+          return null;
+        }
+        const text = (element.textContent ?? "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 120);
+        const imageIdentity =
+          element.tagName === "IMG"
+          ? (
+              (element as HTMLImageElement).currentSrc ||
+              (element as HTMLImageElement).src
+            )
+              .split("?")[0]
+              .slice(-100)
+          : "";
+        if (!text && !imageIdentity) return null;
+        return {
+          top: Math.max(0, Math.round(rect.top / 20)),
+          left: Math.max(0, Math.round(rect.left / 20)),
+          token: [
+            element.tagName,
+            text,
+            imageIdentity,
+          ].join("|"),
+        };
+      })
+      .filter(
+        (
+          item
+        ): item is {
+          top: number;
+          left: number;
+          token: string;
+        } => Boolean(item)
+      )
+      .sort((left, right) => left.top - right.top || left.left - right.left)
+      .map((item) => item.token)
+      .slice(0, 36);
+  });
 }
 
 async function suppressRepeatedStickyElements(page: Page) {
@@ -290,6 +496,9 @@ export async function captureRenderedPage(initialUrl: URL) {
     }
     await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
     await preparePage(page);
+    let scrollSurface = await findScrollSurface(page);
+    await warmLazyContent(page, scrollSurface);
+    scrollSurface = await findScrollSurface(page);
 
     const finalUrl = usedHtmlFallback ? renderedUrl : new URL(page.url());
     await validatePublicBrowserUrl(finalUrl);
@@ -297,10 +506,6 @@ export async function captureRenderedPage(initialUrl: URL) {
     const pageDetails = await page.evaluate(() => ({
       title: document.title.trim(),
       text: document.body?.innerText?.trim() ?? "",
-      height: Math.max(
-        document.body?.scrollHeight ?? 0,
-        document.documentElement.scrollHeight
-      ),
     }));
     if (
       /bot verification|verify (?:that )?you are not a robot/i.test(
@@ -313,16 +518,42 @@ export async function captureRenderedPage(initialUrl: URL) {
     }
 
     const positions = calculateViewportPositions(
-      pageDetails.height,
-      VIEWPORT.height,
+      scrollSurface.scrollHeight,
+      scrollSurface.viewportHeight,
       MAX_VIEWPORTS
     );
     const images: SourceImage[] = [];
+    const acceptedSignatures: string[][] = [];
+    const actualOffsets: number[] = [];
     let totalBytes = 0;
 
     for (let index = 0; index < positions.length; index += 1) {
-      await page.evaluate((y) => window.scrollTo(0, y), positions[index]);
-      await page.waitForTimeout(160);
+      await scrollSurfaceTo(page, scrollSurface, positions[index]);
+      await page.waitForTimeout(220);
+      const confirmed = await scrollSurfaceTo(page, scrollSurface, positions[index]);
+      const actual = confirmed.actual;
+      if (actual < 0) {
+        throw new Error("The webpage scroll container became unavailable.");
+      }
+      if (
+        actualOffsets.length > 0 &&
+        actual <= actualOffsets[actualOffsets.length - 1] + 39
+      ) {
+        if (index === positions.length - 1) {
+          throw new Error("The webpage could not advance to its ending viewport.");
+        }
+        continue;
+      }
+      actualOffsets.push(actual);
+      const signature = await getViewportSignature(page);
+      const isExit = index === positions.length - 1;
+      if (
+        !isExit &&
+        images.length > 0 &&
+        isNearDuplicateViewport(signature, acceptedSignatures)
+      ) {
+        continue;
+      }
       const bytes = await page.screenshot({
         type: "jpeg",
         quality: 62,
@@ -332,6 +563,7 @@ export async function captureRenderedPage(initialUrl: URL) {
         break;
       }
       totalBytes += bytes.length;
+      acceptedSignatures.push(signature);
       images.push({
         id: crypto.randomUUID(),
         type: "image",
@@ -349,6 +581,23 @@ export async function captureRenderedPage(initialUrl: URL) {
 
     if (images.length === 0) {
       throw new Error("Gravitas could not capture the rendered page.");
+    }
+    if (
+      positions.length > 1 &&
+      (!haveStrictlyProgressingOffsets(actualOffsets) ||
+        actualOffsets[0] !== 0 ||
+        actualOffsets.at(-1)! < scrollSurface.maxScroll - 40)
+    ) {
+      throw new Error(
+        "The webpage did not expose a reliable top-to-bottom scroll journey."
+      );
+    }
+    if (positions.length > 2 && images.length < 3) {
+      throw new Error(
+        `The webpage produced too few distinct viewports for a reliable journey ` +
+          `(positions=${positions.length}, accepted=${images.length}, ` +
+          `offsets=${actualOffsets.join(",")}).`
+      );
     }
 
     return {

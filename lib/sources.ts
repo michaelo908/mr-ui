@@ -82,6 +82,40 @@ export function calculateViewportPositions(
   );
 }
 
+export function haveStrictlyProgressingOffsets(
+  offsets: number[],
+  minimumAdvance = 40
+) {
+  return offsets.every(
+    (offset, index) =>
+      index === 0 || offset - offsets[index - 1] >= minimumAdvance
+  );
+}
+
+export function viewportSignatureSimilarity(
+  left: string[],
+  right: string[]
+) {
+  if (left.length === 0 || right.length === 0) return 0;
+  const length = Math.min(left.length, right.length);
+  let matches = 0;
+  for (let index = 0; index < length; index += 1) {
+    if (left[index] === right[index]) matches += 1;
+  }
+  return matches / Math.max(left.length, right.length);
+}
+
+export function isNearDuplicateViewport(
+  candidate: string[],
+  accepted: string[][],
+  threshold = 0.86
+) {
+  return accepted.some(
+    (signature) =>
+      viewportSignatureSimilarity(candidate, signature) >= threshold
+  );
+}
+
 export function buildRenderedUrlAnalysisInput(
   extractedText: string,
   selectedGraviton: string

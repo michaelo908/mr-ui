@@ -7,6 +7,10 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) =>
   fs.readFileSync(path.join(root, relativePath), "utf8");
+const {
+  haveStrictlyProgressingOffsets,
+  isNearDuplicateViewport,
+} = require("../lib/sources.ts");
 
 test("URL route renders viewports and no longer imports detached page images", () => {
   const route = read("app/api/sources/url/route.ts");
@@ -28,6 +32,52 @@ test("client persists captured viewports and identifies rendered URL requests", 
   assert.match(app, /urlSourceImages = source\.images/);
   assert.match(app, /sourceMode: sourceIdentity\?\.type === "url" \? "rendered-url"/);
   assert.match(app, /Viewport \$\{index \+ 1\} of \$\{images\.length\}/);
+});
+
+test("URL submission enters processing synchronously and scopes results by run ID", () => {
+  const app = read("components/GravitasApp.tsx");
+  assert.match(app, /runCoordinatorRef\.current\.tryStart\(runId\)/);
+  assert.match(app, /setIsLoading\(true\)/);
+  assert.match(app, /Opening the page and capturing the reader journey/);
+  assert.match(app, /msg\.runId === runId/);
+  assert.match(app, /runCoordinatorRef\.current\.finish\(runId\)/);
+  assert.match(app, /setUrlError\(null\)/);
+});
+
+test("confirmed scroll offsets must strictly progress", () => {
+  assert.equal(haveStrictlyProgressingOffsets([0, 900, 1800, 2700]), true);
+  assert.equal(haveStrictlyProgressingOffsets([0, 900, 900, 1800]), false);
+  assert.equal(haveStrictlyProgressingOffsets([0, 900, 925, 1800]), false);
+});
+
+test("near-duplicate viewport signatures are rejected", () => {
+  const opening = ["hero", "hero", "copy", "cta", "image", "footer"];
+  assert.equal(
+    isNearDuplicateViewport(
+      ["hero", "hero", "copy", "cta", "image", "footer"],
+      [opening]
+    ),
+    true
+  );
+  assert.equal(
+    isNearDuplicateViewport(
+      ["section", "quote", "quote", "form", "form", "footer"],
+      [opening]
+    ),
+    false
+  );
+});
+
+test("renderer detects the scroll surface and guarantees opening and exit", () => {
+  const capture = read("lib/viewport-capture.ts");
+  assert.match(capture, /findScrollSurface/);
+  assert.match(capture, /data-gravitas-scroll-container/);
+  assert.match(capture, /actualOffsets\[0\] !== 0/);
+  assert.match(capture, /actualOffsets\.at\(-1\).*scrollSurface\.maxScroll/s);
+  assert.match(capture, /did not expose a reliable top-to-bottom scroll journey/);
+  assert.match(capture, /produced too few distinct viewports/);
+  assert.match(capture, /document\.getAnimations\(\)/);
+  assert.match(capture, /suppressRepeatedStickyElements/);
 });
 
 test("server serialises Chromium preparation and sanitises launch failures", () => {

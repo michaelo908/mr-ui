@@ -34,10 +34,12 @@ import {
   shouldShowAnalysisEasterEgg,
   type AnalysisStatus,
 } from "@/lib/analysis-personality";
+import { createAnalysisRunCoordinator } from "@/lib/analysis-run-coordinator";
 
 type Msg = {
   role: "user" | "assistant";
   content: string;
+  runId?: string;
   analysisStatus?: AnalysisStatus;
   sourceContent?: string;
   imageData?: string[];
@@ -1390,6 +1392,7 @@ const gravitonGroups = [
 ];
 
   const [isLoading, setIsLoading] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState<string | null>(null);
   const [copiedAllKey, setCopiedAllKey] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
@@ -1409,6 +1412,7 @@ const gravitonGroups = [
   const router = useRouter();
   const supabase = createClient();
   const sendLockRef = useRef(false);
+  const runCoordinatorRef = useRef(createAnalysisRunCoordinator());
 
   const jumpInExpired = isJumpInExpired(
     jumpInSession?.startedAt ?? null,
@@ -1891,12 +1895,23 @@ if (trialActive && trialEndDate) {
 
   }
 
+    const runId = crypto.randomUUID();
+    if (!runCoordinatorRef.current.tryStart(runId)) return;
+    sendLockRef.current = true;
+    setIsLoading(true);
+    setAnalysisProgress(
+      inputMode === "url"
+        ? "Opening the page and capturing the reader journey…"
+        : "Preparing your analysis…"
+    );
+    setUrlError(null);
+
     let raw = draft;
     let sourceIdentity: SourceIdentity | undefined;
     let urlSourceImages: SourceImage[] = [];
 
+    try {
     if (inputMode === "url") {
-      setUrlError(null);
       try {
         let source = importedUrl?.requestedUrl === urlDraft.trim()
           ? importedUrl.source
@@ -1913,9 +1928,11 @@ if (trialActive && trialEndDate) {
             error?: string;
           };
           if (!sourceResponse.ok || !sourceData.source) {
+            if (!runCoordinatorRef.current.isCurrent(runId)) return;
             setUrlError(sourceData.error || "The webpage could not be imported.");
             return;
           }
+          if (!runCoordinatorRef.current.isCurrent(runId)) return;
           source = sourceData.source;
           setImportedUrl({
             requestedUrl: urlDraft.trim(),
@@ -1929,6 +1946,7 @@ if (trialActive && trialEndDate) {
         sourceIdentity = source;
         urlSourceImages = source.images;
       } catch {
+        if (!runCoordinatorRef.current.isCurrent(runId)) return;
         setUrlError("The webpage could not be imported. Check the address and try again.");
         return;
       }
@@ -1962,7 +1980,6 @@ const finalInput = gravitonPrefix + raw;
       return;
     }
 
-    sendLockRef.current = true;
     const parsed = parseCommand(finalInput);
     console.log("GRAVITON:", selectedGraviton);
     console.log("FINAL INPUT:", finalInput);
@@ -1984,7 +2001,11 @@ const finalInput = gravitonPrefix + raw;
 
     const activeJumpInSession = startJumpInSession();
 
-    setIsLoading(true);
+    setAnalysisProgress(
+      inputMode === "url"
+        ? "Analysing the captured journey from the reader’s side…"
+        : "Analysing the source from the reader’s side…"
+    );
 
     setMessages((m) => [
       ...m,
@@ -1996,7 +2017,7 @@ const finalInput = gravitonPrefix + raw;
             : raw.trim(),
         sourceIdentity,
       },
-      { role: "assistant", content: THINKING_TOKEN },
+      { role: "assistant", content: THINKING_TOKEN, runId },
     ]);
 
     scrollToBottom();
@@ -2073,6 +2094,7 @@ if (urlSourceImages.length > 0) {
       
 
       const data = await res.json();
+      if (!runCoordinatorRef.current.isCurrent(runId)) return;
       const authoritativeStartedAt = Number(
         res.headers.get("X-Jump-In-Started-At")
       );
@@ -2100,7 +2122,11 @@ if (urlSourceImages.length > 0) {
         setMessages((m) =>
           m.filter(
             (msg) =>
-              !(msg.role === "assistant" && msg.content === THINKING_TOKEN)
+              !(
+                msg.role === "assistant" &&
+                msg.content === THINKING_TOKEN &&
+                msg.runId === runId
+              )
           )
         );
         return;
@@ -2116,10 +2142,13 @@ if (urlSourceImages.length > 0) {
 
       setMessages((m) =>
         m.map((msg) =>
-          msg.role === "assistant" && msg.content === THINKING_TOKEN
+          msg.role === "assistant" &&
+          msg.content === THINKING_TOKEN &&
+          msg.runId === runId
             ? {
                 role: "assistant",
                 content: normalizedOutput,
+                runId,
                 analysisStatus: "success",
               }
             : msg
@@ -2138,20 +2167,27 @@ if (urlSourceImages.length > 0) {
       setRewriteBoost((prev) => prev + rewriteJump);
 
     } catch (err) {
+      if (!runCoordinatorRef.current.isCurrent(runId)) return;
       setMessages((m) =>
         m.map((msg) =>
-          msg.role === "assistant" && msg.content === THINKING_TOKEN
+          msg.role === "assistant" &&
+          msg.content === THINKING_TOKEN &&
+          msg.runId === runId
            ? {
                role: "assistant",
                content: `Something went wrong while analysing: ${String(err)}`,
+               runId,
                analysisStatus: "error",
              }
             : msg
         )
       );
+    }
     } finally {
+      if (!runCoordinatorRef.current.finish(runId)) return;
       sendLockRef.current = false;
       setIsLoading(false);
+      setAnalysisProgress(null);
       scrollToBottom();
     }
   }
@@ -2622,9 +2658,14 @@ if (urlSourceImages.length > 0) {
       disabled={!canSend}
       className="h-[56px] w-full rounded-xl bg-neutral-100 px-5 text-sm font-semibold text-neutral-950 hover:bg-white disabled:bg-neutral-800 disabled:text-neutral-500 sm:w-auto"
     >
-      Gravitate
+      {isLoading ? "Working…" : "Gravitate"}
     </button>
   </div>
+  {analysisProgress ? (
+    <p className="mt-2 text-sm text-[#C6A75A]" role="status" aria-live="polite">
+      {analysisProgress}
+    </p>
+  ) : null}
   {isRepeatedGraviton ? (
     <p className="mt-2 text-sm text-[#C6A75A]">
       Select a different Graviton to analyse this source again.
