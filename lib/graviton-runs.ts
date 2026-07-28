@@ -6,6 +6,24 @@ export type ActiveSource =
       images: Array<{ name: string; size: number; lastModified: number }>;
     };
 
+export function isValidPublicHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value.trim());
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      Boolean(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function hasReadySource(source: ActiveSource): boolean {
+  if (source.type === "url") return isValidPublicHttpUrl(source.url);
+  if (source.type === "images") return source.images.length > 0;
+  return source.text.trim().length > 0;
+}
+
 export function getActiveSourceKey(source: ActiveSource): string {
   if (source.type === "url") {
     return `url:${source.url.trim()}`;

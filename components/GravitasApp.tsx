@@ -11,7 +11,9 @@ import {
 import {
   getActiveSourceKey,
   getAnalysisRunKey,
+  hasReadySource,
   hasCompletedAnalysis,
+  isValidPublicHttpUrl,
 } from "@/lib/graviton-runs";
 import {
   buildRenderedUrlAnalysisInput,
@@ -1443,20 +1445,29 @@ const gravitonGroups = [
     activeSourceKey,
     selectedGraviton
   );
+  const hasValidActiveSource = hasReadySource(
+    inputMode === "text"
+      ? { type: "text", text: draft }
+      : inputMode === "url"
+        ? { type: "url", url: urlDraft }
+        : {
+            type: "images",
+            images: imageFiles.map((file) => ({
+              name: file.name,
+              size: file.size,
+              lastModified: file.lastModified,
+            })),
+          }
+  );
 
   const canSend = useMemo(
   () =>
-    ((inputMode === "text" && draft.trim().length > 0) ||
-      (inputMode === "url" && urlDraft.trim().length > 0) ||
-      (inputMode === "images" && imageFiles.length > 0)) &&
+    hasValidActiveSource &&
     !isLoading &&
     !isDemoLocked &&
     !isRepeatedGraviton,
   [
-    draft,
-    urlDraft,
-    imageFiles,
-    inputMode,
+    hasValidActiveSource,
     isLoading,
     isDemoLocked,
     isRepeatedGraviton,
@@ -2481,6 +2492,7 @@ if (urlSourceImages.length > 0) {
         onClick={() => {
           setInputMode(value);
           setUrlError(null);
+          setImportedUrl(null);
           if (value !== "images") setImageFiles([]);
           if (value !== "text") setDraft("");
         }}
@@ -2521,6 +2533,11 @@ if (urlSourceImages.length > 0) {
           isDemoLocked && "cursor-not-allowed opacity-60"
         )}
       />
+      {urlDraft.trim().length > 0 && !isValidPublicHttpUrl(urlDraft) ? (
+        <p className="mt-2 text-sm text-amber-300">
+          Enter a complete public http:// or https:// webpage address.
+        </p>
+      ) : null}
       <p className="mt-2 text-xs text-neutral-500">
         Gravitas renders the page and analyses its ordered viewport experience.
         Extracted text is used only to clarify wording that is difficult to read in the captures.
