@@ -8,6 +8,11 @@ import {
   cadenceInstruction,
   type CadenceMode,
 } from "@/lib/cadence";
+import {
+  getActiveSourceKey,
+  getAnalysisRunKey,
+  hasCompletedAnalysis,
+} from "@/lib/graviton-runs";
 import type { SourceIdentity, SourceImage, UrlSource } from "@/lib/sources";
 import {
   formatJumpInRemaining,
@@ -1288,6 +1293,9 @@ export default function GravitasApp({
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [selectedGraviton, setSelectedGraviton] =
   useState("Full Analysis");
+  const [completedAnalysisRuns, setCompletedAnalysisRuns] = useState<Set<string>>(
+    () => new Set()
+  );
 
 const gravitonGroups = [
   {
@@ -1397,14 +1405,48 @@ const gravitonGroups = [
   const isDemoLocked = isJumpIn && jumpInExpired;
   const apiEndpoint = isJumpIn ? "/api/jump-in/mr" : "/api/mr";
 
+  const activeSourceKey = useMemo(() => {
+    if (inputMode === "url") {
+      return getActiveSourceKey({ type: "url", url: urlDraft });
+    }
+
+    if (inputMode === "images") {
+      return getActiveSourceKey({
+        type: "images",
+        images: imageFiles.map((file) => ({
+          name: file.name,
+          size: file.size,
+          lastModified: file.lastModified,
+        })),
+      });
+    }
+
+    return getActiveSourceKey({ type: "text", text: draft });
+  }, [draft, imageFiles, inputMode, urlDraft]);
+
+  const isRepeatedGraviton = hasCompletedAnalysis(
+    completedAnalysisRuns,
+    activeSourceKey,
+    selectedGraviton
+  );
+
   const canSend = useMemo(
   () =>
     ((inputMode === "text" && draft.trim().length > 0) ||
       (inputMode === "url" && urlDraft.trim().length > 0) ||
       (inputMode === "images" && imageFiles.length > 0)) &&
     !isLoading &&
-    !isDemoLocked,
-  [draft, urlDraft, imageFiles, inputMode, isLoading, isDemoLocked]
+    !isDemoLocked &&
+    !isRepeatedGraviton,
+  [
+    draft,
+    urlDraft,
+    imageFiles,
+    inputMode,
+    isLoading,
+    isDemoLocked,
+    isRepeatedGraviton,
+  ]
 );
 
 const imagePreviewUrls = useMemo(() => {
@@ -1802,7 +1844,7 @@ if (trialActive && trialEndDate) {
   }
 
   async function onSend() {
-    if (sendLockRef.current) return;
+    if (sendLockRef.current || isRepeatedGraviton) return;
 
      if (!isJumpIn && !isSubscribed && !isBookTrial) {
 
@@ -2034,6 +2076,10 @@ if (urlSourceImages.length > 0) {
         return;
       }
 
+      if (!res.ok) {
+        throw new Error(data.error || "The analysis could not be completed.");
+      }
+
       const normalizedOutput = normalizeAssistantHeadings(
         data.output || "No response."
       );
@@ -2045,6 +2091,11 @@ if (urlSourceImages.length > 0) {
             : msg
         )
       );
+      setCompletedAnalysisRuns((current) => {
+        const next = new Set(current);
+        next.add(getAnalysisRunKey(activeSourceKey, selectedGraviton));
+        return next;
+      });
 
       const analysisJump = getRandomInt(14, 28);
       const rewriteJump = getRandomInt(36, 68);
@@ -2514,6 +2565,11 @@ if (urlSourceImages.length > 0) {
       Gravitate
     </button>
   </div>
+  {isRepeatedGraviton ? (
+    <p className="mt-2 text-sm text-[#C6A75A]">
+      Select a different Graviton to analyse this source again.
+    </p>
+  ) : null}
 
   <input
     ref={fileInputRef}
