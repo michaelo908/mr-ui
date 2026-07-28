@@ -76,6 +76,7 @@ test("a navigation that cannot commit falls back to safely fetched HTML", () => 
   const capture = read("lib/viewport-capture.ts");
 
   assert.match(capture, /fetchPublicHtml/);
+  assert.match(capture, /new URL\(initialUrl\.toString\(\)\)/);
   assert.match(capture, /redirect:\s*"manual"/);
   assert.match(capture, /MAX_HTML_REDIRECTS/);
   assert.match(capture, /MAX_HTML_BYTES/);

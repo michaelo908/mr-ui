@@ -122,7 +122,7 @@ function addDocumentBase(html: string, url: URL) {
 }
 
 async function fetchPublicHtml(initialUrl: URL) {
-  let currentUrl = initialUrl;
+  let currentUrl = new URL(initialUrl.toString());
 
   for (let redirect = 0; redirect <= MAX_HTML_REDIRECTS; redirect += 1) {
     await validatePublicBrowserUrl(currentUrl);
