@@ -1,4 +1,6 @@
 const SCREENSHOTONE_ENDPOINT = "https://api.screenshotone.com/take";
+const MAX_CAPTURE_ATTEMPTS = 2;
+const RETRY_DELAY_MS = 400;
 
 export const SCREENSHOTONE_CAPTURE_OPTIONS = {
   format: "png",
@@ -76,6 +78,10 @@ async function readProviderError(response: Response) {
   }
 }
 
+function wait(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 export async function captureFullPagePng(url: URL, requestId: string) {
   const accessKey = process.env.SCREENSHOTONE_ACCESS_KEY?.trim();
   if (!accessKey) {
@@ -92,26 +98,47 @@ export async function captureFullPagePng(url: URL, requestId: string) {
     viewport: `${SCREENSHOTONE_CAPTURE_OPTIONS.viewport_width}x${SCREENSHOTONE_CAPTURE_OPTIONS.viewport_height}`,
   });
 
-  let response: Response;
-  try {
-    response = await fetch(SCREENSHOTONE_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-access-key": accessKey,
-      },
-      body: JSON.stringify(buildScreenshotOneRequest(url)),
-      signal: AbortSignal.timeout(
-        (SCREENSHOTONE_CAPTURE_OPTIONS.timeout + 5) * 1_000
-      ),
-      cache: "no-store",
-    });
-  } catch (error) {
+  let response: Response | undefined;
+  let requestFailure: unknown;
+  for (let attempt = 1; attempt <= MAX_CAPTURE_ATTEMPTS; attempt += 1) {
+    try {
+      response = await fetch(SCREENSHOTONE_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-access-key": accessKey,
+        },
+        body: JSON.stringify(buildScreenshotOneRequest(url)),
+        signal: AbortSignal.timeout(
+          (SCREENSHOTONE_CAPTURE_OPTIONS.timeout + 5) * 1_000
+        ),
+        cache: "no-store",
+      });
+      if (response.status < 500 || attempt === MAX_CAPTURE_ATTEMPTS) break;
+      console.warn("Retrying ScreenshotOne after a provider failure", {
+        requestId,
+        hostname: url.hostname,
+        attempt,
+        status: response.status,
+      });
+    } catch (error) {
+      requestFailure = error;
+      if (attempt === MAX_CAPTURE_ATTEMPTS) break;
+      console.warn("Retrying ScreenshotOne after a request failure", {
+        requestId,
+        hostname: url.hostname,
+        attempt,
+      });
+    }
+    await wait(RETRY_DELAY_MS);
+  }
+
+  if (!response) {
     console.error("ScreenshotOne capture request failed", {
       requestId,
       hostname: url.hostname,
       durationMs: Date.now() - startedAt,
-      error,
+      error: requestFailure,
     });
     throw new ScreenshotOneCaptureError(
       "The webpage capture service did not respond.",

@@ -115,6 +115,8 @@ test("ScreenshotOne replaces browser rendering while preserving local viewport s
   assert.match(provider, /block_ads:\s*true/);
   assert.match(provider, /block_trackers:\s*true/);
   assert.match(provider, /decodeURIComponent\(value\)/);
+  assert.match(provider, /MAX_CAPTURE_ATTEMPTS = 2/);
+  assert.match(provider, /response\.status < 500/);
 });
 
 test("server validates provider output and sanitises capture failures", () => {
