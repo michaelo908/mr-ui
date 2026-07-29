@@ -99,26 +99,32 @@ test("near-duplicate viewport signatures are rejected", () => {
   );
 });
 
-test("renderer detects the scroll surface and guarantees opening and exit", () => {
+test("ScreenshotOne replaces browser rendering while preserving local viewport slicing", () => {
   const capture = read("lib/viewport-capture.ts");
-  assert.match(capture, /findScrollSurface/);
-  assert.match(capture, /data-gravitas-scroll-container/);
-  assert.match(capture, /actualOffsets\[0\] !== 0/);
-  assert.match(capture, /actualOffsets\.at\(-1\).*scrollSurface\.maxScroll/s);
-  assert.match(capture, /did not expose a reliable top-to-bottom scroll journey/);
-  assert.match(capture, /produced too few distinct viewports/);
-  assert.match(capture, /document\.getAnimations\(\)/);
-  assert.match(capture, /suppressRepeatedStickyElements/);
+  const provider = read("lib/screenshotone.ts");
+
+  assert.match(capture, /captureFullPagePng/);
+  assert.match(capture, /calculateViewportPositions/);
+  assert.match(capture, /\.extract\(\{ left: 0, top, width, height: sliceHeight \}\)/);
+  assert.match(provider, /SCREENSHOTONE_ACCESS_KEY/);
+  assert.match(provider, /"x-access-key": accessKey/);
+  assert.doesNotMatch(provider, /["']access_key["']\s*:/);
+  assert.match(provider, /full_page:\s*true/);
+  assert.match(provider, /full_page_algorithm:\s*"by_sections"/);
+  assert.match(provider, /block_cookie_banners:\s*true/);
+  assert.match(provider, /block_ads:\s*true/);
+  assert.match(provider, /block_trackers:\s*true/);
+  assert.match(provider, /decodeURIComponent\(value\)/);
 });
 
-test("server serialises Chromium preparation and sanitises launch failures", () => {
-  const runtime = read("lib/browser-runtime.ts");
+test("server validates provider output and sanitises capture failures", () => {
+  const capture = read("lib/viewport-capture.ts");
   const route = read("app/api/sources/url/route.ts");
 
-  assert.match(runtime, /gravitas-chromium\.prepare\.lock/);
-  assert.match(runtime, /open\(PREPARATION_LOCK,\s*"wx"/);
-  assert.match(runtime, /executablePromise \?\?=/);
-  assert.match(runtime, /MINIMUM_BROWSER_BYTES/);
+  assert.match(capture, /metadata\.format !== "png"/);
+  assert.match(capture, /width < 640 \|\| height < 240/);
+  assert.match(capture, /MAX_FULL_PAGE_BYTES/);
+  assert.match(capture, /MAX_FULL_PAGE_PIXELS/);
   assert.match(route, /Gravitas URL rendering failed/);
   assert.match(
     route,
@@ -127,43 +133,28 @@ test("server serialises Chromium preparation and sanitises launch failures", () 
   assert.doesNotMatch(route, /error instanceof Error \? error\.message/);
 });
 
-test("browser launch retries transient executable-busy failures", () => {
-  const runtime = read("lib/browser-runtime.ts");
+test("URL rendering retains SSRF protection and bounded provider timeouts", () => {
   const capture = read("lib/viewport-capture.ts");
-
-  assert.match(runtime, /ETXTBSY\|text file busy/);
-  assert.match(capture, /isRetryableBrowserLaunchError/);
-  assert.match(capture, /waitBeforeBrowserLaunchRetry/);
-  assert.match(capture, /return launch\(\)/);
-});
-
-test("URL rendering avoids DNS exhaustion and does not wait indefinitely for scripts", () => {
-  const capture = read("lib/viewport-capture.ts");
+  const provider = read("lib/screenshotone.ts");
   const route = read("app/api/sources/url/route.ts");
 
-  assert.match(capture, /publicUrlValidationCache/);
-  assert.match(capture, /validations = new Map/);
-  assert.match(capture, /waitUntil:\s*"commit"/);
-  assert.match(capture, /waitForSelector\("body"/);
-  assert.match(capture, /DOCUMENT_READY_TIMEOUT_MS/);
-  assert.match(capture, /resourceType\(\) === "media"/);
-  assert.match(capture, /resourceType\(\) === "font"/);
+  assert.match(capture, /validatePublicBrowserUrl\(initialUrl\)/);
+  assert.match(capture, /validatePublicBrowserUrl\(currentUrl\)/);
   assert.match(capture, /DESKTOP_USER_AGENT/);
-  assert.match(capture, /locale:\s*"en-AU"/);
+  assert.match(provider, /AbortSignal\.timeout/);
+  assert.match(provider, /timeout:\s*45/);
+  assert.match(provider, /navigation_timeout:\s*25/);
   assert.match(route, /preferredRegion\s*=\s*"syd1"/);
 });
 
-test("a navigation that cannot commit falls back to safely fetched HTML", () => {
+test("supporting text remains best-effort and follows only validated redirects", () => {
   const capture = read("lib/viewport-capture.ts");
 
-  assert.match(capture, /fetchPublicHtml/);
+  assert.match(capture, /fetchSupportingPage/);
   assert.match(capture, /new URL\(initialUrl\.toString\(\)\)/);
   assert.match(capture, /redirect:\s*"manual"/);
   assert.match(capture, /MAX_HTML_REDIRECTS/);
   assert.match(capture, /MAX_HTML_BYTES/);
   assert.match(capture, /validatePublicBrowserUrl\(currentUrl\)/);
-  assert.match(capture, /addDocumentBase/);
-  assert.match(capture, /page\.setContent\(fallback\.html/);
-  assert.match(capture, /usedHtmlFallback \? renderedUrl : new URL\(page\.url\(\)\)/);
-  assert.match(capture, /target host returned bot verification/i);
+  assert.match(capture, /Supporting webpage text was unavailable/);
 });
