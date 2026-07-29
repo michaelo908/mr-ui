@@ -107,9 +107,17 @@ async function fetchSupportingPage(initialUrl: URL) {
 
     const html = bytes.toString("utf8");
     const text = stripHtmlToReadableText(html);
+    const title = extractHtmlTitle(html);
+    if (
+      /bot verification|verify (?:that )?you are not a robot|checking your browser|human verification/i.test(
+        `${title}\n${text.slice(0, 1_000)}`
+      )
+    ) {
+      throw new Error("The supporting text request returned bot verification.");
+    }
     return {
       finalUrl: currentUrl,
-      title: extractHtmlTitle(html),
+      title,
       text,
     };
   }

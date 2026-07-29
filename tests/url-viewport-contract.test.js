@@ -159,4 +159,5 @@ test("supporting text remains best-effort and follows only validated redirects",
   assert.match(capture, /MAX_HTML_BYTES/);
   assert.match(capture, /validatePublicBrowserUrl\(currentUrl\)/);
   assert.match(capture, /Supporting webpage text was unavailable/);
+  assert.match(capture, /supporting text request returned bot verification/i);
 });
