@@ -17,6 +17,7 @@ import {
 } from "@/lib/graviton-runs";
 import {
   buildRenderedUrlAnalysisInput,
+  MAX_URL_VIEWPORTS,
   type SourceIdentity,
   type SourceImage,
   type UrlSource,
@@ -38,6 +39,8 @@ import { createAnalysisRunCoordinator } from "@/lib/analysis-run-coordinator";
 import {
   getViewportImageByNumber,
   parseNarrativePerformance,
+  type NarrativePerformanceLightboxContext,
+  type NarrativePerformanceViewportLaunch,
 } from "@/lib/narrative-performance";
 import ImageLightbox from "@/components/ImageLightbox";
 import NarrativePerformancePanel from "@/components/NarrativePerformancePanel";
@@ -813,6 +816,8 @@ function StructuredAssistantMessage({
   const [activeLightboxIndex, setActiveLightboxIndex] = useState<number | null>(
     null
   );
+  const [lightboxContext, setLightboxContext] =
+    useState<NarrativePerformanceLightboxContext | null>(null);
 
   const summary = sections.summary?.trim();
   const performance = useMemo(
@@ -852,7 +857,10 @@ function StructuredAssistantMessage({
       const index = lightboxImages.findIndex(
         (candidate) => candidate.id === image.id
       );
-      if (index >= 0) setActiveLightboxIndex(index);
+      if (index >= 0) {
+        setLightboxContext(null);
+        setActiveLightboxIndex(index);
+      }
     },
     [lightboxImages]
   );
@@ -862,11 +870,38 @@ function StructuredAssistantMessage({
         orderedViewportImages,
         viewportNumber
       );
-      if (image) openImage(image);
+      if (!image) return;
+      const index = orderedViewportImages.findIndex(
+        (candidate) => candidate.id === image.id
+      );
+      if (index >= 0) {
+        setLightboxContext(null);
+        setActiveLightboxIndex(index);
+      }
     },
-    [openImage, orderedViewportImages]
+    [orderedViewportImages]
   );
-  const closeLightbox = useCallback(() => setActiveLightboxIndex(null), []);
+  const openRecommendationViewport = useCallback(
+    (launch: NarrativePerformanceViewportLaunch) => {
+      const image = getViewportImageByNumber(
+        orderedViewportImages,
+        launch.startingViewport
+      );
+      if (!image) return;
+      const index = orderedViewportImages.findIndex(
+        (candidate) => candidate.id === image.id
+      );
+      if (index >= 0) {
+        setLightboxContext(launch.context);
+        setActiveLightboxIndex(index);
+      }
+    },
+    [orderedViewportImages]
+  );
+  const closeLightbox = useCallback(() => {
+    setActiveLightboxIndex(null);
+    setLightboxContext(null);
+  }, []);
   const changeLightboxImage = useCallback(
     (index: number) => setActiveLightboxIndex(index),
     []
@@ -878,6 +913,7 @@ function StructuredAssistantMessage({
     setCopiedRewriteKey(null);
     setIsGeneratingAlternate(false);
     setActiveLightboxIndex(null);
+    setLightboxContext(null);
 
     if (rewrite) {
       setRewrites([makeRewriteVariant(rewrite, 0)]);
@@ -1099,6 +1135,7 @@ ${cadenceInstruction(cadence)}`;
           performance={performance}
           images={orderedViewportImages}
           onOpenViewport={openViewport}
+          onOpenRecommendation={openRecommendationViewport}
         />
       ) : null}
 
@@ -1259,6 +1296,7 @@ ${cadenceInstruction(cadence)}`;
       <ImageLightbox
         images={lightboxImages}
         activeIndex={activeLightboxIndex}
+        context={lightboxContext}
         onChange={changeLightboxImage}
         onClose={closeLightbox}
       />
@@ -2725,7 +2763,8 @@ if (urlSourceImages.length > 0) {
         </p>
       ) : null}
       <p className="mt-2 text-xs text-neutral-500">
-        Gravitas renders the page and analyses its ordered viewport experience.
+        Gravitas renders the page and analyses up to {MAX_URL_VIEWPORTS} ordered
+        viewports.
         Extracted text is used only to clarify wording that is difficult to read in the captures.
       </p>
       {importedUrl?.source.truncated ? (

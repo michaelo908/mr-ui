@@ -105,6 +105,7 @@ test("ScreenshotOne replaces browser rendering while preserving local viewport s
 
   assert.match(capture, /captureFullPagePng/);
   assert.match(capture, /calculateViewportPositions/);
+  assert.match(capture, /MAX_VIEWPORTS = MAX_URL_VIEWPORTS/);
   assert.match(capture, /\.extract\(\{ left: 0, top, width, height: sliceHeight \}\)/);
   assert.match(provider, /SCREENSHOTONE_ACCESS_KEY/);
   assert.match(provider, /"x-access-key": accessKey/);
@@ -117,6 +118,20 @@ test("ScreenshotOne replaces browser rendering while preserving local viewport s
   assert.match(provider, /decodeURIComponent\(value\)/);
   assert.match(provider, /MAX_CAPTURE_ATTEMPTS = 2/);
   assert.match(provider, /response\.status < 500/);
+});
+
+test("URL analysis consistently caps ordered captures at 16 viewports", () => {
+  const sources = read("lib/sources.ts");
+  const capture = read("lib/viewport-capture.ts");
+  const apiRoute = read("app/api/mr/route.ts");
+  const app = read("components/GravitasApp.tsx");
+
+  assert.match(sources, /MAX_URL_VIEWPORTS = 16/);
+  assert.match(sources, /maxCaptures = MAX_URL_VIEWPORTS/);
+  assert.match(capture, /MAX_VIEWPORTS = MAX_URL_VIEWPORTS/);
+  assert.match(apiRoute, /imageData\.length > MAX_URL_VIEWPORTS/);
+  assert.match(apiRoute, /up to 16/);
+  assert.match(app, /up to \{MAX_URL_VIEWPORTS\} ordered/);
 });
 
 test("server validates provider output and sanitises capture failures", () => {

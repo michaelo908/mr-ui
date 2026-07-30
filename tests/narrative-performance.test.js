@@ -3,6 +3,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   extractViewportNumbers,
+  buildRecommendationLightboxContext,
+  buildRecommendationViewportLaunch,
   getViewportImageByNumber,
   parseNarrativePerformance,
 } = require("../lib/narrative-performance.ts");
@@ -78,4 +80,104 @@ test("maps viewport numbers by stored order and rejects invalid references", () 
   assert.equal(getViewportImageByNumber(images, 3).id, "third");
   assert.equal(getViewportImageByNumber(images, 4), null);
   assert.equal(getViewportImageByNumber(images, 0), null);
+});
+
+test("recommendation context preserves its own action and valid evidence set", () => {
+  const images = Array.from({ length: 5 }, (_, index) => ({
+    id: `viewport-${index + 1}`,
+    role: "viewport",
+    order: index,
+  }));
+  const context = buildRecommendationLightboxContext(
+    {
+      action: "Consolidate",
+      body: "Viewports 2, 3 and 4 repeat the mechanism. The repetition slows progression. Retain viewport 2 and merge the unique proof beneath it.",
+    },
+    images
+  );
+
+  assert.deepEqual(context, {
+    action: "Consolidate",
+    color: "#FACC15",
+    emoji: "🟡",
+    recommendation:
+      "Viewports 2, 3 and 4 repeat the mechanism. The repetition slows progression. Retain viewport 2 and merge the unique proof beneath it.",
+    viewportNumbers: [2, 3, 4],
+  });
+});
+
+test("each recommendation keeps independent context for a shared viewport", () => {
+  const images = Array.from({ length: 4 }, (_, index) => ({
+    id: `viewport-${index + 1}`,
+    role: "viewport",
+    order: index,
+  }));
+  const protect = buildRecommendationLightboxContext(
+    {
+      action: "Protect",
+      body: "Viewport 3 carries the clearest proof. It gives the claim credibility. Keep it adjacent to the promise.",
+    },
+    images
+  );
+  const reduce = buildRecommendationLightboxContext(
+    {
+      action: "Reduce",
+      body: "Viewports 3 and 4 repeat the proof. The second pass delays the decision. Remove the repeated explanation in viewport 4.",
+    },
+    images
+  );
+
+  assert.equal(protect.action, "Protect");
+  assert.deepEqual(protect.viewportNumbers, [3]);
+  assert.equal(reduce.action, "Reduce");
+  assert.deepEqual(reduce.viewportNumbers, [3, 4]);
+});
+
+test("recommendation launch is one payload containing context and clicked viewport", () => {
+  const images = Array.from({ length: 5 }, (_, index) => ({
+    id: `viewport-${index + 1}`,
+    role: "viewport",
+    order: index,
+  }));
+  const recommendation = {
+    action: "Consolidate",
+    body: "Viewports 2, 3 and 4 repeat the mechanism. The repetition slows progression. Retain viewport 2 and merge the unique proof beneath it.",
+  };
+
+  const launch = buildRecommendationViewportLaunch(
+    recommendation,
+    images,
+    3
+  );
+
+  assert.equal(launch.startingViewport, 3);
+  assert.equal(launch.context.action, "Consolidate");
+  assert.equal(launch.context.color, "#FACC15");
+  assert.equal(launch.context.emoji, "🟡");
+  assert.equal(launch.context.recommendation, recommendation.body);
+  assert.deepEqual(launch.context.viewportNumbers, [2, 3, 4]);
+});
+
+test("recommendation launch refuses an index-only viewport outside its context", () => {
+  const images = Array.from({ length: 5 }, (_, index) => ({
+    id: `viewport-${index + 1}`,
+    role: "viewport",
+    order: index,
+  }));
+  const launch = buildRecommendationViewportLaunch(
+    {
+      action: "Reduce",
+      body: "Viewports 2 and 3 repeat the proof. The second pass delays the decision. Remove the repeated explanation.",
+    },
+    images,
+    5
+  );
+
+  assert.equal(launch, null);
+});
+
+test("expands compact viewport ranges into the complete evidence set", () => {
+  assert.deepEqual(extractViewportNumbers("Viewports 2–5 repeat the proof."), [
+    2, 3, 4, 5,
+  ]);
 });

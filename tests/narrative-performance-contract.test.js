@@ -55,3 +55,55 @@ test("viewport thumbnails and references share the image lightbox", () => {
   assert.match(lightbox, /event\.key === "ArrowRight"/);
   assert.match(lightbox, /event\.target === event\.currentTarget/);
 });
+
+test("recommendation viewport launches preserve contextual action and evidence", () => {
+  const app = read("components/GravitasApp.tsx");
+  const panel = read("components/NarrativePerformancePanel.tsx");
+  const lightbox = read("components/ImageLightbox.tsx");
+
+  assert.match(panel, /buildRecommendationLightboxContext/);
+  assert.match(panel, /buildRecommendationViewportLaunch/);
+  assert.match(panel, /onOpenRecommendation\(launch\)/);
+  assert.match(app, /setLightboxContext\(launch\.context\)/);
+  assert.match(app, /launch\.startingViewport/);
+  assert.match(lightbox, /context\.action\.toUpperCase\(\)/);
+  assert.match(lightbox, /context\.color/);
+  assert.match(lightbox, /context\.recommendation/);
+  assert.match(lightbox, /Recommendation evidence viewports/);
+  assert.match(lightbox, /Show evidence viewport \$\{viewportNumber\}/);
+});
+
+test("recommendation callbacks cannot degrade to an index-only launch", () => {
+  const panel = read("components/NarrativePerformancePanel.tsx");
+  const app = read("components/GravitasApp.tsx");
+
+  assert.match(
+    panel,
+    /onOpenRecommendation:\s*\(\s*launch: NarrativePerformanceViewportLaunch/
+  );
+  assert.match(
+    app,
+    /openRecommendationViewport = useCallback\(\s*\(launch: NarrativePerformanceViewportLaunch\)/
+  );
+  assert.doesNotMatch(
+    app,
+    /setLightboxContext\(context\);\s*setActiveLightboxIndex/
+  );
+});
+
+test("the coloured recommendation bullet launches its first evidence viewport", () => {
+  const panel = read("components/NarrativePerformancePanel.tsx");
+
+  assert.match(panel, /const firstViewport = context\.viewportNumbers\[0\]/);
+  assert.match(panel, /Open \$\{recommendation\.action\} recommendation evidence/);
+  assert.match(panel, /style=\{\{ color: context\.color \}\}/);
+});
+
+test("thumbnail launches use neutral inspection mode", () => {
+  const app = read("components/GravitasApp.tsx");
+  const lightbox = read("components/ImageLightbox.tsx");
+
+  assert.match(app, /setLightboxContext\(null\);\s*setActiveLightboxIndex\(index\)/);
+  assert.match(lightbox, /context && isViewport/);
+  assert.match(lightbox, /: viewportLabel/);
+});

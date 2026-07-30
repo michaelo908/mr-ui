@@ -33,8 +33,8 @@ test("captures short pages as ordered contiguous viewports including the exit", 
 });
 
 test("samples long pages from opening to exit without duplicate offsets", () => {
-  const positions = calculateViewportPositions(20_000, 800, 10);
-  assert.equal(positions.length, 10);
+  const positions = calculateViewportPositions(20_000, 800);
+  assert.equal(positions.length, 16);
   assert.equal(positions[0], 0);
   assert.equal(positions.at(-1), 19_200);
   assert.equal(new Set(positions).size, positions.length);
@@ -44,6 +44,7 @@ test("samples long pages from opening to exit without duplicate offsets", () => 
 test("rendered URL prompt makes viewports primary and text supporting only", () => {
   const input = buildRenderedUrlAnalysisInput("Menu\nHard-to-read heading", "Full Analysis");
   assert.match(input, /sole primary evidence/i);
+  assert.match(input, /up to 16/i);
   assert.match(input, /supporting legibility assistance only/i);
   assert.match(input, /Do not use it to infer page structure/i);
   assert.match(input, /Hard-to-read heading/);

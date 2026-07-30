@@ -5,12 +5,13 @@ import { captureFullPagePng } from "@/lib/screenshotone";
 import {
   calculateViewportPositions,
   extractHtmlTitle,
+  MAX_URL_VIEWPORTS,
   stripHtmlToReadableText,
   type SourceImage,
 } from "@/lib/sources";
 
 const VIEWPORT = { width: 1280, height: 800 };
-const MAX_VIEWPORTS = 10;
+export const MAX_VIEWPORTS = MAX_URL_VIEWPORTS;
 const MAX_FULL_PAGE_BYTES = 30_000_000;
 const MAX_FULL_PAGE_PIXELS = 80_000_000;
 const MAX_TOTAL_SCREENSHOT_BYTES = 3_000_000;

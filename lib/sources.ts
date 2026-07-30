@@ -1,4 +1,5 @@
 export type SourceType = "text" | "url" | "image" | "pdf" | "document";
+export const MAX_URL_VIEWPORTS = 16;
 
 export type SourceIdentity = {
   id: string;
@@ -61,7 +62,7 @@ export function extractHtmlTitle(html: string) {
 export function calculateViewportPositions(
   documentHeight: number,
   viewportHeight: number,
-  maxCaptures = 10
+  maxCaptures = MAX_URL_VIEWPORTS
 ) {
   const height = Math.max(viewportHeight, Math.floor(documentHeight));
   const lastPosition = Math.max(0, height - viewportHeight);
@@ -121,7 +122,7 @@ export function buildRenderedUrlAnalysisInput(
   selectedGraviton: string
 ) {
   const support = extractedText.trim();
-  return `Analyse the ordered rendered webpage viewports using the selected Gravitas lens: ${selectedGraviton}.
+  return `Analyse the ordered rendered webpage viewports (up to ${MAX_URL_VIEWPORTS}) using the selected Gravitas lens: ${selectedGraviton}.
 
 The viewport screenshots are the sole primary evidence for the substantive analysis. Treat them as the visitor's ordered visual experience from the top of the page to the bottom.
 

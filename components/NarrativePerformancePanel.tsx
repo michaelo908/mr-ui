@@ -3,18 +3,27 @@
 import type { ReactNode } from "react";
 import {
   actionEmoji,
+  buildRecommendationLightboxContext,
+  buildRecommendationViewportLaunch,
   getViewportImageByNumber,
   type NarrativePerformance,
+  type NarrativePerformanceRecommendation,
+  type NarrativePerformanceViewportLaunch,
 } from "@/lib/narrative-performance";
 import type { SourceImage } from "@/lib/sources";
 
 function renderViewportReferences(
   value: string,
   images: SourceImage[],
-  onOpenViewport: (viewportNumber: number) => void
+  onOpenViewport: (viewportNumber: number) => void,
+  recommendation: NarrativePerformanceRecommendation | null = null,
+  onOpenRecommendation?: (
+    launch: NarrativePerformanceViewportLaunch
+  ) => void
 ) {
   const parts: ReactNode[] = [];
-  const pattern = /\b(Viewports?)\s+(\d+(?:\s*(?:,|and|&)\s*\d+)*)/gi;
+  const pattern =
+    /\b(Viewports?)\s+(\d+(?:\s*(?:,|and|&|[-–—])\s*\d+)*)/gi;
   let cursor = 0;
   let match: RegExpExecArray | null;
 
@@ -33,12 +42,25 @@ function renderViewportReferences(
       );
       const viewportNumber = Number(numberMatch[0]);
       const image = getViewportImageByNumber(images, viewportNumber);
+      const launch = recommendation
+        ? buildRecommendationViewportLaunch(
+            recommendation,
+            images,
+            viewportNumber
+          )
+        : null;
       parts.push(
         image ? (
           <button
             key={`viewport-${match.index}-${viewportNumber}`}
             type="button"
-            onClick={() => onOpenViewport(viewportNumber)}
+            onClick={() => {
+              if (launch && onOpenRecommendation) {
+                onOpenRecommendation(launch);
+              } else {
+                onOpenViewport(viewportNumber);
+              }
+            }}
             className="font-semibold text-[#C6A75A] underline decoration-[#C6A75A]/60 underline-offset-4 hover:text-amber-200"
             aria-label={`Open viewport ${viewportNumber}`}
           >
@@ -66,10 +88,14 @@ export default function NarrativePerformancePanel({
   performance,
   images,
   onOpenViewport,
+  onOpenRecommendation,
 }: {
   performance: NarrativePerformance;
   images: SourceImage[];
   onOpenViewport: (viewportNumber: number) => void;
+  onOpenRecommendation: (
+    launch: NarrativePerformanceViewportLaunch
+  ) => void;
 }) {
   return (
     <section
@@ -104,24 +130,54 @@ export default function NarrativePerformancePanel({
 
       {performance.recommendations.length > 0 ? (
         <div className="mt-5 space-y-3">
-          {performance.recommendations.map((recommendation, index) => (
-            <div
-              key={`${recommendation.action}-${index}`}
-              className="border-t border-neutral-800 pt-3 first:border-t-0 first:pt-0"
-            >
-              <p className="text-sm leading-6 text-neutral-200">
-                <span className="font-semibold text-neutral-100">
-                  {actionEmoji(recommendation.action)} {recommendation.action}
-                </span>
-                <span aria-hidden="true"> — </span>
-                {renderViewportReferences(
-                  recommendation.body,
-                  images,
-                  onOpenViewport
-                )}
-              </p>
-            </div>
-          ))}
+          {performance.recommendations.map((recommendation, index) => {
+            const context = buildRecommendationLightboxContext(
+              recommendation,
+              images
+            );
+            const firstViewport = context.viewportNumbers[0];
+            const bulletLaunch =
+              firstViewport === undefined
+                ? null
+                : buildRecommendationViewportLaunch(
+                    recommendation,
+                    images,
+                    firstViewport
+                  );
+            return (
+              <div
+                key={`${recommendation.action}-${index}`}
+                className="border-t border-neutral-800 pt-3 first:border-t-0 first:pt-0"
+              >
+                <p className="text-sm leading-6 text-neutral-200">
+                  <button
+                    type="button"
+                    disabled={!bulletLaunch}
+                    onClick={() => {
+                      if (bulletLaunch) onOpenRecommendation(bulletLaunch);
+                    }}
+                    className="rounded font-semibold underline-offset-4 hover:underline disabled:cursor-default disabled:no-underline"
+                    style={{ color: context.color }}
+                    aria-label={
+                      bulletLaunch
+                        ? `Open ${recommendation.action} recommendation evidence`
+                        : undefined
+                    }
+                  >
+                    {actionEmoji(recommendation.action)} {recommendation.action}
+                  </button>
+                  <span aria-hidden="true"> — </span>
+                  {renderViewportReferences(
+                    recommendation.body,
+                    images,
+                    onOpenViewport,
+                    recommendation,
+                    onOpenRecommendation
+                  )}
+                </p>
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </section>

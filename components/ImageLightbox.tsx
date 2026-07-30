@@ -1,26 +1,38 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import {
+  getViewportImageByNumber,
+  type NarrativePerformanceLightboxContext,
+} from "@/lib/narrative-performance";
 import type { SourceImage } from "@/lib/sources";
 
 export default function ImageLightbox({
   images,
   activeIndex,
+  context = null,
   onChange,
   onClose,
 }: {
   images: SourceImage[];
   activeIndex: number | null;
+  context?: NarrativePerformanceLightboxContext | null;
   onChange: (index: number) => void;
   onClose: () => void;
 }) {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const activeIndexRef = useRef(activeIndex);
   const activeImage =
     activeIndex === null ? null : images[activeIndex] ?? null;
+  const isOpen = activeImage !== null;
 
   useEffect(() => {
-    if (!activeImage || activeIndex === null) return;
+    activeIndexRef.current = activeIndex;
+  }, [activeIndex]);
+
+  useEffect(() => {
+    if (!isOpen) return;
 
     previousFocusRef.current =
       document.activeElement instanceof HTMLElement
@@ -36,10 +48,12 @@ export default function ImageLightbox({
         onClose();
       } else if (event.key === "ArrowLeft" && images.length > 1) {
         event.preventDefault();
-        onChange((activeIndex - 1 + images.length) % images.length);
+        const current = activeIndexRef.current ?? 0;
+        onChange((current - 1 + images.length) % images.length);
       } else if (event.key === "ArrowRight" && images.length > 1) {
         event.preventDefault();
-        onChange((activeIndex + 1) % images.length);
+        const current = activeIndexRef.current ?? 0;
+        onChange((current + 1) % images.length);
       } else if (event.key === "Tab") {
         const dialog = document.querySelector<HTMLElement>(
           '[data-image-lightbox="true"]'
@@ -70,31 +84,117 @@ export default function ImageLightbox({
       window.removeEventListener("keydown", handleKeyDown);
       previousFocusRef.current?.focus();
     };
-  }, [activeImage, activeIndex, images.length, onChange, onClose]);
+  }, [images.length, isOpen, onChange, onClose]);
 
   if (!activeImage || activeIndex === null) return null;
 
   const isViewport = activeImage.role === "viewport";
-  const label = isViewport
-    ? `Viewport ${activeIndex + 1} of ${images.length}`
+  const positionLabel = isViewport
+    ? `${activeIndex + 1} of ${images.length}`
     : images.length === 1
       ? activeImage.title
-      : `Image ${activeIndex + 1} of ${images.length}`;
+      : `${activeIndex + 1} of ${images.length}`;
+  const viewportLabel = isViewport
+    ? `VIEWPORT ${activeIndex + 1}`
+    : activeImage.title;
+  const title = context && isViewport
+    ? `${context.emoji} ${context.action.toUpperCase()} — ${viewportLabel}`
+    : viewportLabel;
+  const dialogLabel = isViewport
+    ? `${title}, ${positionLabel}`
+    : `${title}, image ${positionLabel}`;
 
   return (
     <div
       data-image-lightbox="true"
       role="dialog"
       aria-modal="true"
-      aria-label={label}
-      className="fixed inset-0 z-[100] flex bg-black/90 p-3 sm:p-6"
+      aria-label={dialogLabel}
+      className="fixed inset-0 z-[100] flex bg-black/90 p-2 sm:p-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="relative mx-auto flex min-h-0 w-full max-w-7xl flex-col">
-        <div className="mb-3 flex shrink-0 items-center justify-between gap-4 text-neutral-100">
-          <div className="text-sm font-semibold">{label}</div>
+      <div className="relative mx-auto flex min-h-0 w-full max-w-7xl flex-col overflow-hidden rounded-xl">
+        <header className="sticky top-0 z-20 shrink-0 border-b border-neutral-700 bg-neutral-950/95 px-3 py-3 text-neutral-100 shadow-lg backdrop-blur sm:px-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h2
+                  className="text-sm font-bold tracking-wide text-white sm:text-base"
+                  style={
+                    context && isViewport ? { color: context.color } : undefined
+                  }
+                >
+                  {title}
+                </h2>
+                <span className="text-xs font-semibold text-neutral-400">
+                  {positionLabel}
+                </span>
+              </div>
+
+              {context && isViewport ? (
+                <>
+                  <p className="mt-2 max-w-4xl text-xs leading-5 text-neutral-300 sm:text-sm">
+                    {context.recommendation}
+                  </p>
+                  {context.viewportNumbers.length > 0 ? (
+                    <nav
+                      className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-neutral-400"
+                      aria-label="Recommendation evidence viewports"
+                    >
+                      <span className="mr-1 font-semibold">Evidence:</span>
+                      {context.viewportNumbers.map((viewportNumber, index) => {
+                        const evidenceImage = getViewportImageByNumber(
+                          images,
+                          viewportNumber
+                        );
+                        const evidenceIndex = evidenceImage
+                          ? images.findIndex(
+                              (image) => image.id === evidenceImage.id
+                            )
+                          : -1;
+                        const isCurrent = evidenceIndex === activeIndex;
+                        return (
+                          <span
+                            key={viewportNumber}
+                            className="inline-flex items-center gap-1.5"
+                          >
+                            {index > 0 ? (
+                              <span aria-hidden="true" className="text-neutral-600">
+                                ·
+                              </span>
+                            ) : null}
+                            <button
+                              type="button"
+                              disabled={evidenceIndex < 0}
+                              onClick={() => onChange(evidenceIndex)}
+                              aria-label={`Show evidence viewport ${viewportNumber}`}
+                              aria-current={isCurrent ? "true" : undefined}
+                              className={
+                                isCurrent
+                                  ? "rounded px-1.5 py-0.5 font-bold ring-1"
+                                  : "rounded px-1.5 py-0.5 font-semibold text-neutral-200 hover:bg-neutral-800 hover:text-white disabled:text-neutral-600"
+                              }
+                              style={
+                                isCurrent && context
+                                  ? {
+                                      color: context.color,
+                                      boxShadow: `0 0 0 1px ${context.color}`,
+                                    }
+                                  : undefined
+                              }
+                            >
+                              {viewportNumber}
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </nav>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
           <button
             ref={closeButtonRef}
             type="button"
@@ -104,13 +204,14 @@ export default function ImageLightbox({
           >
             ×
           </button>
-        </div>
+          </div>
+        </header>
 
-        <div className="relative min-h-0 flex-1 overflow-auto rounded-xl">
+        <div className="relative min-h-0 flex-1 overflow-auto bg-neutral-950 pt-3">
           <div className="flex min-h-full min-w-full items-start justify-center">
             <img
               src={activeImage.dataUrl}
-              alt={activeImage.altText || activeImage.title || label}
+              alt={activeImage.altText || activeImage.title || dialogLabel}
               className="h-auto max-w-none rounded-lg object-contain shadow-2xl"
               style={{
                 width: "min(100%, 1440px)",

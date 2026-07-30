@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { cadenceInstruction, type CadenceMode } from "@/lib/cadence";
+import { MAX_URL_VIEWPORTS } from "@/lib/sources";
 
 /**
  * Default domain frame (normal Multirrupt operation).
@@ -206,6 +207,19 @@ export async function handleMrRequest(req: Request) {
     ? imageData.length > 0
     : typeof imageData === "string" && imageData.trim().length > 0;
 
+  if (
+    body?.sourceMode === "rendered-url" &&
+    Array.isArray(imageData) &&
+    imageData.length > MAX_URL_VIEWPORTS
+  ) {
+    return NextResponse.json(
+      {
+        error: `Rendered URL analysis supports up to ${MAX_URL_VIEWPORTS} ordered viewports.`,
+      },
+      { status: 400 }
+    );
+  }
+
   const visualAnalysisContext = hasImageData
     ? `
 VISUAL INPUT PRESENT:
@@ -232,7 +246,7 @@ If text is also supplied, analyse the text and image together.
     body?.sourceMode === "rendered-url"
       ? `
 RENDERED WEBPAGE VIEWPORT HIERARCHY:
-The supplied ordered viewport screenshots are the sole primary evidence for the substantive webpage analysis.
+The supplied ordered viewport screenshots (up to 16) are the sole primary evidence for the substantive webpage analysis.
 
 Analyse the viewport sequence first and as the actual visitor experience:
 - preserve its top-to-bottom order
