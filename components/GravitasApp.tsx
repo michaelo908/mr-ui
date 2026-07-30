@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -35,6 +35,12 @@ import {
   type AnalysisStatus,
 } from "@/lib/analysis-personality";
 import { createAnalysisRunCoordinator } from "@/lib/analysis-run-coordinator";
+import {
+  getViewportImageByNumber,
+  parseNarrativePerformance,
+} from "@/lib/narrative-performance";
+import ImageLightbox from "@/components/ImageLightbox";
+import NarrativePerformancePanel from "@/components/NarrativePerformancePanel";
 
 type Msg = {
   role: "user" | "assistant";
@@ -468,6 +474,11 @@ function normalizeAssistantCopyText(content: string) {
     parts.push(parsed.sections.summary.trim());
   }
 
+  if (parsed.sections.performance?.trim()) {
+    parts.push("Narrative Performance");
+    parts.push(parsed.sections.performance.trim());
+  }
+
   if (parsed.sections.depth?.trim()) {
     parts.push("Editor’s Notes in Depth");
     parts.push(parsed.sections.depth.trim());
@@ -488,7 +499,7 @@ function normalizeAssistantCopyText(content: string) {
 
 function getSectionKind(
   line: string
-): "summary" | "depth" | "rewrite" | "debrief" | null {
+): "summary" | "performance" | "depth" | "rewrite" | "debrief" | null {
   const t = normalizeSectionLabel(line);
 
   if (
@@ -497,6 +508,10 @@ function getSectionKind(
     t === "editor summary"
   ) {
     return "summary";
+  }
+
+  if (t === "narrative performance") {
+    return "performance";
   }
 
   if (
@@ -527,7 +542,7 @@ function getSectionKind(
 function parseStructuredMR(content: string) {
   const lines = content.split(/\r?\n/);
 
-  type Kind = "summary" | "depth" | "rewrite" | "debrief";
+  type Kind = "summary" | "performance" | "depth" | "rewrite" | "debrief";
   const sections: Partial<Record<Kind, string>> = {};
   const order: Kind[] = [];
 
@@ -558,6 +573,7 @@ function parseStructuredMR(content: string) {
 
   const hasStructured =
     Boolean(sections.summary) ||
+    Boolean(sections.performance) ||
     Boolean(sections.depth) ||
     Boolean(sections.rewrite) ||
     Boolean(sections.debrief);
@@ -794,27 +810,74 @@ function StructuredAssistantMessage({
   const [copiedRewriteKey, setCopiedRewriteKey] = useState<string | null>(null);
   const [rewrites, setRewrites] = useState<RewriteVariant[]>([]);
   const [isGeneratingAlternate, setIsGeneratingAlternate] = useState(false);
+  const [activeLightboxIndex, setActiveLightboxIndex] = useState<number | null>(
+    null
+  );
 
   const summary = sections.summary?.trim();
+  const performance = useMemo(
+    () =>
+      sections.performance
+        ? parseNarrativePerformance(sections.performance)
+        : null,
+    [sections.performance]
+  );
   const depth = sections.depth?.trim();
   const rewrite = sections.rewrite?.trim();
   const debrief = sections.debrief?.trim();
-  const displayImages =
-    sourceImages.length > 0
-      ? sourceImages
-      : sourceImageData.map((dataUrl, index) => ({
-          id: `legacy-image-${index}`,
-          type: "image" as const,
-          title: `Image ${index + 1}`,
-          dataUrl,
-          order: index,
-        }));
+  const displayImages = useMemo<SourceImage[]>(
+    () =>
+      sourceImages.length > 0
+        ? sourceImages
+        : sourceImageData.map((dataUrl, index) => ({
+            id: `legacy-image-${index}`,
+            type: "image" as const,
+            title: `Image ${index + 1}`,
+            dataUrl,
+            order: index,
+          })),
+    [sourceImageData, sourceImages]
+  );
+  const orderedViewportImages = useMemo(
+    () =>
+      displayImages
+        .filter((image) => image.role === "viewport")
+        .sort((left, right) => left.order - right.order),
+    [displayImages]
+  );
+  const lightboxImages =
+    orderedViewportImages.length > 0 ? orderedViewportImages : displayImages;
+  const openImage = useCallback(
+    (image: SourceImage) => {
+      const index = lightboxImages.findIndex(
+        (candidate) => candidate.id === image.id
+      );
+      if (index >= 0) setActiveLightboxIndex(index);
+    },
+    [lightboxImages]
+  );
+  const openViewport = useCallback(
+    (viewportNumber: number) => {
+      const image = getViewportImageByNumber(
+        orderedViewportImages,
+        viewportNumber
+      );
+      if (image) openImage(image);
+    },
+    [openImage, orderedViewportImages]
+  );
+  const closeLightbox = useCallback(() => setActiveLightboxIndex(null), []);
+  const changeLightboxImage = useCallback(
+    (index: number) => setActiveLightboxIndex(index),
+    []
+  );
   useEffect(() => {
     setShowRewrite(false);
     setShowRewriteButton(false);
     setRewriteState("idle");
     setCopiedRewriteKey(null);
     setIsGeneratingAlternate(false);
+    setActiveLightboxIndex(null);
 
     if (rewrite) {
       setRewrites([makeRewriteVariant(rewrite, 0)]);
@@ -915,6 +978,7 @@ ${cadenceInstruction(cadence)}`;
           }
         : {
             mode: "general",
+            requestKind: "alternate-rewrite",
             input: sourceText,
             context: alternateInstruction,
             constraints: {},
@@ -985,7 +1049,11 @@ ${cadenceInstruction(cadence)}`;
           ) : null}
           {displayImages.length > 0 ? (
             <div className="mb-5">
-              <SourceImageStrip images={displayImages} compact />
+              <SourceImageStrip
+                images={displayImages}
+                compact
+                onOpenImage={openImage}
+              />
             </div>
           ) : null}
 
@@ -1024,6 +1092,14 @@ ${cadenceInstruction(cadence)}`;
             </div>
           ) : null}
         </section>
+      ) : null}
+
+      {performance ? (
+        <NarrativePerformancePanel
+          performance={performance}
+          images={orderedViewportImages}
+          onOpenViewport={openViewport}
+        />
       ) : null}
 
       {depth ? (
@@ -1179,6 +1255,13 @@ ${cadenceInstruction(cadence)}`;
           <div className="mt-3">{renderMR(debrief)}</div>
         </section>
       ) : null}
+
+      <ImageLightbox
+        images={lightboxImages}
+        activeIndex={activeLightboxIndex}
+        onChange={changeLightboxImage}
+        onClose={closeLightbox}
+      />
     </div>
   );
 }
@@ -1199,45 +1282,85 @@ function parseCommand(raw: string): { mode: "general" | "mr_heresy"; content: st
 function SourceImageStrip({
   images,
   compact = false,
+  onOpenImage,
 }: {
   images: SourceImage[];
   compact?: boolean;
+  onOpenImage?: (image: SourceImage) => void;
 }) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const orderedImages = useMemo(
+    () =>
+      images.some((image) => image.role === "viewport")
+        ? [...images].sort((left, right) => left.order - right.order)
+        : images,
+    [images]
+  );
+  const closeLightbox = useCallback(() => setActiveIndex(null), []);
+  const changeLightboxImage = useCallback(
+    (index: number) => setActiveIndex(index),
+    []
+  );
+
   return (
-    <div className={compact ? "flex flex-wrap gap-3" : "flex gap-2 overflow-x-auto pb-1"}>
-      {images.map((image, index) => (
-        <figure key={image.id} className={compact ? "w-24" : "shrink-0"}>
-          <img
-            src={image.dataUrl}
-            alt={image.altText || image.title || `Image ${index + 1}`}
-            title={image.altText}
-            className={
-              compact
-                ? "h-20 w-24 rounded-lg border border-neutral-700 object-cover"
-                : "h-24 w-24 rounded-xl border border-neutral-800 object-cover"
-            }
-          />
-          <figcaption
-            className={
-              compact
-                ? "mt-1 text-center text-[10px] uppercase tracking-wider text-neutral-500"
-                : "mt-1 max-w-24 truncate text-center text-[11px] text-neutral-500"
-            }
-            title={image.altText}
-          >
-            {image.role === "viewport"
-              ? `Viewport ${index + 1} of ${images.length}`
-              : images.length === 1
-                ? compact
-                  ? "Image analysed"
-                  : "Image 1"
-                : compact
-                  ? `Image ${index + 1} of ${images.length}`
-                  : `Image ${index + 1}`}
-          </figcaption>
-        </figure>
-      ))}
-    </div>
+    <>
+      <div className={compact ? "flex flex-wrap gap-3" : "flex gap-2 overflow-x-auto pb-1"}>
+        {orderedImages.map((image, index) => (
+          <figure key={image.id} className={compact ? "w-24" : "shrink-0"}>
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenImage) onOpenImage(image);
+                else setActiveIndex(index);
+              }}
+              className="block rounded-xl text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C6A75A]"
+              aria-label={`Open ${
+                image.role === "viewport"
+                  ? `viewport ${index + 1}`
+                  : `image ${index + 1}`
+              }`}
+            >
+              <img
+                src={image.dataUrl}
+                alt={image.altText || image.title || `Image ${index + 1}`}
+                title={image.altText}
+                className={
+                  compact
+                    ? "h-20 w-24 rounded-lg border border-neutral-700 object-cover transition hover:border-[#C6A75A]"
+                    : "h-24 w-24 rounded-xl border border-neutral-800 object-cover transition hover:border-[#C6A75A]"
+                }
+              />
+            </button>
+            <figcaption
+              className={
+                compact
+                  ? "mt-1 text-center text-[10px] uppercase tracking-wider text-neutral-500"
+                  : "mt-1 max-w-24 truncate text-center text-[11px] text-neutral-500"
+              }
+              title={image.altText}
+            >
+              {image.role === "viewport"
+                ? `Viewport ${index + 1} of ${orderedImages.length}`
+                : orderedImages.length === 1
+                  ? compact
+                    ? "Image analysed"
+                    : "Image 1"
+                  : compact
+                    ? `Image ${index + 1} of ${orderedImages.length}`
+                    : `Image ${index + 1}`}
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+      {!onOpenImage ? (
+        <ImageLightbox
+          images={orderedImages}
+          activeIndex={activeIndex}
+          onChange={changeLightboxImage}
+          onClose={closeLightbox}
+        />
+      ) : null}
+    </>
   );
 }
 async function fileToBase64(file: File): Promise<string> {

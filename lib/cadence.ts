@@ -37,5 +37,5 @@ ${rhythm}
 Cadence governs prose rhythm only. It does not grant permission to compress,
 omit, summarise, add, reorder, restructure, or otherwise change substantive
 content beyond changes already required by the diagnosis. Do not let Cadence
-alter the Executive Summary or Diagnosis in Depth.`;
+alter the Editor's Summary, Narrative Performance, or Diagnosis in Depth.`;
 }

@@ -31,7 +31,7 @@ test("client persists captured viewports and identifies rendered URL requests", 
   assert.match(app, /setImportedUrl/);
   assert.match(app, /urlSourceImages = source\.images/);
   assert.match(app, /sourceMode: sourceIdentity\?\.type === "url" \? "rendered-url"/);
-  assert.match(app, /Viewport \$\{index \+ 1\} of \$\{images\.length\}/);
+  assert.match(app, /Viewport \$\{index \+ 1\} of \$\{orderedImages\.length\}/);
 });
 
 test("URL submission enters processing synchronously and scopes results by run ID", () => {

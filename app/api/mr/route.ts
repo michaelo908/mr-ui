@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { cadenceInstruction, type CadenceMode } from "@/lib/cadence";
 
@@ -31,16 +32,17 @@ CRITICAL BEHAVIOUR:
   answer clearly and completely, then stop. Do NOT prompt them to paste text unless they explicitly signal intent.
 
 OUTPUT CONTRACT (MANDATORY WHEN TEXT IS PROVIDED):
-When the user has pasted text for diagnosis, output EXACTLY these four sections, in this exact order, using Markdown headings exactly as shown:
+When the user has pasted text for diagnosis, output EXACTLY these five sections, in this exact order, using Markdown headings exactly as shown:
 
-## Executive Summary
+## Editor's Summary
+## Narrative Performance
 ## Diagnosis in Depth
 ## Rewrite
 ## Rewrite Debrief
 
 SECTION RULES:
 
-## Executive Summary
+## Editor's Summary
 - Maximum 5 bullet points.
 - Bullet format MUST be exactly:
   • **<2–4 word descriptive heading>:** <1–2 short sentences>
@@ -48,6 +50,25 @@ SECTION RULES:
 - Each bullet max ~30 words after the heading.
 - Focus strictly on structural sequencing, escalation, consequence, and reader-state.
 - No framework terminology, no teaching commentary, no stylistic advice.
+
+## Narrative Performance
+- This is a concise operational consequence of the completed analysis, not a second analysis, scorecard, estimated conversion assessment, or generic advice layer.
+- Do not introduce any substantive finding that is unsupported by the Editor's Summary or Diagnosis in Depth. You may express an operational consequence more directly and concisely than those sections.
+- Include only genuinely supported observations from this allowed set, omitting any that the analysis does not establish:
+  • **Decision Readiness:** <concise analysis-derived observation>
+  • **Effective Narrative Length:** <concise analysis-derived observation>
+  • **Primary Narrative Drag:** <concise analysis-derived observation>
+  • **Recommended Structure:** <concise analysis-derived observation>
+- Never invent a metric or observation to fill the panel. Do not use numerical scores, generic performance dimensions, projected rewrite scores, current-versus-rewrite comparisons, or estimated conversion performance.
+- Then provide normally 3 concise recommendations. Use up to 5 only for unusually complex material with distinct, material issues that cannot responsibly be combined.
+- Each recommendation must be a single bullet using exactly one of these prefixes:
+  • 🟢 **Protect** —
+  • 🟡 **Consolidate** —
+  • 🔴 **Reduce** —
+  • 🔵 **Introduce** —
+- Every recommendation must contain exactly three concise sentences in this order: the observed condition in the source; the consequence for the reader; the prescribed action.
+- Recommendations must be specific to the analysed material. Use 🔵 Introduce only where the completed analysis establishes that something genuinely absent is required.
+- For rendered URL analyses, cite the exact relevant viewport as "Viewport N" or "Viewports N and N" whenever the finding is visual or positional. Never cite a viewport that does not support the finding.
 
 ## Diagnosis in Depth
 - Full detailed diagnostic (Multirrupt v1.8 style): comprehensive, multi-point, high-signal.
@@ -65,7 +86,7 @@ The rewrite MUST be constructed from the diagnosis above and MUST produce MATERI
 ## Rewrite Debrief
 - Always visible.
 - Max 5 bullets.
-- Same bullet format as Executive Summary:
+- Same bullet format as Editor's Summary:
   • **<2–4 word descriptive heading>:** <1–2 short sentences>
 - Each bullet must explicitly link a rewrite move to a diagnosed weakness.
 - No teaching. No extra recommendations. Just proof-of-pudding alignment.
@@ -136,6 +157,9 @@ function isContinuationContext(body: any): boolean {
   const ctx = typeof body?.context === "string" ? body.context.toLowerCase() : "";
   return (
     ctx.includes("## executive summary") ||
+    ctx.includes("## editor's summary") ||
+    ctx.includes("## editor’s summary") ||
+    ctx.includes("## narrative performance") ||
     ctx.includes("## diagnosis in depth") ||
     ctx.includes("## rewrite") ||
     ctx.includes("## rewrite debrief") ||
@@ -166,6 +190,7 @@ export async function handleMrRequest(req: Request) {
   }
 
   const heresyMode = isMrHeresyMode(body);
+  const alternateRewrite = body?.requestKind === "alternate-rewrite";
   const cadence: CadenceMode =
     body?.cadence === "sustained" ? "sustained" : "dynamic";
 
@@ -238,7 +263,7 @@ Any extracted page text in the input is supporting readability assistance only. 
     ? combinedOriginalContext
       ? `${MR_HERESY_CHARTER}\n\n${combinedOriginalContext}`
       : MR_HERESY_CHARTER
-    : continuation
+    : alternateRewrite || continuation
       ? combinedOriginalContext
       : combinedOriginalContext
         ? `${MR_DOMAIN_FRAME}\n\n${combinedOriginalContext}`

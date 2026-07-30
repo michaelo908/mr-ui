@@ -8,7 +8,7 @@ test("Dynamic Cadence is limited to rewrite rhythm", () => {
   assert.match(instruction, /APPLY TO REWRITE OUTPUT ONLY/);
   assert.match(instruction, /shorter sentences and paragraphs/);
   assert.match(instruction, /does not grant permission to compress/);
-  assert.match(instruction, /Do not let Cadence\s+alter the Executive Summary/);
+  assert.match(instruction, /Do not let Cadence\s+alter the Editor's Summary/);
 });
 
 test("Sustained Cadence requests traditional long-form rhythm", () => {
