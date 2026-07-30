@@ -49,7 +49,7 @@ test("viewport thumbnails and references share the image lightbox", () => {
   const lightbox = read("components/ImageLightbox.tsx");
 
   assert.match(app, /onOpenImage=\{openImage\}/);
-  assert.match(panel, /Open viewport \$\{viewportNumber\}/);
+  assert.match(panel, /Open viewport \$\{startingViewport\}/);
   assert.match(lightbox, /event\.key === "Escape"/);
   assert.match(lightbox, /event\.key === "ArrowLeft"/);
   assert.match(lightbox, /event\.key === "ArrowRight"/);
@@ -97,6 +97,16 @@ test("the coloured recommendation bullet launches its first evidence viewport", 
   assert.match(panel, /const firstViewport = context\.viewportNumbers\[0\]/);
   assert.match(panel, /Open \$\{recommendation\.action\} recommendation evidence/);
   assert.match(panel, /style=\{\{ color: context\.color \}\}/);
+});
+
+test("inline rendering consumes the canonical viewport reference tokens", () => {
+  const panel = read("components/NarrativePerformancePanel.tsx");
+  const parser = read("lib/narrative-performance.ts");
+
+  assert.match(panel, /parseViewportReferenceTokens\(value\)\.map/);
+  assert.equal(panel.includes("const pattern = /\\b(Viewports?)"), false);
+  assert.match(parser, /export function parseViewportReferenceTokens/);
+  assert.match(parser, /extractViewportNumbers[\s\S]*parseViewportReferenceTokens/);
 });
 
 test("thumbnail launches use neutral inspection mode", () => {

@@ -6,6 +6,7 @@ const {
   buildRecommendationLightboxContext,
   buildRecommendationViewportLaunch,
   getViewportImageByNumber,
+  parseViewportReferenceTokens,
   parseNarrativePerformance,
 } = require("../lib/narrative-performance.ts");
 
@@ -180,4 +181,95 @@ test("expands compact viewport ranges into the complete evidence set", () => {
   assert.deepEqual(extractViewportNumbers("Viewports 2–5 repeat the proof."), [
     2, 3, 4, 5,
   ]);
+});
+
+function referenceTokens(value) {
+  return parseViewportReferenceTokens(value).filter(
+    (token) => token.type === "reference"
+  );
+}
+
+function reconstructedText(value) {
+  return parseViewportReferenceTokens(value)
+    .map((token) => token.text)
+    .join("");
+}
+
+test("tokenises a singular viewport reference without changing its wording", () => {
+  const value = "Viewport 1 establishes the opening promise.";
+  assert.deepEqual(referenceTokens(value), [
+    {
+      type: "reference",
+      text: "1",
+      viewportNumbers: [1],
+      startingViewport: 1,
+    },
+  ]);
+  assert.equal(reconstructedText(value), value);
+});
+
+test("tokenises every item in an Oxford-comma viewport list", () => {
+  const value = "Viewports 3, 5, 6, and 7 repeat the same mechanism.";
+  assert.deepEqual(
+    referenceTokens(value).map((token) => ({
+      text: token.text,
+      viewportNumbers: token.viewportNumbers,
+    })),
+    [
+      { text: "3", viewportNumbers: [3] },
+      { text: "5", viewportNumbers: [5] },
+      { text: "6", viewportNumbers: [6] },
+      { text: "7", viewportNumbers: [7] },
+    ]
+  );
+  assert.equal(reconstructedText(value), value);
+  assert.deepEqual(extractViewportNumbers(value), [3, 5, 6, 7]);
+});
+
+test("tokenises and expands en-dash and hyphen viewport ranges", () => {
+  for (const range of ["2–6", "2-6"]) {
+    const value = `Viewports ${range} carry the evidence.`;
+    assert.deepEqual(referenceTokens(value), [
+      {
+        type: "reference",
+        text: range,
+        viewportNumbers: [2, 3, 4, 5, 6],
+        startingViewport: 2,
+      },
+    ]);
+    assert.equal(reconstructedText(value), value);
+  }
+});
+
+test("tokenises and expands to-syntax viewport ranges", () => {
+  const value = "Viewports 2 to 6 carry the evidence.";
+  assert.deepEqual(referenceTokens(value), [
+    {
+      type: "reference",
+      text: "2 to 6",
+      viewportNumbers: [2, 3, 4, 5, 6],
+      startingViewport: 2,
+    },
+  ]);
+  assert.equal(reconstructedText(value), value);
+});
+
+test("tokenises mixed explicit and ranged viewport syntax", () => {
+  const value = "Viewports 2 and 4–7 create the drag.";
+  assert.deepEqual(referenceTokens(value), [
+    {
+      type: "reference",
+      text: "2",
+      viewportNumbers: [2],
+      startingViewport: 2,
+    },
+    {
+      type: "reference",
+      text: "4–7",
+      viewportNumbers: [4, 5, 6, 7],
+      startingViewport: 4,
+    },
+  ]);
+  assert.equal(reconstructedText(value), value);
+  assert.deepEqual(extractViewportNumbers(value), [2, 4, 5, 6, 7]);
 });

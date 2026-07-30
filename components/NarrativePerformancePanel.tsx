@@ -1,11 +1,11 @@
 "use client";
 
-import type { ReactNode } from "react";
 import {
   actionEmoji,
   buildRecommendationLightboxContext,
   buildRecommendationViewportLaunch,
   getViewportImageByNumber,
+  parseViewportReferenceTokens,
   type NarrativePerformance,
   type NarrativePerformanceRecommendation,
   type NarrativePerformanceViewportLaunch,
@@ -21,67 +21,51 @@ function renderViewportReferences(
     launch: NarrativePerformanceViewportLaunch
   ) => void
 ) {
-  const parts: ReactNode[] = [];
-  const pattern =
-    /\b(Viewports?)\s+(\d+(?:\s*(?:,|and|&|[-–—])\s*\d+)*)/gi;
-  let cursor = 0;
-  let match: RegExpExecArray | null;
+  return parseViewportReferenceTokens(value).map((token, index) => {
+    if (token.type === "text") {
+      return <span key={`text-${index}`}>{token.text}</span>;
+    }
 
-  while ((match = pattern.exec(value)) !== null) {
-    parts.push(value.slice(cursor, match.index));
-    parts.push(<span key={`label-${match.index}`}>{match[1]} </span>);
-
-    const numberPattern = /\d+/g;
-    let numberCursor = 0;
-    let numberMatch: RegExpExecArray | null;
-    while ((numberMatch = numberPattern.exec(match[2])) !== null) {
-      parts.push(
-        <span key={`separator-${match.index}-${numberMatch.index}`}>
-          {match[2].slice(numberCursor, numberMatch.index)}
-        </span>
-      );
-      const viewportNumber = Number(numberMatch[0]);
-      const image = getViewportImageByNumber(images, viewportNumber);
-      const launch = recommendation
+    const validViewportNumbers = token.viewportNumbers.filter(
+      (viewportNumber) =>
+        getViewportImageByNumber(images, viewportNumber) !== null
+    );
+    const startingViewport = validViewportNumbers[0];
+    const launch =
+      recommendation && startingViewport !== undefined
         ? buildRecommendationViewportLaunch(
             recommendation,
             images,
-            viewportNumber
+            startingViewport
           )
         : null;
-      parts.push(
-        image ? (
-          <button
-            key={`viewport-${match.index}-${viewportNumber}`}
-            type="button"
-            onClick={() => {
-              if (launch && onOpenRecommendation) {
-                onOpenRecommendation(launch);
-              } else {
-                onOpenViewport(viewportNumber);
-              }
-            }}
-            className="font-semibold text-[#C6A75A] underline decoration-[#C6A75A]/60 underline-offset-4 hover:text-amber-200"
-            aria-label={`Open viewport ${viewportNumber}`}
-          >
-            {viewportNumber}
-          </button>
-        ) : (
-          <span key={`viewport-${match.index}-${viewportNumber}`}>
-            {viewportNumber}
-          </span>
-        )
-      );
-      numberCursor = numberMatch.index + numberMatch[0].length;
-    }
-    parts.push(
-      <span key={`tail-${match.index}`}>{match[2].slice(numberCursor)}</span>
-    );
-    cursor = match.index + match[0].length;
-  }
 
-  parts.push(value.slice(cursor));
-  return parts;
+    if (startingViewport === undefined) {
+      return <span key={`reference-${index}`}>{token.text}</span>;
+    }
+
+    return (
+      <button
+        key={`reference-${index}`}
+        type="button"
+        onClick={() => {
+          if (launch && onOpenRecommendation) {
+            onOpenRecommendation(launch);
+          } else {
+            onOpenViewport(startingViewport);
+          }
+        }}
+        className="font-semibold text-[#C6A75A] underline decoration-[#C6A75A]/60 underline-offset-4 hover:text-amber-200"
+        aria-label={
+          validViewportNumbers.length === 1
+            ? `Open viewport ${startingViewport}`
+            : `Open viewports ${validViewportNumbers.join(", ")} starting at viewport ${startingViewport}`
+        }
+      >
+        {token.text}
+      </button>
+    );
+  });
 }
 
 export default function NarrativePerformancePanel({

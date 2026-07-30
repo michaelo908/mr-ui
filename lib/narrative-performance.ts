@@ -118,36 +118,112 @@ export function parseNarrativePerformance(
   return { observations, recommendations };
 }
 
-export function extractViewportNumbers(value: string): number[] {
-  const numbers: number[] = [];
-  const referencePattern =
-    /\bViewports?\s+(\d+(?:\s*(?:,|and|&|[-–—])\s*\d+)*)/gi;
+export type ViewportReferenceToken =
+  | { type: "text"; text: string }
+  | {
+      type: "reference";
+      text: string;
+      viewportNumbers: number[];
+      startingViewport: number;
+    };
 
-  for (const match of value.matchAll(referencePattern)) {
-    const rangeMatch = match[1].match(/^(\d+)\s*[-–—]\s*(\d+)$/);
-    if (rangeMatch) {
-      const start = Number(rangeMatch[1]);
-      const end = Number(rangeMatch[2]);
-      if (start > 0 && end >= start && end - start <= 16) {
-        for (let viewportNumber = start; viewportNumber <= end; viewportNumber += 1) {
-          if (!numbers.includes(viewportNumber)) numbers.push(viewportNumber);
-        }
-        continue;
-      }
-    }
-
-    for (const numberMatch of match[1].matchAll(/\d+/g)) {
-      const viewportNumber = Number(numberMatch[0]);
-      if (
-        Number.isSafeInteger(viewportNumber) &&
-        viewportNumber > 0 &&
-        !numbers.includes(viewportNumber)
-      ) {
-        numbers.push(viewportNumber);
-      }
-    }
+function expandViewportReference(value: string) {
+  const rangeMatch = value.match(
+    /^(\d+)\s*(?:[-–—]|to)\s*(\d+)$/i
+  );
+  if (!rangeMatch) {
+    const viewportNumber = Number(value);
+    return Number.isSafeInteger(viewportNumber) && viewportNumber > 0
+      ? [viewportNumber]
+      : [];
   }
 
+  const start = Number(rangeMatch[1]);
+  const end = Number(rangeMatch[2]);
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(end) ||
+    start < 1 ||
+    end < start ||
+    end - start > 15
+  ) {
+    return [];
+  }
+
+  return Array.from(
+    { length: end - start + 1 },
+    (_, index) => start + index
+  );
+}
+
+export function parseViewportReferenceTokens(
+  value: string
+): ViewportReferenceToken[] {
+  const tokens: ViewportReferenceToken[] = [];
+  const phrasePattern =
+    /\bViewports?\s+\d+(?:\s*(?:[-–—]|to)\s*\d+)?(?:\s*,\s*(?:and\s+)?\d+(?:\s*(?:[-–—]|to)\s*\d+)?|\s+(?:and|&)\s+\d+(?:\s*(?:[-–—]|to)\s*\d+)?)*/gi;
+  let cursor = 0;
+
+  for (const phraseMatch of value.matchAll(phrasePattern)) {
+    const phraseIndex = phraseMatch.index ?? 0;
+    if (phraseIndex > cursor) {
+      tokens.push({ type: "text", text: value.slice(cursor, phraseIndex) });
+    }
+
+    const phrase = phraseMatch[0];
+    const prefixMatch = phrase.match(/^Viewports?\s+/i);
+    const prefixLength = prefixMatch?.[0].length ?? 0;
+    if (prefixLength > 0) {
+      tokens.push({ type: "text", text: phrase.slice(0, prefixLength) });
+    }
+
+    const expression = phrase.slice(prefixLength);
+    const itemPattern = /\d+(?:\s*(?:[-–—]|to)\s*\d+)?/gi;
+    let expressionCursor = 0;
+    for (const itemMatch of expression.matchAll(itemPattern)) {
+      const itemIndex = itemMatch.index ?? 0;
+      if (itemIndex > expressionCursor) {
+        tokens.push({
+          type: "text",
+          text: expression.slice(expressionCursor, itemIndex),
+        });
+      }
+      const viewportNumbers = expandViewportReference(itemMatch[0]);
+      if (viewportNumbers.length > 0) {
+        tokens.push({
+          type: "reference",
+          text: itemMatch[0],
+          viewportNumbers,
+          startingViewport: viewportNumbers[0],
+        });
+      } else {
+        tokens.push({ type: "text", text: itemMatch[0] });
+      }
+      expressionCursor = itemIndex + itemMatch[0].length;
+    }
+    if (expressionCursor < expression.length) {
+      tokens.push({
+        type: "text",
+        text: expression.slice(expressionCursor),
+      });
+    }
+    cursor = phraseIndex + phrase.length;
+  }
+
+  if (cursor < value.length) {
+    tokens.push({ type: "text", text: value.slice(cursor) });
+  }
+  return tokens.length > 0 ? tokens : [{ type: "text", text: value }];
+}
+
+export function extractViewportNumbers(value: string): number[] {
+  const numbers: number[] = [];
+  for (const token of parseViewportReferenceTokens(value)) {
+    if (token.type !== "reference") continue;
+    for (const viewportNumber of token.viewportNumbers) {
+      if (!numbers.includes(viewportNumber)) numbers.push(viewportNumber);
+    }
+  }
   return numbers;
 }
 
