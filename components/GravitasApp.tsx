@@ -47,6 +47,10 @@ import {
 } from "@/lib/narrative-performance";
 import ImageLightbox from "@/components/ImageLightbox";
 import NarrativePerformancePanel from "@/components/NarrativePerformancePanel";
+import {
+  parseTextEvidenceBlocks,
+  type TextEvidenceLaunch,
+} from "@/lib/text-evidence";
 
 type Msg = {
   role: "user" | "assistant";
@@ -822,6 +826,13 @@ function StructuredAssistantMessage({
   const [lightboxContext, setLightboxContext] =
     useState<NarrativePerformanceLightboxContext | null>(null);
   const [isDepthOpen, setIsDepthOpen] = useState(false);
+  const [pendingTextEvidence, setPendingTextEvidence] =
+    useState<TextEvidenceLaunch | null>(null);
+  const [highlightedTextEvidence, setHighlightedTextEvidence] =
+    useState<TextEvidenceLaunch | null>(null);
+  const textEvidenceRefs = useRef(new Map<number, HTMLDivElement>());
+  const textEvidenceHighlightTimeoutRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const summary = sections.summary?.trim();
   const performance = useMemo(
@@ -832,6 +843,10 @@ function StructuredAssistantMessage({
     [sections.performance]
   );
   const depth = sections.depth?.trim();
+  const textEvidenceBlocks = useMemo(
+    () => (depth ? parseTextEvidenceBlocks(depth) : []),
+    [depth]
+  );
   const rewrite = sections.rewrite?.trim();
   const debrief = sections.debrief?.trim();
   const displayImages = useMemo<SourceImage[]>(
@@ -910,6 +925,55 @@ function StructuredAssistantMessage({
     (index: number) => setActiveLightboxIndex(index),
     []
   );
+  const openTextEvidence = useCallback((launch: TextEvidenceLaunch) => {
+    setIsDepthOpen(true);
+    setPendingTextEvidence(launch);
+  }, []);
+
+  useEffect(() => {
+    if (!isDepthOpen || !pendingTextEvidence) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const target = textEvidenceRefs.current.get(
+        pendingTextEvidence.evidenceNumber
+      );
+      if (!target) {
+        setPendingTextEvidence(null);
+        return;
+      }
+
+      const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      ).matches;
+      target.scrollIntoView({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "center",
+      });
+      target.focus({ preventScroll: true });
+      setHighlightedTextEvidence(pendingTextEvidence);
+      setPendingTextEvidence(null);
+
+      if (textEvidenceHighlightTimeoutRef.current) {
+        clearTimeout(textEvidenceHighlightTimeoutRef.current);
+      }
+      textEvidenceHighlightTimeoutRef.current = setTimeout(() => {
+        setHighlightedTextEvidence(null);
+        textEvidenceHighlightTimeoutRef.current = null;
+      }, 1800);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [isDepthOpen, pendingTextEvidence]);
+
+  useEffect(
+    () => () => {
+      if (textEvidenceHighlightTimeoutRef.current) {
+        clearTimeout(textEvidenceHighlightTimeoutRef.current);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     setShowRewrite(false);
     setShowRewriteButton(false);
@@ -918,6 +982,10 @@ function StructuredAssistantMessage({
     setIsGeneratingAlternate(false);
     setActiveLightboxIndex(null);
     setLightboxContext(null);
+    setIsDepthOpen(false);
+    setPendingTextEvidence(null);
+    setHighlightedTextEvidence(null);
+    textEvidenceRefs.current.clear();
 
     if (rewrite) {
       setRewrites([makeRewriteVariant(rewrite, 0)]);
@@ -1141,6 +1209,12 @@ ${cadenceInstruction(cadence)}`;
           images={orderedViewportImages}
           onOpenViewport={openViewport}
           onOpenRecommendation={openRecommendationViewport}
+          textEvidenceBlocks={
+            displayImages.length === 0 ? textEvidenceBlocks : []
+          }
+          onOpenTextEvidence={
+            displayImages.length === 0 ? openTextEvidence : undefined
+          }
         />
       ) : null}
 
@@ -1168,7 +1242,86 @@ ${cadenceInstruction(cadence)}`;
             </div>
           </summary>
           <div className="border-t border-neutral-800 px-4 py-4">
-            {renderMR(depth)}
+            {textEvidenceBlocks.length > 0 && displayImages.length === 0 ? (
+              <div className="space-y-3">
+                {textEvidenceBlocks.map((block) => {
+                  const highlight =
+                    highlightedTextEvidence?.evidenceNumber === block.number
+                      ? highlightedTextEvidence
+                      : null;
+                  return (
+                    <div
+                      key={block.id}
+                      id={block.id}
+                      ref={(element) => {
+                        if (element) {
+                          textEvidenceRefs.current.set(block.number, element);
+                        } else {
+                          textEvidenceRefs.current.delete(block.number);
+                        }
+                      }}
+                      tabIndex={-1}
+                      aria-label={`Evidence ${block.number}`}
+                      className={classNames(
+                        "scroll-mt-24 rounded-xl border px-3 py-2 outline-none transition-[border-color,background-color,box-shadow] duration-700",
+                        highlight
+                          ? "gravitas-text-evidence-highlight"
+                          : "border-transparent bg-transparent"
+                      )}
+                      style={
+                        highlight
+                          ? ({
+                              borderColor: highlight.color,
+                              backgroundColor: `color-mix(in srgb, ${highlight.color} 9%, transparent)`,
+                              "--evidence-color": highlight.color,
+                            } as React.CSSProperties)
+                          : undefined
+                      }
+                    >
+                      <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">
+                        Evidence {block.number}
+                      </div>
+                      {renderMR(block.content)}
+                    </div>
+                  );
+                })}
+                <style jsx>{`
+                  .gravitas-text-evidence-highlight {
+                    animation: gravitas-evidence-emphasis 1.35s ease-out 1;
+                  }
+
+                  @keyframes gravitas-evidence-emphasis {
+                    0% {
+                      box-shadow: 0 0 0 0
+                        color-mix(
+                          in srgb,
+                          var(--evidence-color) 32%,
+                          transparent
+                        );
+                    }
+                    45% {
+                      box-shadow: 0 0 0 4px
+                        color-mix(
+                          in srgb,
+                          var(--evidence-color) 14%,
+                          transparent
+                        );
+                    }
+                    100% {
+                      box-shadow: 0 0 0 0 transparent;
+                    }
+                  }
+
+                  @media (prefers-reduced-motion: reduce) {
+                    .gravitas-text-evidence-highlight {
+                      animation: none;
+                    }
+                  }
+                `}</style>
+              </div>
+            ) : (
+              renderMR(depth)
+            )}
           </div>
         </details>
       ) : null}

@@ -12,6 +12,13 @@ import {
   type NarrativePerformanceViewportLaunch,
 } from "@/lib/narrative-performance";
 import type { SourceImage } from "@/lib/sources";
+import {
+  buildTextEvidenceLaunch,
+  extractTextEvidenceNumbers,
+  stripTextEvidenceReference,
+  type TextEvidenceBlock,
+  type TextEvidenceLaunch,
+} from "@/lib/text-evidence";
 
 function renderViewportReferences(
   value: string,
@@ -78,6 +85,8 @@ export default function NarrativePerformancePanel({
   images,
   onOpenViewport,
   onOpenRecommendation,
+  textEvidenceBlocks = [],
+  onOpenTextEvidence,
 }: {
   performance: NarrativePerformance;
   images: SourceImage[];
@@ -85,6 +94,8 @@ export default function NarrativePerformancePanel({
   onOpenRecommendation: (
     launch: NarrativePerformanceViewportLaunch
   ) => void;
+  textEvidenceBlocks?: TextEvidenceBlock[];
+  onOpenTextEvidence?: (launch: TextEvidenceLaunch) => void;
 }) {
   return (
     <section
@@ -133,6 +144,25 @@ export default function NarrativePerformancePanel({
                     images,
                     firstViewport
                   );
+            const availableTextEvidence = new Set(
+              textEvidenceBlocks.map((block) => block.number)
+            );
+            const textEvidenceNumbers = extractTextEvidenceNumbers(
+              recommendation.body
+            ).filter((number) => availableTextEvidence.has(number));
+            const firstTextEvidenceLaunch =
+              textEvidenceNumbers[0] === undefined
+                ? null
+                : buildTextEvidenceLaunch(
+                    recommendation,
+                    textEvidenceBlocks,
+                    textEvidenceNumbers[0],
+                    context.color
+                  );
+            const recommendationBody =
+              textEvidenceNumbers.length > 0
+                ? stripTextEvidenceReference(recommendation.body)
+                : recommendation.body;
             return (
               <div
                 key={`${recommendation.action}-${index}`}
@@ -141,14 +171,18 @@ export default function NarrativePerformancePanel({
                 <p className="text-sm leading-6 text-neutral-200">
                   <button
                     type="button"
-                    disabled={!bulletLaunch}
+                    disabled={!bulletLaunch && !firstTextEvidenceLaunch}
                     onClick={() => {
-                      if (bulletLaunch) onOpenRecommendation(bulletLaunch);
+                      if (bulletLaunch) {
+                        onOpenRecommendation(bulletLaunch);
+                      } else if (firstTextEvidenceLaunch && onOpenTextEvidence) {
+                        onOpenTextEvidence(firstTextEvidenceLaunch);
+                      }
                     }}
                     className="rounded font-semibold underline-offset-4 hover:underline disabled:cursor-default disabled:no-underline"
                     style={{ color: context.color }}
                     aria-label={
-                      bulletLaunch
+                      bulletLaunch || firstTextEvidenceLaunch
                         ? `Open ${recommendation.action} recommendation evidence`
                         : undefined
                     }
@@ -157,12 +191,47 @@ export default function NarrativePerformancePanel({
                   </button>
                   <span aria-hidden="true"> — </span>
                   {renderViewportReferences(
-                    recommendation.body,
+                    recommendationBody,
                     images,
                     onOpenViewport,
                     recommendation,
                     onOpenRecommendation
                   )}
+                  {textEvidenceNumbers.length > 0 && onOpenTextEvidence ? (
+                    <span className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-neutral-400">
+                      <span className="font-semibold">Evidence:</span>
+                      {textEvidenceNumbers.map((number, evidenceIndex) => {
+                        const launch = buildTextEvidenceLaunch(
+                          recommendation,
+                          textEvidenceBlocks,
+                          number,
+                          context.color
+                        );
+                        return (
+                          <span
+                            key={`${recommendation.action}-evidence-${number}`}
+                            className="inline-flex items-center gap-1.5"
+                          >
+                            {evidenceIndex > 0 ? (
+                              <span aria-hidden="true">·</span>
+                            ) : null}
+                            <button
+                              type="button"
+                              disabled={!launch}
+                              onClick={() => {
+                                if (launch) onOpenTextEvidence(launch);
+                              }}
+                              className="rounded px-1 font-semibold underline decoration-current/60 underline-offset-4 hover:bg-white/5 disabled:no-underline"
+                              style={{ color: context.color }}
+                              aria-label={`Show text evidence ${number} for ${recommendation.action}`}
+                            >
+                              {number}
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </span>
+                  ) : null}
                 </p>
               </div>
             );

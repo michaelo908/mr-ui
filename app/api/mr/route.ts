@@ -70,10 +70,14 @@ SECTION RULES:
 - Every recommendation must contain exactly three concise sentences in this order: the observed condition in the source; the consequence for the reader; the prescribed action.
 - Recommendations must be specific to the analysed material. Use 🔵 Introduce only where the completed analysis establishes that something genuinely absent is required.
 - For rendered URL analyses, cite the exact relevant viewport as "Viewport N" or "Viewports N and N" whenever the finding is visual or positional. Never cite a viewport that does not support the finding.
+- For plain-text analyses only, end every recommendation with "Evidence: **N · N**", referencing the exact numbered evidence blocks in Editor's Notes in Depth that support it. Cite every material supporting block and no unsupported block. Do not use paragraph numbers.
 
 ## Diagnosis in Depth
 - Full detailed diagnostic (Multirrupt v1.8 style): comprehensive, multi-point, high-signal.
 - This section can be long. It proves competence.
+- For plain-text analyses only, divide this section into the smallest coherent evidence blocks that preserve contextual understanding: a paragraph, consecutive connected paragraphs, a heading with its associated content, a list, a quote, or another naturally coherent narrative unit.
+- Put a machine-readable marker on its own line immediately before every plain-text evidence block, using exactly "[[Evidence: N]]". Number blocks sequentially from 1 in report order. The marker is structural metadata and must not be discussed in the prose.
+- Each plain-text recommendation's Evidence references must use this same block numbering. Never create a second numbering scheme.
 
 ## Rewrite (CRITICAL: MUST BE A REAL REWRITE)
 The rewrite MUST be constructed from the diagnosis above and MUST produce MATERIAL CHANGE:
