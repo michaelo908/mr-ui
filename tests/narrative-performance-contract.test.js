@@ -103,7 +103,9 @@ test("inline rendering consumes the canonical viewport reference tokens", () => 
   const panel = read("components/NarrativePerformancePanel.tsx");
   const parser = read("lib/narrative-performance.ts");
 
-  assert.match(panel, /parseViewportReferenceTokens\(value\)\.map/);
+  assert.match(panel, /const tokens = parseViewportReferenceTokens\(value\)/);
+  assert.match(panel, /extractViewportNumbersFromTokens\(tokens\)/);
+  assert.match(panel, /return tokens\.map/);
   assert.equal(panel.includes("const pattern = /\\b(Viewports?)"), false);
   assert.match(parser, /export function parseViewportReferenceTokens/);
   assert.match(parser, /extractViewportNumbers[\s\S]*parseViewportReferenceTokens/);

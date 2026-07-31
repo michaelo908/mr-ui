@@ -4,9 +4,15 @@ import { handleMrRequest } from "@/app/api/mr/route";
 import {
   createJumpInToken,
   isJumpInTokenExpired,
+  isJumpInTokenResetEligible,
   JUMP_IN_COOKIE_NAME,
   readJumpInToken,
 } from "@/lib/jump-in-server";
+import {
+  JUMP_IN_MAX_PASTED_WORDS,
+  JUMP_IN_MAX_URL_VIEWPORTS,
+  JUMP_IN_RESET_MS,
+} from "@/lib/jump-in";
 
 export async function POST(req: Request) {
   const cookieStore = await cookies();
@@ -21,7 +27,10 @@ export async function POST(req: Request) {
       ? requestedSessionId
       : null;
 
-  if (existing && isJumpInTokenExpired(existing, now)) {
+  const resetEligible =
+    existing && isJumpInTokenResetEligible(existing, now);
+
+  if (existing && isJumpInTokenExpired(existing, now) && !resetEligible) {
     console.log("Jump In analytics", {
       event: "session_expired",
       sessionId: existing.sessionId,
@@ -32,15 +41,19 @@ export async function POST(req: Request) {
     );
   }
 
+  const activeExisting = resetEligible ? null : existing;
   const session =
-    existing ?? {
+    activeExisting ?? {
       startedAt: now,
       sessionId: safeRequestedSessionId ?? crypto.randomUUID(),
     };
 
-  const response = await handleMrRequest(req);
+  const response = await handleMrRequest(req, {
+    maxUrlViewports: JUMP_IN_MAX_URL_VIEWPORTS,
+    maxPastedTextWords: JUMP_IN_MAX_PASTED_WORDS,
+  });
 
-  if (!existing) {
+  if (!activeExisting) {
     response.cookies.set(
       JUMP_IN_COOKIE_NAME,
       createJumpInToken(session.startedAt, session.sessionId),
@@ -48,7 +61,7 @@ export async function POST(req: Request) {
         httpOnly: true,
         sameSite: "lax",
         secure: process.env.NODE_ENV === "production",
-        maxAge: 24 * 60 * 60,
+        maxAge: JUMP_IN_RESET_MS / 1000,
         path: "/",
       }
     );

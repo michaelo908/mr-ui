@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { JUMP_IN_DURATION_MS } from "@/lib/jump-in";
+import { JUMP_IN_DURATION_MS, JUMP_IN_RESET_MS } from "@/lib/jump-in";
 
 export const JUMP_IN_COOKIE_NAME = "gravitas_jump_in";
 
@@ -61,4 +61,11 @@ export function readJumpInToken(value?: string): JumpInToken | null {
 
 export function isJumpInTokenExpired(token: JumpInToken, now = Date.now()) {
   return now >= token.startedAt + JUMP_IN_DURATION_MS;
+}
+
+export function isJumpInTokenResetEligible(
+  token: JumpInToken,
+  now = Date.now()
+) {
+  return now >= token.startedAt + JUMP_IN_RESET_MS;
 }

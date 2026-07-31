@@ -5,7 +5,11 @@ const {
   formatJumpInRemaining,
   getJumpInRemainingMs,
   isJumpInExpired,
+  isJumpInResetEligible,
   JUMP_IN_DURATION_MS,
+  JUMP_IN_MAX_PASTED_WORDS,
+  JUMP_IN_MAX_URL_VIEWPORTS,
+  JUMP_IN_RESET_MS,
 } = require("../lib/jump-in.ts");
 
 test("the timer is untouched before the first analysis", () => {
@@ -39,4 +43,21 @@ test("remaining time is formatted for the persistent countdown", () => {
   assert.equal(formatJumpInRemaining(61_000), "1:01");
   assert.equal(formatJumpInRemaining(1), "0:01");
   assert.equal(formatJumpInRemaining(0), "0:00");
+});
+
+test("embedded limits retain the requested product boundaries", () => {
+  assert.equal(JUMP_IN_MAX_URL_VIEWPORTS, 10);
+  assert.equal(JUMP_IN_MAX_PASTED_WORDS, 800);
+});
+
+test("a free session becomes eligible again at exactly seven days", () => {
+  const startedAt = 50_000;
+  assert.equal(
+    isJumpInResetEligible(startedAt, startedAt + JUMP_IN_RESET_MS - 1),
+    false
+  );
+  assert.equal(
+    isJumpInResetEligible(startedAt, startedAt + JUMP_IN_RESET_MS),
+    true
+  );
 });

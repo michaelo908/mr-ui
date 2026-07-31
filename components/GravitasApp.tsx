@@ -26,8 +26,11 @@ import {
   formatJumpInRemaining,
   getJumpInRemainingMs,
   isJumpInExpired,
+  isJumpInResetEligible,
   JUMP_IN_DAY_PASS_URL,
   JUMP_IN_DURATION_MS,
+  JUMP_IN_MAX_PASTED_WORDS,
+  JUMP_IN_MAX_URL_VIEWPORTS,
   JUMP_IN_STORAGE_KEY,
   type JumpInSessionState,
 } from "@/lib/jump-in";
@@ -818,6 +821,7 @@ function StructuredAssistantMessage({
   );
   const [lightboxContext, setLightboxContext] =
     useState<NarrativePerformanceLightboxContext | null>(null);
+  const [isDepthOpen, setIsDepthOpen] = useState(false);
 
   const summary = sections.summary?.trim();
   const performance = useMemo(
@@ -1005,6 +1009,7 @@ ${cadenceInstruction(cadence)}`;
       parsed.mode === "mr_heresy"
         ? {
             mode: "mr_heresy",
+            requestKind: "alternate-rewrite",
             input: " ",
             context: `${alternateInstruction}\n\nApply Multirrupt Mode to the following source:\n\n${sourceText}`,
             constraints: {},
@@ -1140,15 +1145,25 @@ ${cadenceInstruction(cadence)}`;
       ) : null}
 
       {depth ? (
-        <details className="rounded-2xl border border-neutral-800 bg-neutral-900/20">
-          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold marker:hidden">
+        <details
+          open={isDepthOpen}
+          onToggle={(event) => setIsDepthOpen(event.currentTarget.open)}
+          className="rounded-2xl border border-[#C6A75A]/30 bg-neutral-900/30"
+        >
+          <summary
+            aria-expanded={isDepthOpen}
+            className="cursor-pointer list-none px-4 py-4 font-semibold marker:hidden hover:bg-[#C6A75A]/[0.04]"
+          >
             <div className="flex items-center justify-between gap-4">
-              <span style={{ color: MR_GOLD }}>Editor’s Notes in Depth</span>
+              <span className="text-[17px]" style={{ color: MR_GOLD }}>
+                Editor’s Notes in Depth
+              </span>
               <span
-                className="inline-flex items-center gap-1 text-xs uppercase tracking-widest"
+                className="inline-flex items-center gap-1.5 text-sm uppercase tracking-[0.12em]"
                 style={{ color: MR_GOLD }}
               >
-                Click to expand <span aria-hidden="true">▾</span>
+                {isDepthOpen ? "Click to close" : "Click to expand"}{" "}
+                <span aria-hidden="true">{isDepthOpen ? "▴" : "▾"}</span>
               </span>
             </div>
           </summary>
@@ -1753,7 +1768,9 @@ useEffect(() => {
           typeof parsed.sessionId === "string" &&
           (parsed.startedAt === null || typeof parsed.startedAt === "number")
         ) {
-          session = parsed;
+          session = isJumpInResetEligible(parsed.startedAt)
+            ? { sessionId: crypto.randomUUID(), startedAt: null }
+            : parsed;
         }
       } catch {
         // Replace malformed local state below.
@@ -1793,7 +1810,29 @@ useEffect(() => {
   }, [isJumpIn, jumpInSession?.startedAt]);
 
   useEffect(() => {
+    if (
+      !isJumpIn ||
+      !jumpInSession ||
+      !isJumpInResetEligible(jumpInSession.startedAt, jumpInNow)
+    ) {
+      return;
+    }
+
+    const renewedSession: JumpInSessionState = {
+      sessionId: crypto.randomUUID(),
+      startedAt: null,
+    };
+    window.localStorage.setItem(
+      JUMP_IN_STORAGE_KEY,
+      JSON.stringify(renewedSession)
+    );
+    setJumpInSession(renewedSession);
+    setJumpInNow(Date.now());
+  }, [isJumpIn, jumpInNow, jumpInSession]);
+
+  useEffect(() => {
     if (!isJumpIn || !jumpInExpired || !jumpInSession) return;
+    if (isJumpInResetEligible(jumpInSession.startedAt, jumpInNow)) return;
     if (jumpInSession.expiredEventSent) return;
 
     const saved = window.localStorage.getItem(JUMP_IN_STORAGE_KEY);
@@ -1831,7 +1870,7 @@ useEffect(() => {
         sessionId: expiredSession.sessionId,
       }),
     });
-  }, [isJumpIn, jumpInExpired, jumpInSession]);
+  }, [isJumpIn, jumpInExpired, jumpInNow, jumpInSession]);
 
   useEffect(() => {
     scrollToBottom();
@@ -2081,11 +2120,14 @@ if (trialActive && trialEndDate) {
           : null;
 
         if (!source) {
-          const sourceResponse = await fetch("/api/sources/url", {
+          const sourceResponse = await fetch(
+            isJumpIn ? "/api/jump-in/sources/url" : "/api/sources/url",
+            {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ url: urlDraft }),
-          });
+            }
+          );
           const sourceData = (await sourceResponse.json()) as {
             source?: UrlSource;
             error?: string;
@@ -2104,7 +2146,8 @@ if (trialActive && trialEndDate) {
         }
         raw = buildRenderedUrlAnalysisInput(
           source.extractedText,
-          selectedGraviton
+          selectedGraviton,
+          isJumpIn ? JUMP_IN_MAX_URL_VIEWPORTS : MAX_URL_VIEWPORTS
         );
         sourceIdentity = source;
         urlSourceImages = source.images;
@@ -2141,6 +2184,17 @@ const finalInput = gravitonPrefix + raw;
 
     if (raw.length > 30000) {
       alert("That’s a large input. For best results, keep it under 30,000 characters.");
+      return;
+    }
+
+    if (
+      isJumpIn &&
+      inputMode === "text" &&
+      raw.trim().split(/\s+/).filter(Boolean).length > JUMP_IN_MAX_PASTED_WORDS
+    ) {
+      alert(
+        `The free embedded session supports pasted text up to ${JUMP_IN_MAX_PASTED_WORDS} words.`
+      );
       return;
     }
 
@@ -2233,6 +2287,8 @@ if (urlSourceImages.length > 0) {
           imageData,
           cadence,
           sourceMode: sourceIdentity?.type === "url" ? "rendered-url" : undefined,
+          entitlementSourceText:
+            isJumpIn && inputMode === "text" ? raw : undefined,
         }
       : {
           mode: "general",
@@ -2242,6 +2298,8 @@ if (urlSourceImages.length > 0) {
           imageData,
           cadence,
           sourceMode: sourceIdentity?.type === "url" ? "rendered-url" : undefined,
+          entitlementSourceText:
+            isJumpIn && inputMode === "text" ? raw : undefined,
         };
 
     try {
@@ -2763,7 +2821,8 @@ if (urlSourceImages.length > 0) {
         </p>
       ) : null}
       <p className="mt-2 text-xs text-neutral-500">
-        Gravitas renders the page and analyses up to {MAX_URL_VIEWPORTS} ordered
+        Gravitas renders the page and analyses up to{" "}
+        {isJumpIn ? JUMP_IN_MAX_URL_VIEWPORTS : MAX_URL_VIEWPORTS} ordered
         viewports.
         Extracted text is used only to clarify wording that is difficult to read in the captures.
       </p>

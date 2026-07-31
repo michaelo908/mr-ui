@@ -129,9 +129,12 @@ test("URL analysis consistently caps ordered captures at 16 viewports", () => {
   assert.match(sources, /MAX_URL_VIEWPORTS = 16/);
   assert.match(sources, /maxCaptures = MAX_URL_VIEWPORTS/);
   assert.match(capture, /MAX_VIEWPORTS = MAX_URL_VIEWPORTS/);
-  assert.match(apiRoute, /imageData\.length > MAX_URL_VIEWPORTS/);
+  assert.match(apiRoute, /imageData\.length > maxUrlViewports/);
   assert.match(apiRoute, /up to 16/);
-  assert.match(app, /up to \{MAX_URL_VIEWPORTS\} ordered/);
+  assert.match(
+    app,
+    /\{isJumpIn \? JUMP_IN_MAX_URL_VIEWPORTS : MAX_URL_VIEWPORTS\} ordered/
+  );
 });
 
 test("server validates provider output and sanitises capture failures", () => {

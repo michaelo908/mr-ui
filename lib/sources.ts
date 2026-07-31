@@ -119,10 +119,11 @@ export function isNearDuplicateViewport(
 
 export function buildRenderedUrlAnalysisInput(
   extractedText: string,
-  selectedGraviton: string
+  selectedGraviton: string,
+  maxViewports = MAX_URL_VIEWPORTS
 ) {
   const support = extractedText.trim();
-  return `Analyse the ordered rendered webpage viewports (up to ${MAX_URL_VIEWPORTS}) using the selected Gravitas lens: ${selectedGraviton}.
+  return `Analyse the ordered rendered webpage viewports (up to ${maxViewports}) using the selected Gravitas lens: ${selectedGraviton}.
 
 The viewport screenshots are the sole primary evidence for the substantive analysis. Treat them as the visitor's ordered visual experience from the top of the page to the bottom.
 

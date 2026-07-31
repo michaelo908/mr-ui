@@ -160,8 +160,15 @@ export function parseViewportReferenceTokens(
   value: string
 ): ViewportReferenceToken[] {
   const tokens: ViewportReferenceToken[] = [];
+  const referenceItem =
+    String.raw`\d+(?![A-Za-z0-9])(?:\s*(?:[-–—]|to)\s*\d+(?![A-Za-z0-9]))?`;
+  const decoratedReferenceItem =
+    String.raw`[(*_` + "`" + String.raw`]*\s*${referenceItem}[)*_` + "`" + String.raw`]*`;
   const phrasePattern =
-    /\bViewports?\s+\d+(?:\s*(?:[-–—]|to)\s*\d+)?(?:\s*,\s*(?:and\s+)?\d+(?:\s*(?:[-–—]|to)\s*\d+)?|\s+(?:and|&)\s+\d+(?:\s*(?:[-–—]|to)\s*\d+)?)*/gi;
+    new RegExp(
+      String.raw`\bViewports?\s+${decoratedReferenceItem}(?:(?:\s*,\s*(?:and\s+)?|\s+(?:and|&)\s+)${decoratedReferenceItem})*`,
+      "gi"
+    );
   let cursor = 0;
 
   for (const phraseMatch of value.matchAll(phrasePattern)) {
@@ -217,8 +224,14 @@ export function parseViewportReferenceTokens(
 }
 
 export function extractViewportNumbers(value: string): number[] {
+  return extractViewportNumbersFromTokens(parseViewportReferenceTokens(value));
+}
+
+export function extractViewportNumbersFromTokens(
+  tokens: ViewportReferenceToken[]
+): number[] {
   const numbers: number[] = [];
-  for (const token of parseViewportReferenceTokens(value)) {
+  for (const token of tokens) {
     if (token.type !== "reference") continue;
     for (const viewportNumber of token.viewportNumbers) {
       if (!numbers.includes(viewportNumber)) numbers.push(viewportNumber);

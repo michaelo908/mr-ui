@@ -171,7 +171,13 @@ function isContinuationContext(body: any): boolean {
   );
 }
 
-export async function handleMrRequest(req: Request) {
+export async function handleMrRequest(
+  req: Request,
+  options: {
+    maxUrlViewports?: number;
+    maxPastedTextWords?: number;
+  } = {}
+) {
   const MR_API_URL = process.env.MR_API_URL;
   const MR_API_KEY = process.env.MR_API_KEY;
 
@@ -207,17 +213,40 @@ export async function handleMrRequest(req: Request) {
     ? imageData.length > 0
     : typeof imageData === "string" && imageData.trim().length > 0;
 
+  const maxUrlViewports = options.maxUrlViewports ?? MAX_URL_VIEWPORTS;
+
   if (
     body?.sourceMode === "rendered-url" &&
     Array.isArray(imageData) &&
-    imageData.length > MAX_URL_VIEWPORTS
+    imageData.length > maxUrlViewports
   ) {
     return NextResponse.json(
       {
-        error: `Rendered URL analysis supports up to ${MAX_URL_VIEWPORTS} ordered viewports.`,
+        error: `Rendered URL analysis supports up to ${maxUrlViewports} ordered viewports.`,
       },
       { status: 400 }
     );
+  }
+
+  if (
+    options.maxPastedTextWords &&
+    body?.requestKind !== "alternate-rewrite" &&
+    body?.sourceMode !== "rendered-url" &&
+    !hasImageData
+  ) {
+    const entitlementSourceText =
+      typeof body?.entitlementSourceText === "string"
+        ? body.entitlementSourceText
+        : "";
+    const wordCount = entitlementSourceText.trim().split(/\s+/).filter(Boolean).length;
+    if (!entitlementSourceText || wordCount > options.maxPastedTextWords) {
+      return NextResponse.json(
+        {
+          error: `The free embedded session supports pasted text up to ${options.maxPastedTextWords} words.`,
+        },
+        { status: 400 }
+      );
+    }
   }
 
   const visualAnalysisContext = hasImageData

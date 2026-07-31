@@ -273,3 +273,27 @@ test("tokenises mixed explicit and ranged viewport syntax", () => {
   assert.equal(reconstructedText(value), value);
   assert.deepEqual(extractViewportNumbers(value), [2, 4, 5, 6, 7]);
 });
+
+test("links every reference in the formatted 16-viewport recommendation that reproduced the failure", () => {
+  const value =
+    "Viewports **12, 13, and 14** repeat the same proof (with Viewport 16 returning to it). The late repetition delays closure. Consolidate the proof beneath Viewport **12**.";
+
+  assert.deepEqual(extractViewportNumbers(value), [12, 13, 14, 16]);
+  assert.deepEqual(
+    referenceTokens(value).map((token) => token.viewportNumbers),
+    [[12], [13], [14], [16], [12]]
+  );
+  assert.equal(reconstructedText(value), value);
+});
+
+test("preserves punctuation, parentheses, markdown, and line breaks while linking references", () => {
+  const value =
+    "Viewports (**2**, _4–7_),\nand Viewport `16`: carry the repeated proof.";
+
+  assert.deepEqual(extractViewportNumbers(value), [2, 4, 5, 6, 7, 16]);
+  assert.deepEqual(
+    referenceTokens(value).map((token) => token.viewportNumbers),
+    [[2], [4, 5, 6, 7], [16]]
+  );
+  assert.equal(reconstructedText(value), value);
+});

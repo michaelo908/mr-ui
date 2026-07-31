@@ -4,6 +4,7 @@ import {
   actionEmoji,
   buildRecommendationLightboxContext,
   buildRecommendationViewportLaunch,
+  extractViewportNumbersFromTokens,
   getViewportImageByNumber,
   parseViewportReferenceTokens,
   type NarrativePerformance,
@@ -21,13 +22,17 @@ function renderViewportReferences(
     launch: NarrativePerformanceViewportLaunch
   ) => void
 ) {
-  return parseViewportReferenceTokens(value).map((token, index) => {
+  const tokens = parseViewportReferenceTokens(value);
+  const canonicalViewportNumbers = extractViewportNumbersFromTokens(tokens);
+
+  return tokens.map((token, index) => {
     if (token.type === "text") {
       return <span key={`text-${index}`}>{token.text}</span>;
     }
 
     const validViewportNumbers = token.viewportNumbers.filter(
       (viewportNumber) =>
+        canonicalViewportNumbers.includes(viewportNumber) &&
         getViewportImageByNumber(images, viewportNumber) !== null
     );
     const startingViewport = validViewportNumbers[0];

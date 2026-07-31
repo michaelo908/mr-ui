@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import type { UrlSource } from "@/lib/sources";
+import { MAX_URL_VIEWPORTS } from "@/lib/sources";
 import { captureRenderedPage } from "@/lib/viewport-capture";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
 export const preferredRegion = "syd1";
 
-export async function POST(req: Request) {
+export async function handleUrlSourceRequest(
+  req: Request,
+  maxViewports = MAX_URL_VIEWPORTS
+) {
   try {
     const body = (await req.json()) as { url?: unknown };
     if (typeof body.url !== "string" || !body.url.trim()) {
@@ -18,7 +22,7 @@ export async function POST(req: Request) {
         ? body.url.trim()
         : `https://${body.url.trim()}`
     );
-    const rendered = await captureRenderedPage(requestedUrl);
+    const rendered = await captureRenderedPage(requestedUrl, maxViewports);
     const source: UrlSource = {
       id: crypto.randomUUID(),
       type: "url",
@@ -45,4 +49,8 @@ export async function POST(req: Request) {
       { status: 422 }
     );
   }
+}
+
+export async function POST(req: Request) {
+  return handleUrlSourceRequest(req);
 }

@@ -1,4 +1,7 @@
 export const JUMP_IN_DURATION_MS = 20 * 60 * 1000;
+export const JUMP_IN_RESET_MS = 7 * 24 * 60 * 60 * 1000;
+export const JUMP_IN_MAX_URL_VIEWPORTS = 10;
+export const JUMP_IN_MAX_PASTED_WORDS = 800;
 export const JUMP_IN_STORAGE_KEY = "gravitasJumpInSessionV1";
 export const JUMP_IN_DAY_PASS_URL = "https://multirrupt.com/day-pass/";
 
@@ -19,6 +22,13 @@ export function getJumpInRemainingMs(
 
 export function isJumpInExpired(startedAt: number | null, now = Date.now()) {
   return startedAt !== null && getJumpInRemainingMs(startedAt, now) === 0;
+}
+
+export function isJumpInResetEligible(
+  startedAt: number | null,
+  now = Date.now()
+) {
+  return startedAt !== null && now >= startedAt + JUMP_IN_RESET_MS;
 }
 
 export function formatJumpInRemaining(remainingMs: number) {

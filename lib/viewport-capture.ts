@@ -129,7 +129,8 @@ async function fetchSupportingPage(initialUrl: URL) {
 async function sliceFullPageCapture(
   fullPagePng: Buffer,
   finalUrl: URL,
-  requestId: string
+  requestId: string,
+  maxViewports: number
 ) {
   if (fullPagePng.length === 0 || fullPagePng.length > MAX_FULL_PAGE_BYTES) {
     throw new Error("The webpage capture was empty or too large.");
@@ -151,7 +152,7 @@ async function sliceFullPageCapture(
   const positions = calculateViewportPositions(
     height,
     scaledViewportHeight,
-    MAX_VIEWPORTS
+    maxViewports
   );
   const images: SourceImage[] = [];
   let totalBytes = 0;
@@ -203,7 +204,14 @@ async function sliceFullPageCapture(
   }));
 }
 
-export async function captureRenderedPage(initialUrl: URL) {
+export async function captureRenderedPage(
+  initialUrl: URL,
+  maxViewports = MAX_VIEWPORTS
+) {
+  const safeMaxViewports = Math.max(
+    1,
+    Math.min(MAX_VIEWPORTS, Math.floor(maxViewports))
+  );
   const requestId = crypto.randomUUID();
   await validatePublicBrowserUrl(initialUrl);
 
@@ -225,7 +233,12 @@ export async function captureRenderedPage(initialUrl: URL) {
     throw new Error(`The page returned HTTP ${targetStatus}.`);
   }
 
-  const images = await sliceFullPageCapture(capture.bytes, finalUrl, requestId);
+  const images = await sliceFullPageCapture(
+    capture.bytes,
+    finalUrl,
+    requestId,
+    safeMaxViewports
+  );
   const extractedText = supportingPage?.text ?? "";
 
   return {
