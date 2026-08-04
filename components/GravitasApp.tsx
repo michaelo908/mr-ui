@@ -2281,7 +2281,12 @@ if (trialActive && trialEndDate) {
             body: JSON.stringify({ url: urlDraft }),
             }
           );
-          const sourceData = (await sourceResponse.json()) as {
+          const sourceData = (await sourceResponse.json().catch(() => ({
+            error:
+              sourceResponse.status === 504
+                ? "The webpage took too long to render. Please try again."
+                : "The webpage could not be imported.",
+          }))) as {
             source?: UrlSource;
             error?: string;
           };

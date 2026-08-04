@@ -44,8 +44,21 @@ export async function handleUrlSourceRequest(
       error,
       cause: error instanceof Error ? error.cause : undefined,
     });
+    const errorCode =
+      error && typeof error === "object" && "code" in error
+        ? String(error.code)
+        : "";
+    const isAddressFailure = [
+      "ENOTFOUND",
+      "EAI_AGAIN",
+      "EBUSY",
+    ].includes(errorCode);
     return NextResponse.json(
-      { error: "Gravitas could not render this page. Please try again." },
+      {
+        error: isAddressFailure
+          ? "Gravitas could not find that website. Check the address and try again."
+          : "Gravitas could not render this page. Please try again.",
+      },
       { status: 422 }
     );
   }

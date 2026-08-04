@@ -22,6 +22,23 @@ const MAX_SUPPORTING_TEXT = 28_000;
 const DESKTOP_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36";
+const TRANSIENT_DNS_RETRY_DELAY_MS = 150;
+
+async function lookupPublicAddresses(hostname: string) {
+  try {
+    return await lookup(hostname, { all: true, verbatim: true });
+  } catch (error) {
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? String(error.code)
+        : "";
+    if (code !== "EBUSY" && code !== "EAI_AGAIN") throw error;
+    await new Promise((resolve) =>
+      setTimeout(resolve, TRANSIENT_DNS_RETRY_DELAY_MS)
+    );
+    return lookup(hostname, { all: true, verbatim: true });
+  }
+}
 
 function isPrivateAddress(address: string) {
   if (address === "::1" || address === "0.0.0.0") return true;
@@ -64,7 +81,7 @@ export async function validatePublicBrowserUrl(url: URL) {
 
   const addresses = isIP(url.hostname)
     ? [{ address: url.hostname }]
-    : await lookup(url.hostname, { all: true, verbatim: true });
+    : await lookupPublicAddresses(url.hostname);
   if (addresses.length === 0 || addresses.some(({ address }) => isPrivateAddress(address))) {
     throw new Error("That address is not a public webpage.");
   }
@@ -223,7 +240,11 @@ export async function captureRenderedPage(
     });
     return undefined;
   });
-  const capture = await captureFullPagePng(initialUrl, requestId);
+  const capture = await captureFullPagePng(
+    initialUrl,
+    requestId,
+    safeMaxViewports * VIEWPORT.height
+  );
   const supportingPage = await supportingPagePromise;
   const finalUrl = supportingPage?.finalUrl ?? initialUrl;
   await validatePublicBrowserUrl(finalUrl);

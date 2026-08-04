@@ -7,15 +7,15 @@ export const SCREENSHOTONE_CAPTURE_OPTIONS = {
   full_page: true,
   full_page_algorithm: "by_sections",
   full_page_scroll: true,
-  full_page_scroll_by: 500,
-  full_page_scroll_delay: 500,
+  full_page_scroll_by: 800,
+  full_page_scroll_delay: 100,
   viewport_width: 1280,
   viewport_height: 800,
   device_scale_factor: 1,
   reduced_motion: true,
-  delay: 2,
-  timeout: 45,
-  navigation_timeout: 25,
+  delay: 1,
+  timeout: 38,
+  navigation_timeout: 20,
   block_ads: true,
   block_trackers: true,
   block_cookie_banners: true,
@@ -42,9 +42,10 @@ export class ScreenshotOneCaptureError extends Error {
   }
 }
 
-export function buildScreenshotOneRequest(url: URL) {
+export function buildScreenshotOneRequest(url: URL, maxHeight: number) {
   return {
     ...SCREENSHOTONE_CAPTURE_OPTIONS,
+    full_page_max_height: maxHeight,
     url: url.toString(),
   };
 }
@@ -82,7 +83,11 @@ function wait(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-export async function captureFullPagePng(url: URL, requestId: string) {
+export async function captureFullPagePng(
+  url: URL,
+  requestId: string,
+  maxHeight: number
+) {
   const accessKey = process.env.SCREENSHOTONE_ACCESS_KEY?.trim();
   if (!accessKey) {
     throw new ScreenshotOneCaptureError(
@@ -101,6 +106,7 @@ export async function captureFullPagePng(url: URL, requestId: string) {
   let response: Response | undefined;
   let requestFailure: unknown;
   for (let attempt = 1; attempt <= MAX_CAPTURE_ATTEMPTS; attempt += 1) {
+    const attemptStartedAt = Date.now();
     try {
       response = await fetch(SCREENSHOTONE_ENDPOINT, {
         method: "POST",
@@ -108,9 +114,9 @@ export async function captureFullPagePng(url: URL, requestId: string) {
           "content-type": "application/json",
           "x-access-key": accessKey,
         },
-        body: JSON.stringify(buildScreenshotOneRequest(url)),
+        body: JSON.stringify(buildScreenshotOneRequest(url, maxHeight)),
         signal: AbortSignal.timeout(
-          (SCREENSHOTONE_CAPTURE_OPTIONS.timeout + 5) * 1_000
+          (SCREENSHOTONE_CAPTURE_OPTIONS.timeout + 2) * 1_000
         ),
         cache: "no-store",
       });
@@ -123,11 +129,15 @@ export async function captureFullPagePng(url: URL, requestId: string) {
       });
     } catch (error) {
       requestFailure = error;
-      if (attempt === MAX_CAPTURE_ATTEMPTS) break;
+      const attemptDurationMs = Date.now() - attemptStartedAt;
+      if (attempt === MAX_CAPTURE_ATTEMPTS || attemptDurationMs >= 10_000) {
+        break;
+      }
       console.warn("Retrying ScreenshotOne after a request failure", {
         requestId,
         hostname: url.hostname,
         attempt,
+        attemptDurationMs,
       });
     }
     await wait(RETRY_DELAY_MS);

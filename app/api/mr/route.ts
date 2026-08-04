@@ -2,6 +2,10 @@
 import { NextResponse } from "next/server";
 import { cadenceInstruction, type CadenceMode } from "@/lib/cadence";
 import { MAX_URL_VIEWPORTS } from "@/lib/sources";
+import {
+  assessEditorSummary,
+  EDITOR_SUMMARY_CONTRACT,
+} from "@/lib/editor-summary";
 
 /**
  * Default domain frame (normal Multirrupt operation).
@@ -44,13 +48,7 @@ When the user has pasted text for diagnosis, output EXACTLY these five sections,
 SECTION RULES:
 
 ## Editor's Summary
-- Maximum 5 bullet points.
-- Bullet format MUST be exactly:
-  • **<2–4 word descriptive heading>:** <1–2 short sentences>
-- Headings are descriptive (not interpretive), 2–4 words only.
-- Each bullet max ~30 words after the heading.
-- Focus strictly on structural sequencing, escalation, consequence, and reader-state.
-- No framework terminology, no teaching commentary, no stylistic advice.
+${EDITOR_SUMMARY_CONTRACT}
 
 ## Narrative Performance
 - This is a concise operational consequence of the completed analysis, not a second analysis, scorecard, estimated conversion assessment, or generic advice layer.
@@ -91,7 +89,7 @@ The rewrite MUST be constructed from the diagnosis above and MUST produce MATERI
 ## Rewrite Debrief
 - Always visible.
 - Max 5 bullets.
-- Same bullet format as Editor's Summary:
+- Use this debrief-specific bullet format:
   • **<2–4 word descriptive heading>:** <1–2 short sentences>
 - Each bullet must explicitly link a rewrite move to a diagnosed weakness.
 - No teaching. No extra recommendations. Just proof-of-pudding alignment.
@@ -350,6 +348,14 @@ Any extracted page text in the input is supporting readability assistance only. 
 
     try {
       const json = JSON.parse(text);
+      if (!alternateRewrite && typeof json?.output === "string") {
+        const summaryAssessment = assessEditorSummary(json.output);
+        if (summaryAssessment.violations.length > 0) {
+          console.warn("Editor’s Summary contract warning", {
+            violations: summaryAssessment.violations,
+          });
+        }
+      }
       return NextResponse.json(json, { status: upstream.status });
     } catch {
       return new NextResponse(text, {

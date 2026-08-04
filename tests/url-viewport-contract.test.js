@@ -118,6 +118,34 @@ test("ScreenshotOne replaces browser rendering while preserving local viewport s
   assert.match(provider, /decodeURIComponent\(value\)/);
   assert.match(provider, /MAX_CAPTURE_ATTEMPTS = 2/);
   assert.match(provider, /response\.status < 500/);
+  assert.match(provider, /full_page_max_height: maxHeight/);
+  assert.match(
+    capture,
+    /safeMaxViewports \* VIEWPORT\.height/
+  );
+});
+
+test("long-page capture stays within the serverless deadline", () => {
+  const provider = read("lib/screenshotone.ts");
+  const app = read("components/GravitasApp.tsx");
+
+  assert.match(provider, /full_page_scroll_by:\s*800/);
+  assert.match(provider, /full_page_scroll_delay:\s*100/);
+  assert.match(provider, /timeout:\s*38/);
+  assert.match(provider, /navigation_timeout:\s*20/);
+  assert.match(provider, /attemptDurationMs >= 10_000/);
+  assert.match(app, /sourceResponse\.status === 504/);
+  assert.match(app, /The webpage took too long to render/);
+});
+
+test("DNS failures identify mistyped or unavailable websites", () => {
+  const capture = read("lib/viewport-capture.ts");
+  const route = read("app/api/sources/url/route.ts");
+
+  assert.match(capture, /code !== "EBUSY" && code !== "EAI_AGAIN"/);
+  assert.match(capture, /TRANSIENT_DNS_RETRY_DELAY_MS/);
+  assert.match(route, /"ENOTFOUND"/);
+  assert.match(route, /Gravitas could not find that website/);
 });
 
 test("URL analysis consistently caps ordered captures at 16 viewports", () => {
@@ -162,8 +190,8 @@ test("URL rendering retains SSRF protection and bounded provider timeouts", () =
   assert.match(capture, /validatePublicBrowserUrl\(currentUrl\)/);
   assert.match(capture, /DESKTOP_USER_AGENT/);
   assert.match(provider, /AbortSignal\.timeout/);
-  assert.match(provider, /timeout:\s*45/);
-  assert.match(provider, /navigation_timeout:\s*25/);
+  assert.match(provider, /timeout:\s*38/);
+  assert.match(provider, /navigation_timeout:\s*20/);
   assert.match(route, /preferredRegion\s*=\s*"syd1"/);
 });
 
