@@ -52,6 +52,8 @@ import {
   parseTextEvidenceBlocks,
   type TextEvidenceLaunch,
 } from "@/lib/text-evidence";
+import { emitSignal, initializeSignalIdentity, signalHeaders, toSignalIdentifier } from "@/lib/signals/client";
+import type { SignalName } from "@/lib/signals/registry";
 
 type Msg = {
   role: "user" | "assistant";
@@ -800,6 +802,7 @@ function StructuredAssistantMessage({
   interactionLocked,
   onSessionExpired,
   onRewriteProduced,
+  onInteractionSignal,
 }: {
   content: string;
   sourceRaw: string;
@@ -811,6 +814,7 @@ function StructuredAssistantMessage({
   interactionLocked: boolean;
   onSessionExpired?: () => void;
   onRewriteProduced?: () => void;
+  onInteractionSignal?: (name: SignalName, properties?: Record<string, unknown>) => void;
 }) {
   const { hasStructured, sections } = useMemo(() => parseStructuredMR(content), [content]);
   const rewriteSectionRef = useRef<HTMLElement | null>(null);
@@ -912,11 +916,15 @@ function StructuredAssistantMessage({
         (candidate) => candidate.id === image.id
       );
       if (index >= 0) {
+        onInteractionSignal?.("engagement.evidence_inspected", {
+          evidence_type: "viewport",
+          evidence_number: launch.startingViewport,
+        });
         setLightboxContext(launch.context);
         setActiveLightboxIndex(index);
       }
     },
-    [orderedViewportImages]
+    [onInteractionSignal, orderedViewportImages]
   );
   const closeLightbox = useCallback(() => {
     setActiveLightboxIndex(null);
@@ -927,9 +935,13 @@ function StructuredAssistantMessage({
     []
   );
   const openTextEvidence = useCallback((launch: TextEvidenceLaunch) => {
+    onInteractionSignal?.("engagement.evidence_inspected", {
+      evidence_type: "text",
+      evidence_number: launch.evidenceNumber,
+    });
     setIsDepthOpen(true);
     setPendingTextEvidence(launch);
-  }, []);
+  }, [onInteractionSignal]);
 
   useEffect(() => {
     if (!isDepthOpen || !pendingTextEvidence) return;
@@ -1042,6 +1054,7 @@ function StructuredAssistantMessage({
 
   const handleRewriteClick = () => {
     if (interactionLocked) return;
+    onInteractionSignal?.("workflow.rewrite_revealed");
     setRewriteState("working");
     setTimeout(() => {
       revealRewrite();
@@ -1050,6 +1063,7 @@ function StructuredAssistantMessage({
 
   async function handleCopyRewrite(variant: RewriteVariant, format: CopyFormat) {
     await copyTextForFormat(variant.content, format);
+    onInteractionSignal?.("workflow.rewrite_copied", { format });
     const copyKey = `${variant.id}:${format}`;
     setCopiedRewriteKey(copyKey);
     setTimeout(() => {
@@ -1098,9 +1112,15 @@ ${cadenceInstruction(cadence)}`;
           };
 
     try {
+      const alternateAnalysisId = crypto.randomUUID();
+      const alternateSurface = apiEndpoint.includes("jump-in") ? "jump-in" : "paid";
       const res = await fetch(apiEndpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...signalHeaders(alternateSurface),
+          "X-Gravitas-Analysis-Id": alternateAnalysisId,
+        },
         body: JSON.stringify(payload),
       });
 
@@ -1121,6 +1141,7 @@ ${cadenceInstruction(cadence)}`;
         return [...prev, makeRewriteVariant(alternateRewrite, prev.length)];
       });
 
+      onInteractionSignal?.("workflow.rewrite_created");
       onRewriteProduced?.();
     } catch {
       // no-op for now
@@ -1225,7 +1246,11 @@ ${cadenceInstruction(cadence)}`;
       {depth ? (
         <details
           open={isDepthOpen}
-          onToggle={(event) => setIsDepthOpen(event.currentTarget.open)}
+          onToggle={(event) => {
+            const open = event.currentTarget.open;
+            setIsDepthOpen(open);
+            onInteractionSignal?.("engagement.depth_toggled", { open });
+          }}
           className="rounded-2xl border border-[#C6A75A]/30 bg-neutral-900/30"
         >
           <summary
@@ -1758,6 +1783,18 @@ const gravitonGroups = [
   );
   const isDemoLocked = isJumpIn && jumpInExpired;
   const apiEndpoint = isJumpIn ? "/api/jump-in/mr" : "/api/mr";
+  const signalSurface = isJumpIn ? "jump-in" as const : "paid" as const;
+
+  useEffect(() => {
+    const key = `gravitasSignalSessionStartedV1:${signalSurface}`;
+    try {
+      if (window.sessionStorage.getItem(key)) return;
+      window.sessionStorage.setItem(key, "1");
+    } catch {}
+    emitSignal("discovery.session_started", signalSurface, {
+      entry_path: window.location.pathname,
+    });
+  }, [signalSurface]);
 
   const activeSourceKey = useMemo(() => {
     if (inputMode === "url") {
@@ -2072,6 +2109,10 @@ useEffect(() => {
     );
     setJumpInSession(expiredSession);
 
+    emitSignal("discovery.session_expired", signalSurface, {
+      session_kind: "jump_in",
+    });
+
     void fetch("/api/jump-in/events", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2080,7 +2121,7 @@ useEffect(() => {
         sessionId: expiredSession.sessionId,
       }),
     });
-  }, [isJumpIn, jumpInExpired, jumpInNow, jumpInSession]);
+  }, [isJumpIn, jumpInExpired, jumpInNow, jumpInSession, signalSurface]);
 
   useEffect(() => {
     scrollToBottom();
@@ -2195,6 +2236,9 @@ if (trialActive && trialEndDate) {
   }
 
   function handleDayPassClick() {
+    emitSignal("discovery.day_pass_clicked", signalSurface, {
+      reason: jumpInExpired ? "session_expired" : "manual",
+    });
     if (isJumpIn && jumpInSession) {
       void fetch("/api/jump-in/events", {
         method: "POST",
@@ -2216,8 +2260,17 @@ if (trialActive && trialEndDate) {
 
   async function handleSubscribe() {
     try {
+      const signalIdentity = initializeSignalIdentity();
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...signalHeaders(signalSurface),
+        },
+        body: JSON.stringify({
+          firstTouch: signalIdentity.firstTouch,
+          lastTouch: signalIdentity.lastTouch,
+        }),
       });
 
       const data = await res.json();
@@ -2237,6 +2290,7 @@ if (trialActive && trialEndDate) {
     if (!msg || (msg.role === "assistant" && msg.content === THINKING_TOKEN)) return;
 
     await copyTextForFormat(msg.content, format);
+    emitSignal("engagement.report_copied", signalSurface, { format, scope: "message" });
 
     const key = `${index}:${format}`;
     setCopiedMessageKey(key);
@@ -2264,6 +2318,7 @@ if (trialActive && trialEndDate) {
       .join("\n\n———\n\n");
 
     await copyTextForFormat(combined, format);
+    emitSignal("engagement.report_copied", signalSurface, { format, scope: "all" });
 
     setCopiedAllKey(format);
     setTimeout(() => {
@@ -2309,6 +2364,12 @@ if (trialActive && trialEndDate) {
     const runId = crypto.randomUUID();
     if (!runCoordinatorRef.current.tryStart(runId)) return;
     sendLockRef.current = true;
+    emitSignal("analysis.started", signalSurface, {
+      analysis_id: runId,
+      source_mode: inputMode,
+      graviton: toSignalIdentifier(selectedGraviton),
+      cadence,
+    });
     setIsLoading(true);
     setIsCapturingUrl(inputMode === "url");
     setAnalysisProgress(
@@ -2522,6 +2583,8 @@ if (urlSourceImages.length > 0) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...signalHeaders(signalSurface),
+          "X-Gravitas-Analysis-Id": runId,
           ...(activeJumpInSession
             ? { "X-Jump-In-Session-Id": activeJumpInSession.sessionId }
             : {}),
@@ -2931,6 +2994,9 @@ if (urlSourceImages.length > 0) {
                               setAnalysisBoost((prev) => prev + getRandomInt(6, 14));
                               setRewriteBoost((prev) => prev + getRandomInt(24, 46));
                             }}
+                            onInteractionSignal={(name, properties) =>
+                              emitSignal(name, signalSurface, properties)
+                            }
                           />
                           {shouldShowAnalysisEasterEgg(m.analysisStatus) ? (
                             <p
@@ -2965,6 +3031,9 @@ if (urlSourceImages.length > 0) {
         key={value}
         type="button"
         onClick={() => {
+          emitSignal("discovery.source_selected", signalSurface, {
+            source_mode: value,
+          });
           setInputMode(value);
           setUrlError(null);
           setImportedUrl(null);
