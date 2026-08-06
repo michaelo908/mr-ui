@@ -2,8 +2,26 @@ import crypto from "crypto";
 import Stripe from "stripe";
 import { Resend } from "resend";
 import { headers } from "next/headers";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { recordSignal } from "@/lib/signals/server";
+import { sanitizeAttribution } from "@/lib/signals/contracts";
+
+function stripeAttribution(metadata: Stripe.Metadata | null, prefix: "ft" | "lt") {
+  if (!metadata) return undefined;
+  return sanitizeAttribution({
+    landingPath: metadata[`gravitas_${prefix}_path`],
+    referrerHost: metadata[`gravitas_${prefix}_referrer`],
+    utmSource: metadata[`gravitas_${prefix}_utm_source`],
+    utmMedium: metadata[`gravitas_${prefix}_utm_medium`],
+    utmCampaign: metadata[`gravitas_${prefix}_utm_campaign`],
+    utmContent: metadata[`gravitas_${prefix}_utm_content`],
+    metaCampaignId: metadata[`gravitas_${prefix}_meta_campaign`],
+    metaAdSetId: metadata[`gravitas_${prefix}_meta_adset`],
+    metaAdId: metadata[`gravitas_${prefix}_meta_ad`],
+    creativeHypothesis: metadata[`gravitas_${prefix}_hypothesis`],
+  });
+}
 
 function getResend() {
   if (!process.env.RESEND_API_KEY) {
@@ -122,6 +140,16 @@ export async function POST(req: Request) {
   try {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
+      const signalIdentity = {
+        visitorId: session.metadata?.gravitas_visitor_id || null,
+        sessionId: session.metadata?.gravitas_session_id || null,
+        userId: session.metadata?.user_id || null,
+        surface: session.metadata?.gravitas_surface === "jump-in" ? "jump-in" as const : "paid" as const,
+        verified: true,
+        isTest: !event.livemode,
+        firstTouch: stripeAttribution(session.metadata, "ft"),
+        lastTouch: stripeAttribution(session.metadata, "lt"),
+      };
 
       const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
         limit: 10,
@@ -139,6 +167,14 @@ export async function POST(req: Request) {
         const lastName = rest.join(" ");
 
         console.log("Gravitas Day Pass purchase detected", email);
+        after(() => recordSignal("purchase.day_pass_completed", {
+          ...signalIdentity,
+          dedupeKey: `stripe:${event.id}:day-pass`,
+          properties: {
+            amount_total: session.amount_total ?? 0,
+            currency: session.currency ?? "unknown",
+          },
+        }));
 
         if (email) {
           const { data: usersData, error: usersError } =
@@ -258,6 +294,17 @@ export async function POST(req: Request) {
           { onConflict: "user_id" }
         );
       }
+
+      after(() => recordSignal("purchase.checkout_completed", {
+        ...signalIdentity,
+        dedupeKey: `stripe:${event.id}:checkout`,
+        properties: {
+          purchase_type: isDayPassPurchase ? "day_pass" : "subscription",
+          amount_total: session.amount_total ?? 0,
+          currency: session.currency ?? "unknown",
+          payment_status: session.payment_status,
+        },
+      }));
     }
 
     if (event.type === "customer.subscription.updated") {
@@ -267,6 +314,13 @@ export async function POST(req: Request) {
         .from("subscriptions")
         .update({ status: subscription.status })
         .eq("stripe_subscription_id", subscription.id);
+      after(() => recordSignal("purchase.subscription_updated", {
+        surface: "paid",
+        verified: true,
+        isTest: !event.livemode,
+        dedupeKey: `stripe:${event.id}:subscription-updated`,
+        properties: { status: subscription.status },
+      }));
     }
 
     if (event.type === "customer.subscription.deleted") {
@@ -276,6 +330,29 @@ export async function POST(req: Request) {
         .from("subscriptions")
         .update({ status: "cancelled" })
         .eq("stripe_subscription_id", subscription.id);
+      after(() => recordSignal("purchase.subscription_cancelled", {
+        surface: "paid",
+        verified: true,
+        isTest: !event.livemode,
+        dedupeKey: `stripe:${event.id}:subscription-cancelled`,
+        properties: { status: subscription.status },
+      }));
+    }
+
+    if (event.type === "checkout.session.async_payment_failed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      after(() => recordSignal("purchase.checkout_failed", {
+        visitorId: session.metadata?.gravitas_visitor_id || null,
+        sessionId: session.metadata?.gravitas_session_id || null,
+        userId: session.metadata?.user_id || null,
+        surface: session.metadata?.gravitas_surface === "jump-in" ? "jump-in" : "paid",
+        firstTouch: stripeAttribution(session.metadata, "ft"),
+        lastTouch: stripeAttribution(session.metadata, "lt"),
+        verified: true,
+        isTest: !event.livemode,
+        dedupeKey: `stripe:${event.id}:checkout-failed`,
+        properties: { failure_stage: "async_payment" },
+      }));
     }
 
     return NextResponse.json({ received: true });

@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { cadenceInstruction, type CadenceMode } from "@/lib/cadence";
 import { MAX_URL_VIEWPORTS } from "@/lib/sources";
 import {
   assessEditorSummary,
   EDITOR_SUMMARY_CONTRACT,
 } from "@/lib/editor-summary";
+import { recordSignal, signalContextFromRequest } from "@/lib/signals/server";
 
 /**
  * Default domain frame (normal Multirrupt operation).
@@ -180,6 +181,8 @@ export async function handleMrRequest(
     maxPastedTextWords?: number;
   } = {}
 ) {
+  const signalContext = signalContextFromRequest(req);
+  const analysisId = req.headers.get("x-gravitas-analysis-id");
   const MR_API_URL = process.env.MR_API_URL;
   const MR_API_KEY = process.env.MR_API_KEY;
 
@@ -346,8 +349,35 @@ Any extracted page text in the input is supporting readability assistance only. 
 
     const text = await upstream.text();
 
-    try {
-      const json = JSON.parse(text);
+    const analysisProperties = {
+      source_mode: body?.sourceMode === "rendered-url"
+        ? "url"
+        : hasImageData ? "images" : "text",
+      viewport_count: body?.sourceMode === "rendered-url" && Array.isArray(imageData)
+        ? imageData.length : 0,
+      image_count: body?.sourceMode !== "rendered-url" && Array.isArray(imageData)
+        ? imageData.length : hasImageData ? 1 : 0,
+      request_kind: alternateRewrite ? "alternate_rewrite" : "analysis",
+      cadence,
+      status_code: upstream.status,
+    };
+
+    let parsedResponse: any = null;
+    try { parsedResponse = JSON.parse(text); } catch {}
+    const verifiedCompletion = upstream.ok && typeof parsedResponse?.output === "string" && parsedResponse.output.trim().length > 0;
+
+    after(() => recordSignal(verifiedCompletion ? "analysis.completed" : "analysis.failed", {
+      ...signalContext,
+      verified: true,
+      dedupeKey: analysisId ? `analysis:${analysisId}:${verifiedCompletion ? "completed" : "failed"}` : null,
+      properties: verifiedCompletion ? analysisProperties : {
+        ...analysisProperties,
+        failure_stage: upstream.ok ? "invalid_output" : "upstream_response",
+      },
+    }));
+
+    if (parsedResponse) {
+      const json = parsedResponse;
       if (!alternateRewrite && typeof json?.output === "string") {
         const summaryAssessment = assessEditorSummary(json.output);
         if (summaryAssessment.violations.length > 0) {
@@ -357,13 +387,18 @@ Any extracted page text in the input is supporting readability assistance only. 
         }
       }
       return NextResponse.json(json, { status: upstream.status });
-    } catch {
-      return new NextResponse(text, {
-        status: upstream.status,
-        headers: { "Content-Type": "text/plain" },
-      });
     }
+    return new NextResponse(text, {
+      status: upstream.status,
+      headers: { "Content-Type": "text/plain" },
+    });
   } catch (err: any) {
+    after(() => recordSignal("analysis.failed", {
+      ...signalContext,
+      verified: true,
+      dedupeKey: analysisId ? `analysis:${analysisId}:failed` : null,
+      properties: { failure_stage: "upstream_transport" },
+    }));
     return NextResponse.json(
       { error: "Upstream request failed", detail: String(err?.message ?? err) },
       { status: 502 }
