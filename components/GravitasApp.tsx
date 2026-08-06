@@ -47,6 +47,7 @@ import {
 } from "@/lib/narrative-performance";
 import ImageLightbox from "@/components/ImageLightbox";
 import NarrativePerformancePanel from "@/components/NarrativePerformancePanel";
+import { calculateEditorSummaryScrollTop } from "@/lib/report-scroll";
 import {
   parseTextEvidenceBlocks,
   type TextEvidenceLaunch,
@@ -1166,7 +1167,10 @@ ${cadenceInstruction(cadence)}`;
             </div>
           ) : null}
 
-          <h2 className="text-[20px] font-semibold tracking-tight text-neutral-100">
+          <h2
+            data-editor-summary-anchor="true"
+            className="text-[20px] font-semibold tracking-tight text-neutral-100"
+          >
             Editor’s Summary
           </h2>
           <div className="mt-3">{renderMR(summary)}</div>
@@ -1904,6 +1908,59 @@ useEffect(() => {
     }, 50);
   }
 
+  function scrollToLatestEditorSummary() {
+    const positionSummary = (behavior: ScrollBehavior) => {
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      const summaries = scroller.querySelectorAll<HTMLElement>(
+        '[data-editor-summary-anchor="true"]'
+      );
+      const target = summaries[summaries.length - 1];
+      if (!target) return;
+
+      const scrollerRect = scroller.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const pageTop = window.scrollY + scrollerRect.top;
+      const top = calculateEditorSummaryScrollTop({
+        currentScrollTop: scroller.scrollTop,
+        scrollerTop: 0,
+        targetTop: targetRect.top - scrollerRect.top,
+        viewportHeight: window.innerHeight,
+      });
+      window.scrollTo({ top: pageTop, behavior });
+      scroller.scrollTo({ top, behavior });
+    };
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => positionSummary("smooth"));
+    });
+
+    window.setTimeout(() => {
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      const summaries = scroller.querySelectorAll<HTMLElement>(
+        '[data-editor-summary-anchor="true"]'
+      );
+      const target = summaries[summaries.length - 1];
+      if (!target) return;
+      const scrollerRect = scroller.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const pageTop = window.scrollY + scrollerRect.top;
+      const expectedTop = calculateEditorSummaryScrollTop({
+        currentScrollTop: scroller.scrollTop,
+        scrollerTop: 0,
+        targetTop: targetRect.top - scrollerRect.top,
+        viewportHeight: window.innerHeight,
+      });
+      if (Math.abs(scrollerRect.top) > 12) {
+        window.scrollTo({ top: pageTop, behavior: "auto" });
+      }
+      if (Math.abs(expectedTop - scroller.scrollTop) > 12) {
+        scroller.scrollTo({ top: expectedTop, behavior: "auto" });
+      }
+    }, 900);
+  }
+
   useEffect(() => {
     setTelemetrySeed(getTelemetrySeed());
   }, []);
@@ -2545,6 +2602,7 @@ if (urlSourceImages.length > 0) {
 
       setAnalysisBoost((prev) => prev + analysisJump);
       setRewriteBoost((prev) => prev + rewriteJump);
+      scrollToLatestEditorSummary();
 
     } catch (err) {
       if (!runCoordinatorRef.current.isCurrent(runId)) return;
@@ -2562,6 +2620,7 @@ if (urlSourceImages.length > 0) {
             : msg
         )
       );
+      scrollToBottom();
     }
     } finally {
       if (!runCoordinatorRef.current.finish(runId)) return;
@@ -2569,7 +2628,6 @@ if (urlSourceImages.length > 0) {
       setIsLoading(false);
       setIsCapturingUrl(false);
       setAnalysisProgress(null);
-      scrollToBottom();
     }
   }
 
