@@ -228,11 +228,12 @@ export async function POST(req: Request) {
               console.error("Unable to grant Day Pass access", profileError);
             }
 
-            const { error: emailError } = await getResend().emails.send({
-              from: "Multirrupt Gravitas <support@multirrupt.ai>",
-              to: email,
-              subject: "Your Gravitas Day Pass is ready",
-              html: `
+            try {
+              const { error: emailError } = await getResend().emails.send({
+                from: "Multirrupt Gravitas <support@multirrupt.ai>",
+                to: email,
+                subject: "Your Gravitas Day Pass is ready",
+                html: `
                 <p>Hi,</p>
 
                 <p>Thanks for purchasing the <strong>Gravitas Day Pass</strong>.</p>
@@ -261,13 +262,16 @@ export async function POST(req: Request) {
                   Enjoy,<br />
                    Michael
                  </p>
-              `,
-            });
+                `,
+              });
 
-            if (emailError) {
+              if (emailError) {
+                console.error("Unable to send Day Pass email", emailError);
+              } else {
+                await addToMailchimp(email, firstName, lastName);
+              }
+            } catch (emailError) {
               console.error("Unable to send Day Pass email", emailError);
-            } else {
-              await addToMailchimp(email, firstName, lastName);
             }
           }
         }
