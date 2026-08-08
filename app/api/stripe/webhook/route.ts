@@ -98,7 +98,10 @@ async function addToMailchimp(
   console.log("Added Gravitas Day Pass buyer to Mailchimp", email);
 }
 
-const GRAVITAS_DAY_PASS_PRICE_ID = "price_1TxjZXPEeaE0AI8SMYUQ1WhG";
+const GRAVITAS_DAY_PASS_PRICE_ID =
+  process.env.STRIPE_DAY_PASS_PRICE_ID || "price_1TxjZXPEeaE0AI8SMYUQ1WhG";
+const GRAVITAS_APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL || "https://www.multirrupt.ai";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-02-25.clover",
@@ -225,11 +228,12 @@ export async function POST(req: Request) {
               console.error("Unable to grant Day Pass access", profileError);
             }
 
-            const { error: emailError } = await getResend().emails.send({
-              from: "Multirrupt Gravitas <support@multirrupt.ai>",
-              to: email,
-              subject: "Your Gravitas Day Pass is ready",
-              html: `
+            try {
+              const { error: emailError } = await getResend().emails.send({
+                from: "Multirrupt Gravitas <support@multirrupt.ai>",
+                to: email,
+                subject: "Your Gravitas Day Pass is ready",
+                html: `
                 <p>Hi,</p>
 
                 <p>Thanks for purchasing the <strong>Gravitas Day Pass</strong>.</p>
@@ -238,16 +242,11 @@ export async function POST(req: Request) {
 
                 <p>
                 <strong>Access Gravitas:</strong><br />
-                <a href="https://www.multirrupt.ai">Open Gravitas</a>
+                <a href="${GRAVITAS_APP_URL}/login">Login to Gravitas</a>
                 </p>
 
                 <p>
                  Use the same email address you used at checkout. Gravitas will send you a magic login link.
-                </p>
-
-                <p>
-                <strong>Included bonus:</strong><br />
-                <a href="https://ixhbcjippdxzdhlerndj.supabase.co/storage/v1/object/public/downloads/hidden-campaign.pdf">Download The Hidden Campaign PDF</a>
                 </p>
 
                 <p>
@@ -263,13 +262,16 @@ export async function POST(req: Request) {
                   Enjoy,<br />
                    Michael
                  </p>
-              `,
-            });
+                `,
+              });
 
-            if (emailError) {
-              console.error("Unable to send Hidden Campaign email", emailError);
-            } else {
-              await addToMailchimp(email, firstName, lastName);
+              if (emailError) {
+                console.error("Unable to send Day Pass email", emailError);
+              } else {
+                await addToMailchimp(email, firstName, lastName);
+              }
+            } catch (emailError) {
+              console.error("Unable to send Day Pass email", emailError);
             }
           }
         }
