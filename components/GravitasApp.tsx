@@ -54,6 +54,7 @@ import {
 } from "@/lib/text-evidence";
 import { emitSignal, initializeSignalIdentity, signalHeaders, toSignalIdentifier } from "@/lib/signals/client";
 import type { SignalName } from "@/lib/signals/registry";
+import type { AcquisitionFunnel } from "@/lib/acquisition-funnels";
 
 type Msg = {
   role: "user" | "assistant";
@@ -94,7 +95,10 @@ const MR_GOLD = "#C6A75A";
 const TELEMETRY_LAUNCH_DATE = "2026-03-15";
 const TELEMETRY_STORAGE_KEY = "gravitasTelemetrySeedV1";
 
-function JumpInWelcome() {
+function JumpInWelcome({ funnel, firstName }: { funnel?: AcquisitionFunnel; firstName?: string }) {
+  const personalizedTitle = funnel
+    ? `${firstName ? `${firstName}, ` : ""}${funnel.jumpInTitle}`
+    : "Paste something that matters.";
   return (
     <div
       className="flex min-h-[420px] items-center justify-center px-4 py-10 text-center sm:min-h-[500px] sm:px-10"
@@ -102,11 +106,11 @@ function JumpInWelcome() {
     >
       <div className="w-full max-w-xl">
         <p className="jump-in-reveal jump-in-reveal-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#C6A75A]">
-          Your message. Seen from the other side.
+          {funnel?.eyebrow ?? "Your message. Seen from the other side."}
         </p>
 
         <h2 className="jump-in-reveal jump-in-reveal-2 mt-5 text-3xl font-semibold tracking-tight text-neutral-100 sm:text-4xl">
-          Paste something that matters.
+          {personalizedTitle}
         </h2>
 
         <div className="jump-in-reveal jump-in-reveal-3 mt-7 space-y-2 text-lg leading-8 text-neutral-300">
@@ -129,7 +133,7 @@ function JumpInWelcome() {
         </div>
 
         <p className="jump-in-reveal jump-in-reveal-6 mt-8 text-base font-semibold text-neutral-100">
-          Paste it below. Then press Gravitate.
+          {funnel?.jumpInPrompt ?? "Paste it below. Then press Gravitate."}
         </p>
         <p className="jump-in-reveal jump-in-reveal-6 mt-2 text-xs text-neutral-600">
           Your 20-minute session starts with your first analysis.
@@ -1651,14 +1655,18 @@ async function compressImage(file: File): Promise<File> {
 }
 export default function GravitasApp({
   experience = "paid",
+  funnel,
+  firstName,
 }: {
   experience?: "paid" | "jump-in";
+  funnel?: AcquisitionFunnel;
+  firstName?: string;
 }) {
   const isJumpIn = experience === "jump-in";
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
-  const [inputMode, setInputMode] = useState<"text" | "url" | "images">("text");
+  const [inputMode, setInputMode] = useState<"text" | "url" | "images">(funnel?.preferredSource ?? "text");
   const [urlDraft, setUrlDraft] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
   const [importedUrl, setImportedUrl] = useState<{
@@ -2745,11 +2753,11 @@ if (urlSourceImages.length > 0) {
         <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="text-2xl font-semibold tracking-tight">
-              {isJumpIn ? "Jump Into Gravitas" : "Multirrupt – GRAVITAS"}
+              {isJumpIn && funnel ? funnel.eyebrow : isJumpIn ? "Jump Into Gravitas" : "Multirrupt – GRAVITAS"}
             </div>
             <div className="mt-1 text-sm text-neutral-400">
               {isJumpIn
-                ? "Full Gravitas. 20 minutes. No signup required."
+                ? funnel ? "Your reader-side diagnostic is unlocked for 20 minutes." : "Full Gravitas. 20 minutes. No signup required."
                 : "Narrative Intelligence Workstation"}
             </div>
             {isJumpIn ? (
@@ -2894,7 +2902,7 @@ if (urlSourceImages.length > 0) {
 )}
 
               {isJumpIn && !jumpInExpired && imagePreviewUrls.length === 0 ? (
-                <JumpInWelcome />
+                <JumpInWelcome funnel={funnel} firstName={firstName} />
               ) : null}
             </div>
           ) : (

@@ -55,7 +55,7 @@ export function initializeSignalIdentity() {
   return { visitorId, sessionId, firstTouch, lastTouch: touch };
 }
 
-export function signalHeaders(surface: "jump-in" | "paid") {
+export function signalHeaders(surface: "jump-in" | "paid" | "acquisition") {
   const identity = initializeSignalIdentity();
   return {
     "X-Gravitas-Visitor-Id": identity.visitorId,
@@ -67,7 +67,7 @@ export function signalHeaders(surface: "jump-in" | "paid") {
 
 export function emitSignal(
   name: SignalName,
-  surface: "jump-in" | "paid",
+  surface: "jump-in" | "paid" | "acquisition",
   properties: Record<string, unknown> = {}
 ) {
   try {

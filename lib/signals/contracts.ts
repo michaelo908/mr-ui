@@ -33,7 +33,7 @@ export type SignalEnvelope = {
   visitorId?: string | null;
   sessionId?: string | null;
   userId?: string | null;
-  surface: "jump-in" | "paid" | "founder" | "unknown";
+  surface: "jump-in" | "paid" | "acquisition" | "founder" | "unknown";
   firstTouch?: SignalAttribution;
   lastTouch?: SignalAttribution;
   properties?: Record<string, unknown>;
