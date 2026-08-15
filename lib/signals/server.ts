@@ -56,7 +56,7 @@ export function signalContextFromRequest(req: Request): Pick<SignalEnvelope, "vi
   return {
     visitorId,
     sessionId,
-    surface: surface === "jump-in" || surface === "paid" ? surface : "unknown",
+    surface: surface === "jump-in" || surface === "paid" || surface === "acquisition" ? surface : "unknown",
     isTest:
       process.env.GRAVITAS_SIGNALS_TEST_MODE === "true" ||
       hostname === "localhost" || hostname === "127.0.0.1",

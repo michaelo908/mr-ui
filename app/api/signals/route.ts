@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     after(() => recordSignal(body.name, {
       visitorId,
       sessionId,
-      surface: body.surface === "jump-in" ? "jump-in" : "paid",
+      surface: body.surface === "jump-in" || body.surface === "acquisition" ? body.surface : "paid",
       firstTouch: body.firstTouch,
       lastTouch: body.lastTouch,
       properties: sanitizeClientSignalProperties(body.name, body.properties),

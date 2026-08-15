@@ -5,9 +5,11 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const publicRoutes = [
+    "/check",
     "/jump-in",
     "/quick-tester",
     "/api/jump-in",
+    "/api/acquisition",
     "/api/signals",
     "/api/sources/url",
   ];
