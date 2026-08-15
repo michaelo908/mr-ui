@@ -47,7 +47,13 @@ export default function AcquisitionLandingPage({ funnel }: { funnel: Acquisition
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-6">
-        <Image src="/MR_Logo1.png" alt="Gravitas" width={154} height={46} priority />
+        <Image
+          src="/gravitas-logo-white.png"
+          alt="Gravitas Narrative Intelligence"
+          width={168}
+          height={36}
+          priority
+        />
         <a href="/login" className="text-sm font-semibold text-neutral-300 hover:text-white">Login to Gravitas</a>
       </nav>
 
