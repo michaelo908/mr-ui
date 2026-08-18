@@ -58,7 +58,7 @@ test("entitlement gates restoration and consumed state follows successful recons
   const app = read("components/GravitasApp.tsx");
   assert.match(app, /!accessResolved/);
   assert.match(app, /\(!isSubscribed && !isBookTrial\)/);
-  assert.match(app, /setMessages\(restoredMessages\)[\s\S]*consumeWorkspaceSnapshot\(snapshot\.sessionId\)/);
+  assert.match(app, /promotePendingToActive\(promoted\)[\s\S]*applyActiveWorkspace\(verified\)[\s\S]*consumeWorkspaceSnapshot\(pending\.sessionId\)/);
   assert.match(app, /Jump In work restored\./);
 });
 

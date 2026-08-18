@@ -73,6 +73,17 @@ import {
   loadWorkspaceSnapshot,
   saveWorkspaceSnapshotSafely,
 } from "@/lib/gravitas-workspace-store";
+import {
+  activeWorkspaceFromPending,
+  GRAVITAS_ACTIVE_WORKSPACE_VERSION,
+  type GravitasActiveWorkspace,
+} from "@/lib/gravitas-active-workspace";
+import {
+  deleteActiveWorkspaceForUser,
+  loadActiveWorkspaceForUser,
+  promotePendingToActive,
+  saveActiveWorkspaceSafely,
+} from "@/lib/gravitas-active-workspace-store";
 
 type Msg = {
   role: "user" | "assistant";
@@ -1805,6 +1816,7 @@ const gravitonGroups = [
   const [isBookTrial, setIsBookTrial] = useState(false);
   const [bookTrialDaysRemaining, setBookTrialDaysRemaining] = useState<number | null>(null);
   const [accessResolved, setAccessResolved] = useState(false);
+  const [authenticatedUserId, setAuthenticatedUserId] = useState<string | null>(null);
   const [telemetrySeed, setTelemetrySeed] = useState<TelemetrySeed | null>(null);
   const [telemetryMinuteTick, setTelemetryMinuteTick] = useState(0);
   const [analysisBoost, setAnalysisBoost] = useState(0);
@@ -1820,12 +1832,20 @@ const gravitonGroups = [
   const runCoordinatorRef = useRef(createAnalysisRunCoordinator());
   const workspaceSaveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
   const workspacePersistencePausedRef = useRef(false);
+  const activeWorkspacePersistencePausedRef = useRef(false);
   const lastSavedWorkspaceRef = useRef<GravitasWorkspaceSnapshot | null>(null);
+  const lastSavedActiveWorkspaceRef = useRef<GravitasActiveWorkspace | null>(null);
+  const activeWorkspaceSaveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const hydratedPaidUserIdRef = useRef<string | null>(null);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const [activeWorkspaceOriginSessionId, setActiveWorkspaceOriginSessionId] = useState<string | null>(null);
   const [workspaceStorageWarning, setWorkspaceStorageWarning] = useState<string | null>(null);
   const [restoredWorkspaceNotice, setRestoredWorkspaceNotice] = useState(false);
   const [restoredSessionId, setRestoredSessionId] = useState<string | null>(null);
   const [workspaceHydration, setWorkspaceHydration] =
     useState<WorkspaceHydrationState>(isJumpIn ? "pending" : "ready");
+  const [paidWorkspaceHydration, setPaidWorkspaceHydration] =
+    useState<WorkspaceHydrationState>(isJumpIn ? "ready" : "pending");
 
   const jumpInExpired = isJumpInExpired(
     jumpInSession?.startedAt ?? null,
@@ -1914,6 +1934,98 @@ const gravitonGroups = [
     selectedGraviton,
     urlDraft,
     workspaceHydration,
+  ]);
+
+  const persistPaidWorkspace = useCallback(async (messageOverride?: Msg[]) => {
+    if (
+      isJumpIn ||
+      !authenticatedUserId ||
+      hydratedPaidUserIdRef.current !== authenticatedUserId ||
+      !activeWorkspaceId ||
+      activeWorkspacePersistencePausedRef.current ||
+      !canAutosaveWorkspace(paidWorkspaceHydration)
+    ) {
+      return false;
+    }
+
+    const workspaceMessages = messageOverride ?? messages;
+    const completedRunIds = new Set(
+      workspaceMessages
+        .filter(
+          (message) =>
+            message.role === "assistant" &&
+            message.analysisStatus === "success" &&
+            typeof message.runId === "string"
+        )
+        .map((message) => message.runId as string)
+    );
+    const completedMessages = workspaceMessages.filter(
+      (message) => message.runId && completedRunIds.has(message.runId)
+    ) as GravitasMessageSnapshot[];
+    const previous = lastSavedActiveWorkspaceRef.current;
+    const now = Date.now();
+    const record: GravitasActiveWorkspace = {
+      version: GRAVITAS_ACTIVE_WORKSPACE_VERSION,
+      workspaceId: activeWorkspaceId,
+      ownerUserId: authenticatedUserId,
+      originatingJumpInSessionId: activeWorkspaceOriginSessionId,
+      inputMode,
+      draft,
+      urlDraft,
+      importedUrl,
+      uploadedFiles: imageFiles.map((file) => ({
+        name: file.name,
+        type: file.type,
+        lastModified: file.lastModified,
+        blob: file,
+      })),
+      selectedGraviton,
+      cadence,
+      messages: completedMessages,
+      createdAt: previous?.createdAt ?? now,
+      updatedAt: now,
+      handoff: previous?.handoff ?? {
+        kind: "paid",
+        pendingSnapshotVersion: null,
+        importedAt: null,
+      },
+    };
+
+    const save = activeWorkspaceSaveQueueRef.current
+      .catch(() => false)
+      .then(async () => {
+        try {
+          const stored = previous
+            ? await saveActiveWorkspaceSafely(record)
+            : await promotePendingToActive(record);
+          lastSavedActiveWorkspaceRef.current = stored;
+          setWorkspaceStorageWarning(null);
+          return true;
+        } catch (error) {
+          setWorkspaceStorageWarning(
+            isStorageQuotaError(error)
+              ? "This browser does not have enough storage to retain your active workspace. Copy your work before continuing."
+              : "Your active workspace could not be saved in this browser. Copy your work before continuing."
+          );
+          return false;
+        }
+      });
+    activeWorkspaceSaveQueueRef.current = save;
+    return save;
+  }, [
+    activeWorkspaceId,
+    activeWorkspaceOriginSessionId,
+    authenticatedUserId,
+    cadence,
+    draft,
+    imageFiles,
+    importedUrl,
+    inputMode,
+    isJumpIn,
+    messages,
+    paidWorkspaceHydration,
+    selectedGraviton,
+    urlDraft,
   ]);
 
   useEffect(() => {
@@ -2274,6 +2386,30 @@ useEffect(() => {
   }, [isJumpIn, jumpInSession, persistJumpInWorkspace, workspaceHydration]);
 
   useEffect(() => {
+    if (
+      isJumpIn ||
+      !canAutosaveWorkspace(paidWorkspaceHydration) ||
+      !(draft.trim() || urlDraft.trim() || importedUrl || imageFiles.length || messages.length)
+    ) {
+      return;
+    }
+    activeWorkspacePersistencePausedRef.current = false;
+    const timeout = window.setTimeout(() => {
+      void persistPaidWorkspace();
+    }, 150);
+    return () => window.clearTimeout(timeout);
+  }, [
+    draft,
+    imageFiles.length,
+    importedUrl,
+    isJumpIn,
+    messages.length,
+    paidWorkspaceHydration,
+    persistPaidWorkspace,
+    urlDraft,
+  ]);
+
+  useEffect(() => {
     if (!isJumpIn || jumpInSession?.startedAt === null) return;
 
     const interval = window.setInterval(() => {
@@ -2367,6 +2503,7 @@ useEffect(() => {
       setAccessResolved(false);
 
       if (isJumpIn) {
+        setAuthenticatedUserId(null);
         setIsSubscribed(false);
         setAccessResolved(true);
         return;
@@ -2377,10 +2514,13 @@ useEffect(() => {
       } = await supabase.auth.getUser();
 
       if (!user) {
+        setAuthenticatedUserId(null);
         setIsSubscribed(false);
         setAccessResolved(true);
         return;
       }
+
+      setAuthenticatedUserId(user.id);
 
       const { data: subscriptionRows } = await supabase
         .from("subscriptions")
@@ -2438,100 +2578,144 @@ if (trialActive && trialEndDate) {
   }, [isJumpIn, supabase]);
 
   useEffect(() => {
-    if (
-      isJumpIn ||
-      !accessResolved ||
-      (!isSubscribed && !isBookTrial) ||
-      restoredSessionId
-    ) {
+    if (isJumpIn || !accessResolved) return;
+    if (!authenticatedUserId || (!isSubscribed && !isBookTrial)) {
+      hydratedPaidUserIdRef.current = null;
+      setPaidWorkspaceHydration("pending");
       return;
     }
-
-    const resumeTarget = window.localStorage.getItem(GRAVITAS_RESUME_MARKER_KEY);
-    if (!isValidResumeTarget(resumeTarget)) return;
-
-    const rawSession = window.localStorage.getItem(JUMP_IN_STORAGE_KEY);
-    if (!rawSession) return;
-
-    let sessionId: string | null = null;
-    try {
-      const parsed = JSON.parse(rawSession) as JumpInSessionState;
-      if (typeof parsed.sessionId === "string") sessionId = parsed.sessionId;
-    } catch {
-      return;
-    }
-    if (!sessionId) return;
 
     let cancelled = false;
-    void (async () => {
-      try {
-        const snapshot = await loadWorkspaceSnapshot(sessionId);
-        if (!snapshot || cancelled) return;
 
-        const restoredFiles = snapshot.uploadedFiles.map(
-          (asset) =>
-            new File([asset.blob], asset.name, {
-              type: asset.type,
-              lastModified: asset.lastModified,
-            })
-        );
-        const restoredMessages = snapshot.messages as Msg[];
-        const restoredSourceKey = getActiveSourceKey(
-          snapshot.inputMode === "url"
-            ? { type: "url", url: snapshot.urlDraft }
-            : snapshot.inputMode === "images"
-              ? {
-                  type: "images",
-                  images: restoredFiles.map((file) => ({
-                    name: file.name,
-                    size: file.size,
-                    lastModified: file.lastModified,
-                  })),
-                }
-              : { type: "text", text: snapshot.draft }
-        );
-        const restoredCompletedRuns = new Set<string>();
-        restoredMessages.forEach((message) => {
-          if (
-            message.role === "assistant" &&
-            message.analysisStatus === "success" &&
-            message.graviton
-          ) {
-            restoredCompletedRuns.add(
-              getAnalysisRunKey(restoredSourceKey, message.graviton)
-            );
-          }
-        });
-
-        setInputMode(snapshot.inputMode);
-        setDraft(snapshot.draft);
-        setUrlDraft(snapshot.urlDraft);
-        setImportedUrl(snapshot.importedUrl);
-        setImageFiles(restoredFiles);
-        setSelectedGraviton(snapshot.selectedGraviton);
-        setCadence(snapshot.cadence);
-        setMessages(restoredMessages);
-        setCompletedAnalysisRuns(restoredCompletedRuns);
-        setRestoredSessionId(snapshot.sessionId);
-        setRestoredWorkspaceNotice(true);
-
-        await new Promise<void>((resolve) => {
-          window.requestAnimationFrame(() => resolve());
-        });
-        if (cancelled) return;
-        const consumed = await consumeWorkspaceSnapshot(snapshot.sessionId);
-        if (consumed && !cancelled) {
-          window.localStorage.removeItem(GRAVITAS_RESUME_MARKER_KEY);
+    const applyActiveWorkspace = (record: GravitasActiveWorkspace) => {
+      const restoredFiles = record.uploadedFiles.map(
+        (asset) => new File([asset.blob], asset.name, {
+          type: asset.type,
+          lastModified: asset.lastModified,
+        })
+      );
+      const restoredMessages = record.messages as Msg[];
+      const restoredSourceKey = getActiveSourceKey(
+        record.inputMode === "url"
+          ? { type: "url", url: record.urlDraft }
+          : record.inputMode === "images"
+            ? {
+                type: "images",
+                images: restoredFiles.map((file) => ({
+                  name: file.name,
+                  size: file.size,
+                  lastModified: file.lastModified,
+                })),
+              }
+            : { type: "text", text: record.draft }
+      );
+      const restoredCompletedRuns = new Set<string>();
+      restoredMessages.forEach((message) => {
+        if (
+          message.role === "assistant" &&
+          message.analysisStatus === "success" &&
+          message.graviton
+        ) {
+          restoredCompletedRuns.add(
+            getAnalysisRunKey(restoredSourceKey, message.graviton)
+          );
         }
+      });
+
+      lastSavedActiveWorkspaceRef.current = record;
+      setActiveWorkspaceId(record.workspaceId);
+      setActiveWorkspaceOriginSessionId(record.originatingJumpInSessionId);
+      setInputMode(record.inputMode);
+      setDraft(record.draft);
+      setUrlDraft(record.urlDraft);
+      setImportedUrl(record.importedUrl);
+      setImageFiles(restoredFiles);
+      setSelectedGraviton(record.selectedGraviton);
+      setCadence(record.cadence);
+      setMessages(restoredMessages);
+      setCompletedAnalysisRuns(restoredCompletedRuns);
+    };
+
+    void (async () => {
+      hydratedPaidUserIdRef.current = null;
+      setPaidWorkspaceHydration("hydrating");
+      try {
+        const resumeTarget = window.localStorage.getItem(GRAVITAS_RESUME_MARKER_KEY);
+        const rawSession = window.localStorage.getItem(JUMP_IN_STORAGE_KEY);
+        let sessionId: string | null = null;
+        if (isValidResumeTarget(resumeTarget) && rawSession) {
+          try {
+            const parsed = JSON.parse(rawSession) as JumpInSessionState;
+            if (typeof parsed.sessionId === "string") sessionId = parsed.sessionId;
+          } catch {}
+        }
+
+        const pending = sessionId
+          ? await loadWorkspaceSnapshot(sessionId)
+          : null;
+        if (cancelled) return;
+
+        if (pending) {
+          const promoted = activeWorkspaceFromPending(
+            pending,
+            authenticatedUserId
+          );
+          try {
+            const verified = await promotePendingToActive(promoted);
+            if (cancelled) return;
+            applyActiveWorkspace(verified);
+            setRestoredSessionId(pending.sessionId);
+            setRestoredWorkspaceNotice(true);
+            setWorkspaceStorageWarning(null);
+            hydratedPaidUserIdRef.current = authenticatedUserId;
+            setPaidWorkspaceHydration("ready");
+            const consumed = await consumeWorkspaceSnapshot(pending.sessionId);
+            if (consumed && !cancelled) {
+              window.localStorage.removeItem(GRAVITAS_RESUME_MARKER_KEY);
+            }
+          } catch (error) {
+            if (cancelled) return;
+            applyActiveWorkspace(activeWorkspaceFromPending(
+              pending,
+              authenticatedUserId,
+              promoted.workspaceId
+            ));
+            setWorkspaceStorageWarning(
+              isStorageQuotaError(error)
+                ? "This browser does not have enough storage to retain your restored work. The Jump In copy remains recoverable."
+                : "Your restored work could not be saved as active work in this browser. The Jump In copy remains recoverable."
+            );
+            setPaidWorkspaceHydration("failed");
+          }
+          return;
+        }
+
+        const active = await loadActiveWorkspaceForUser(authenticatedUserId);
+        if (cancelled) return;
+        if (active) {
+          applyActiveWorkspace(active);
+        } else {
+          setActiveWorkspaceId(crypto.randomUUID());
+          setActiveWorkspaceOriginSessionId(null);
+        }
+        setRestoredWorkspaceNotice(false);
+        setWorkspaceStorageWarning(null);
+        hydratedPaidUserIdRef.current = authenticatedUserId;
+        setPaidWorkspaceHydration("ready");
       } catch {
-        // A malformed or unavailable workspace must never block paid access.
+        if (cancelled) return;
+        setWorkspaceStorageWarning(
+          "Your active workspace could not be opened in this browser. You can continue, but changes may not persist."
+        );
+        hydratedPaidUserIdRef.current = null;
+        setPaidWorkspaceHydration("failed");
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [accessResolved, isBookTrial, isJumpIn, isSubscribed, restoredSessionId]);
+  }, [accessResolved, authenticatedUserId, isBookTrial, isJumpIn, isSubscribed]);
 
   function startJumpInSession() {
     if (!isJumpIn) return null;
@@ -2668,11 +2852,19 @@ if (trialActive && trialEndDate) {
   function onClear() {
     if (isLoading) return;
     workspacePersistencePausedRef.current = true;
-    const workspaceSessionId = jumpInSession?.sessionId ?? restoredSessionId;
+    activeWorkspacePersistencePausedRef.current = true;
+    const workspaceSessionId =
+      jumpInSession?.sessionId ?? activeWorkspaceOriginSessionId ?? restoredSessionId;
     if (workspaceSessionId) {
       void workspaceSaveQueueRef.current
         .catch(() => false)
         .then(() => deleteWorkspaceSnapshot(workspaceSessionId))
+        .catch(() => undefined);
+    }
+    if (!isJumpIn && authenticatedUserId) {
+      void activeWorkspaceSaveQueueRef.current
+        .catch(() => false)
+        .then(() => deleteActiveWorkspaceForUser(authenticatedUserId, activeWorkspaceId))
         .catch(() => undefined);
     }
     window.localStorage.removeItem(GRAVITAS_RESUME_MARKER_KEY);
@@ -2688,6 +2880,10 @@ if (trialActive && trialEndDate) {
     setCopiedMessageKey(null);
     setRestoredWorkspaceNotice(false);
     setRestoredSessionId(null);
+    lastSavedActiveWorkspaceRef.current = null;
+    hydratedPaidUserIdRef.current = authenticatedUserId;
+    setActiveWorkspaceId(isJumpIn ? null : crypto.randomUUID());
+    setActiveWorkspaceOriginSessionId(null);
     setWorkspaceStorageWarning(null);
     messageContentRefs.current = {};
   }
@@ -3112,6 +3308,18 @@ if (urlSourceImages.length > 0) {
     );
   }
 
+  if (
+    !isJumpIn &&
+    (isSubscribed || isBookTrial) &&
+    (paidWorkspaceHydration === "pending" || paidWorkspaceHydration === "hydrating")
+  ) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-neutral-950 text-neutral-100">
+        Restoring workspace...
+      </main>
+    );
+  }
+
   return (
     <main className="gravitas-shell min-h-screen text-neutral-100">
       <div className="relative z-10 mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
@@ -3417,6 +3625,7 @@ if (urlSourceImages.length > 0) {
                                 });
                               setMessages(nextMessages);
                               void persistJumpInWorkspace(nextMessages);
+                              void persistPaidWorkspace(nextMessages);
                             }}
                             onInteractionSignal={(name, properties) =>
                               emitSignal(name, signalSurface, properties)

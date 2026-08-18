@@ -4,17 +4,25 @@ import {
   type GravitasWorkspaceSnapshot,
 } from "@/lib/gravitas-workspace";
 
-const DATABASE_NAME = "gravitas-workspaces";
-const DATABASE_VERSION = 1;
-const STORE_NAME = "pending-workspaces";
+export const DATABASE_NAME = "gravitas-workspaces";
+export const DATABASE_VERSION = 2;
+export const PENDING_WORKSPACE_STORE = "pending-workspaces";
+export const ACTIVE_WORKSPACE_STORE = "active-paid-workspaces";
+export const ACTIVE_WORKSPACE_POINTER_STORE = "active-paid-workspace-pointers";
 
-function openWorkspaceDatabase(): Promise<IDBDatabase> {
+export function openWorkspaceDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = window.indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
     request.onupgradeneeded = () => {
       const database = request.result;
-      if (!database.objectStoreNames.contains(STORE_NAME)) {
-        database.createObjectStore(STORE_NAME, { keyPath: "sessionId" });
+      if (!database.objectStoreNames.contains(PENDING_WORKSPACE_STORE)) {
+        database.createObjectStore(PENDING_WORKSPACE_STORE, { keyPath: "sessionId" });
+      }
+      if (!database.objectStoreNames.contains(ACTIVE_WORKSPACE_STORE)) {
+        database.createObjectStore(ACTIVE_WORKSPACE_STORE, { keyPath: "workspaceId" });
+      }
+      if (!database.objectStoreNames.contains(ACTIVE_WORKSPACE_POINTER_STORE)) {
+        database.createObjectStore(ACTIVE_WORKSPACE_POINTER_STORE, { keyPath: "userId" });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -29,8 +37,8 @@ function transact<T>(
   return openWorkspaceDatabase().then(
     (database) =>
       new Promise<T>((resolve, reject) => {
-        const transaction = database.transaction(STORE_NAME, mode);
-        const store = transaction.objectStore(STORE_NAME);
+        const transaction = database.transaction(PENDING_WORKSPACE_STORE, mode);
+        const store = transaction.objectStore(PENDING_WORKSPACE_STORE);
         transaction.oncomplete = () => database.close();
         transaction.onerror = () => reject(transaction.error ?? new Error("Workspace storage failed"));
         transaction.onabort = () => reject(transaction.error ?? new Error("Workspace storage aborted"));
@@ -70,6 +78,15 @@ export async function loadWorkspaceSnapshot(sessionId: string, now = Date.now())
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
+
+  if (
+    value &&
+    typeof value === "object" &&
+    (value as Partial<GravitasWorkspaceSnapshot>).sessionId === sessionId &&
+    (value as Partial<GravitasWorkspaceSnapshot>).state === "consumed"
+  ) {
+    return null;
+  }
 
   if (!isValidWorkspaceSnapshot(value, sessionId, now)) {
     if (value !== undefined) await deleteWorkspaceSnapshot(sessionId).catch(() => undefined);
