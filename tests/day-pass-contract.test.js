@@ -17,6 +17,8 @@ test("Day Pass fulfilment grants only 48-hour Gravitas access", () => {
   assert.match(webhook, /Your Day Pass runs for 48 hours from purchase/);
   assert.match(webhook, /Login to Gravitas/);
   assert.match(webhook, /try \{[\s\S]*getResend\(\)\.emails\.send/);
+  assert.match(webhook, /Gravitas Staging <support@multirrupt\.ai>/);
+  assert.match(webhook, /from: GRAVITAS_EMAIL_SENDER/);
   assert.match(webhook, /catch \(emailError\)/);
   assert.doesNotMatch(webhook, /Hidden Campaign/i);
   assert.doesNotMatch(webhook, /hidden-campaign\.pdf/i);

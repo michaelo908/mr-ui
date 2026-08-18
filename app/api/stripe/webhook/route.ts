@@ -102,6 +102,9 @@ const GRAVITAS_DAY_PASS_PRICE_ID =
   process.env.STRIPE_DAY_PASS_PRICE_ID || "price_1TxjZXPEeaE0AI8SMYUQ1WhG";
 const GRAVITAS_APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || "https://www.multirrupt.ai";
+const GRAVITAS_EMAIL_SENDER = GRAVITAS_APP_URL.includes("gravitas-staging.multirrupt.ai")
+  ? "Gravitas Staging <support@multirrupt.ai>"
+  : "Multirrupt Gravitas <support@multirrupt.ai>";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-02-25.clover",
@@ -230,7 +233,7 @@ export async function POST(req: Request) {
 
             try {
               const { error: emailError } = await getResend().emails.send({
-                from: "Multirrupt Gravitas <support@multirrupt.ai>",
+                from: GRAVITAS_EMAIL_SENDER,
                 to: email,
                 subject: "Your Gravitas Day Pass is ready",
                 html: `
