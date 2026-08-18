@@ -102,6 +102,18 @@ test("empty initial state cannot replace a non-empty pending snapshot", () => {
   assert.equal(hasWorkspaceContent(selected), true);
 });
 
+test("a later stale write cannot remove rewrites from an existing completed run", () => {
+  const persisted = snapshot();
+  const stale = snapshot({
+    messages: persisted.messages.map((message) =>
+      message.role === "assistant" ? { ...message, rewrites: [] } : message
+    ),
+  });
+  const selected = chooseWorkspaceSnapshotForSave(persisted, stale, now + 1);
+  assert.equal(selected.messages[1].rewrites.length, 2);
+  assert.equal(selected.messages[1].rewrites[1].content, "Second");
+});
+
 test("confirmed absence permits the first empty workspace write", () => {
   const empty = snapshot({ draft: "", messages: [] });
   assert.equal(chooseWorkspaceSnapshotForSave(undefined, empty, now + 1), empty);
@@ -172,4 +184,3 @@ test("text, URL and blob-backed image snapshots remain valid and session-bound",
   assert.equal(isValidWorkspaceSnapshot(image, sessionId, now + 1), true);
   assert.equal(isValidWorkspaceSnapshot(text, "another-session", now + 1), false);
 });
-

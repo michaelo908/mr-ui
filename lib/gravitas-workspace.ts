@@ -176,5 +176,22 @@ export function chooseWorkspaceSnapshotForSave(
   ) {
     return existing;
   }
+  if (isValidWorkspaceSnapshot(existing, incoming.sessionId, now)) {
+    const existingByRunId = new Map(
+      existing.messages.map((message) => [message.runId, message])
+    );
+    const messages = incoming.messages.map((message) => {
+      const retained = existingByRunId.get(message.runId);
+      if (
+        message.role === "assistant" &&
+        retained?.role === "assistant" &&
+        (retained.rewrites?.length ?? 0) > (message.rewrites?.length ?? 0)
+      ) {
+        return { ...message, rewrites: retained.rewrites };
+      }
+      return message;
+    });
+    return { ...incoming, messages };
+  }
   return incoming;
 }

@@ -52,13 +52,13 @@ export async function saveWorkspaceSnapshotSafely(
         snapshot,
         now
       );
-      if (selected !== snapshot) {
+      if (selected === readRequest.result) {
         resolve(selected);
         return;
       }
 
-      const writeRequest = store.put(snapshot);
-      writeRequest.onsuccess = () => resolve(snapshot);
+      const writeRequest = store.put(selected);
+      writeRequest.onsuccess = () => resolve(selected);
       writeRequest.onerror = () => reject(writeRequest.error);
     };
   });

@@ -96,6 +96,7 @@ test("Jump In hydration gates autosave and storage independently rejects empty r
   assert.match(app, /canAutosaveWorkspace\(workspaceHydration\)/);
   assert.match(store, /chooseWorkspaceSnapshotForSave/);
   assert.match(model, /hasWorkspaceContent\(existing\)[\s\S]*!hasWorkspaceContent\(incoming\)/);
+  assert.match(model, /retained\.rewrites[\s\S]*message\.rewrites/);
 });
 
 test("resume intent is validated and contains no source content", () => {

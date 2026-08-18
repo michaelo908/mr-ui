@@ -21,7 +21,7 @@ test("workspace persistence uses IndexedDB and supports blobs without leaking co
   const store = read("lib/gravitas-workspace-store.ts");
   assert.match(model, /blob: Blob/);
   assert.match(store, /window\.indexedDB\.open/);
-  assert.match(store, /store\.put\(snapshot\)/);
+  assert.match(store, /store\.put\((?:snapshot|selected)\)/);
   assert.match(store, /QuotaExceededError/);
   assert.doesNotMatch(store, /localStorage|sessionStorage|fetch\(|Stripe/i);
 });
