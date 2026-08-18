@@ -1,5 +1,76 @@
 @import "tailwindcss";
 
+.gravitas-shell {
+  position: relative;
+  isolation: isolate;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 18% -8%, rgba(54, 133, 224, 0.16), transparent 31rem),
+    radial-gradient(circle at 84% 18%, rgba(54, 133, 224, 0.07), transparent 26rem),
+    linear-gradient(145deg, #111418 0%, #090b0e 46%, #050607 100%);
+}
+
+.gravitas-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px);
+  background-size: 100% 5px;
+  opacity: 0.55;
+}
+
+.gravitas-header,
+.gravitas-input-panel,
+.gravitas-output,
+.gravitas-source-panel {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: linear-gradient(145deg, rgba(29, 34, 40, 0.94), rgba(12, 15, 18, 0.97));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.65),
+    0 22px 65px rgba(0, 0, 0, 0.33);
+}
+
+.gravitas-input-panel {
+  position: relative;
+  border-color: rgba(87, 160, 246, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 0 0 1px rgba(42, 117, 205, 0.025),
+    0 24px 70px rgba(0, 0, 0, 0.38),
+    0 0 55px rgba(35, 118, 215, 0.07);
+}
+
+.gravitas-output {
+  background: linear-gradient(155deg, rgba(22, 26, 31, 0.97), rgba(9, 11, 14, 0.985));
+}
+
+.gravitas-blue-logo {
+  width: 168px;
+  height: 36px;
+  background: #58a6ff;
+  -webkit-mask: url("/gravitas-logo-white.png") center / contain no-repeat;
+  mask: url("/gravitas-logo-white.png") center / contain no-repeat;
+  filter: drop-shadow(0 0 20px rgba(70, 153, 248, 0.24));
+}
+
+.gravitas-workbench textarea,
+.gravitas-workbench input,
+.gravitas-workbench select {
+  box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.38);
+}
+
+@media (max-width: 640px) {
+  .gravitas-header,
+  .gravitas-input-panel,
+  .gravitas-output,
+  .gravitas-source-panel {
+    border-radius: 1rem;
+  }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

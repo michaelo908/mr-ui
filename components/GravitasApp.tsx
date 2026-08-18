@@ -2748,17 +2748,22 @@ if (urlSourceImages.length > 0) {
   }
 
   return (
-    <main className="min-h-screen bg-neutral-950 text-neutral-100">
-      <div className="mx-auto w-full max-w-3xl px-4 py-10">
-        <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <main className="gravitas-shell min-h-screen text-neutral-100">
+      <div className="relative z-10 mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+        <header className="gravitas-header mb-6 flex flex-col gap-5 rounded-2xl px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div>
-            <div className="text-2xl font-semibold tracking-tight">
-              {isJumpIn && funnel ? funnel.eyebrow : isJumpIn ? "Jump Into Gravitas" : "Multirrupt – GRAVITAS"}
+            <div
+              role="img"
+              aria-label="Gravitas Narrative Intelligence"
+              className="gravitas-blue-logo"
+            />
+            <div className="mt-3 text-sm font-medium text-neutral-300">
+              {isJumpIn && funnel ? funnel.eyebrow : isJumpIn ? "Jump Into Gravitas" : "Narrative Intelligence Workstation"}
             </div>
-            <div className="mt-1 text-sm text-neutral-400">
+            <div className="mt-1 text-sm text-neutral-500">
               {isJumpIn
                 ? funnel ? "Your reader-side diagnostic is unlocked for 20 minutes." : "Full Gravitas. 20 minutes. No signup required."
-                : "Narrative Intelligence Workstation"}
+                : "See the narrative from the other side."}
             </div>
             {isJumpIn ? (
               <div
@@ -2868,13 +2873,14 @@ if (urlSourceImages.length > 0) {
           </section>
         ) : null}
 
+        <div className="gravitas-workbench flex flex-col">
         <div
           ref={scrollerRef}
           className={classNames(
-            "rounded-2xl border border-neutral-800 bg-neutral-950 p-4",
+            "gravitas-output order-2 mt-5 rounded-2xl p-4 sm:p-6",
             isJumpIn && messages.length === 0 && !jumpInExpired
               ? "min-h-[460px] overflow-visible sm:min-h-[540px]"
-              : "h-[60vh] overflow-y-auto"
+              : "overflow-visible"
           )}
         >
           {messages.length === 0 ? (
@@ -3028,7 +3034,7 @@ if (urlSourceImages.length > 0) {
           )}
         </div>
 
-        <div className="mt-4 rounded-2xl border border-neutral-800 bg-neutral-950 p-3">
+        <div className="gravitas-input-panel order-1 rounded-2xl p-4 sm:p-5">
   <div className="mb-3 flex flex-wrap gap-2" aria-label="Source type">
     {([
       ["text", "Text"],
@@ -3241,7 +3247,7 @@ if (urlSourceImages.length > 0) {
 </div>
 
   {selectedSourceImages.length > 0 && (
-  <div className="mt-4 rounded-2xl border border-neutral-800 bg-neutral-950 p-3">
+  <div className="gravitas-source-panel order-3 mt-5 rounded-2xl p-3">
     <div className="mb-3 flex items-center justify-between">
       <div className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">
         Content Under Review
@@ -3258,7 +3264,8 @@ if (urlSourceImages.length > 0) {
 
   </div>
 )}
-          
+        </div>
+
         
       </div>
     </main>
