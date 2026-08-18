@@ -851,6 +851,7 @@ function StructuredAssistantMessage({
   const [rewrites, setRewrites] = useState<RewriteVariant[]>([]);
   const initialRewritesRef = useRef(initialRewrites);
   const onRewritesChangeRef = useRef(onRewritesChange);
+  const rewritesInitializedRef = useRef(false);
   const [isGeneratingAlternate, setIsGeneratingAlternate] = useState(false);
   const [activeLightboxIndex, setActiveLightboxIndex] = useState<number | null>(
     null
@@ -1047,6 +1048,10 @@ function StructuredAssistantMessage({
   }, [content, rewrite]);
 
   useEffect(() => {
+    if (!rewritesInitializedRef.current) {
+      rewritesInitializedRef.current = true;
+      if (rewrites.length === 0) return;
+    }
     onRewritesChangeRef.current?.(rewrites);
   }, [rewrites]);
 
@@ -1835,14 +1840,15 @@ const gravitonGroups = [
   const signalSurface = isJumpIn ? "jump-in" as const : "paid" as const;
   const jumpInSessionId = jumpInSession?.sessionId ?? null;
 
-  const persistJumpInWorkspace = useCallback(async () => {
+  const persistJumpInWorkspace = useCallback(async (messageOverride?: Msg[]) => {
     if (!isJumpIn || !jumpInSession || workspacePersistencePausedRef.current) {
       return true;
     }
     if (!canAutosaveWorkspace(workspaceHydration)) return false;
 
+    const workspaceMessages = messageOverride ?? messages;
     const completedRunIds = new Set(
-      messages
+      workspaceMessages
         .filter(
           (message) =>
             message.role === "assistant" &&
@@ -1851,7 +1857,7 @@ const gravitonGroups = [
         )
         .map((message) => message.runId as string)
     );
-    const completedMessages = messages.filter(
+    const completedMessages = workspaceMessages.filter(
       (message) => message.runId && completedRunIds.has(message.runId)
     ) as GravitasMessageSnapshot[];
 
@@ -3394,8 +3400,7 @@ if (urlSourceImages.length > 0) {
                             }}
                             onRewritesChange={(nextRewrites) => {
                               if (!m.runId) return;
-                              setMessages((current) =>
-                                current.map((message) => {
+                              const nextMessages = messages.map((message) => {
                                   if (
                                     message.role !== "assistant" ||
                                     message.runId !== m.runId
@@ -3409,8 +3414,9 @@ if (urlSourceImages.length > 0) {
                                   return currentSerialized === nextSerialized
                                     ? message
                                     : { ...message, rewrites: nextRewrites };
-                                })
-                              );
+                                });
+                              setMessages(nextMessages);
+                              void persistJumpInWorkspace(nextMessages);
                             }}
                             onInteractionSignal={(name, properties) =>
                               emitSignal(name, signalSurface, properties)

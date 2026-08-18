@@ -49,6 +49,8 @@ test("rewrites are parent-owned and restored with their original cadence", () =>
   assert.match(app, /onRewritesChange=\{\(nextRewrites\)/);
   assert.match(app, /message\.rewrites \?\? \[\]/);
   assert.match(app, /cadence=\{m\.cadence \?\? cadence\}/);
+  assert.match(app, /setMessages\(nextMessages\);[\s\S]*persistJumpInWorkspace\(nextMessages\)/);
+  assert.match(app, /rewritesInitializedRef[\s\S]*if \(rewrites\.length === 0\) return/);
   assert.doesNotMatch(app, /Conversion Rewrite|Authority Rewrite|Concise Rewrite/);
 });
 
