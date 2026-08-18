@@ -6,6 +6,8 @@ export const GRAVITAS_WORKSPACE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const GRAVITAS_RESUME_MARKER_KEY = "gravitasResumeMarkerV1";
 export const GRAVITAS_RESUME_TARGET = "/?resume=jump-in";
 
+export type WorkspaceHydrationState = "pending" | "hydrating" | "ready" | "failed";
+
 export type GravitasRewriteSnapshot = {
   id: string;
   label: string;
@@ -146,4 +148,33 @@ export function createWorkspaceSnapshot(
     updatedAt: now,
     expiresAt: previous?.expiresAt ?? now + GRAVITAS_WORKSPACE_TTL_MS,
   };
+}
+
+export function hasWorkspaceContent(snapshot: GravitasWorkspaceSnapshot) {
+  return Boolean(
+    snapshot.draft.trim() ||
+      snapshot.urlDraft.trim() ||
+      snapshot.importedUrl ||
+      snapshot.uploadedFiles.length ||
+      snapshot.messages.length
+  );
+}
+
+export function canAutosaveWorkspace(state: WorkspaceHydrationState) {
+  return state === "ready";
+}
+
+export function chooseWorkspaceSnapshotForSave(
+  existing: unknown,
+  incoming: GravitasWorkspaceSnapshot,
+  now = Date.now()
+) {
+  if (
+    isValidWorkspaceSnapshot(existing, incoming.sessionId, now) &&
+    hasWorkspaceContent(existing) &&
+    !hasWorkspaceContent(incoming)
+  ) {
+    return existing;
+  }
+  return incoming;
 }

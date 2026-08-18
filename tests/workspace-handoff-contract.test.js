@@ -80,6 +80,20 @@ test("clear removes visible and persisted work", () => {
   assert.match(clear, /deleteWorkspaceSnapshot\(workspaceSessionId\)/);
   assert.match(clear, /setMessages\(\[\]\)/);
   assert.match(clear, /removeItem\(GRAVITAS_RESUME_MARKER_KEY\)/);
+  assert.match(clear, /workspacePersistencePausedRef\.current = true/);
+});
+
+test("Jump In hydration gates autosave and storage independently rejects empty replacement", () => {
+  const app = read("components/GravitasApp.tsx");
+  const model = read("lib/gravitas-workspace.ts");
+  const store = read("lib/gravitas-workspace-store.ts");
+  assert.match(app, /useState<WorkspaceHydrationState>/);
+  assert.match(model, /"pending" \| "hydrating" \| "ready" \| "failed"/);
+  assert.match(app, /loadWorkspaceSnapshot\(jumpInSessionId\)/);
+  assert.match(app, /setMessages\(restoredMessages\)[\s\S]*setWorkspaceHydration\("ready"\)/);
+  assert.match(app, /canAutosaveWorkspace\(workspaceHydration\)/);
+  assert.match(store, /chooseWorkspaceSnapshotForSave/);
+  assert.match(model, /hasWorkspaceContent\(existing\)[\s\S]*!hasWorkspaceContent\(incoming\)/);
 });
 
 test("resume intent is validated and contains no source content", () => {

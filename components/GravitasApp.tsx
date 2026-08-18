@@ -56,6 +56,7 @@ import { emitSignal, initializeSignalIdentity, signalHeaders, toSignalIdentifier
 import type { SignalName } from "@/lib/signals/registry";
 import type { AcquisitionFunnel } from "@/lib/acquisition-funnels";
 import {
+  canAutosaveWorkspace,
   createWorkspaceSnapshot,
   GRAVITAS_RESUME_MARKER_KEY,
   GRAVITAS_RESUME_TARGET,
@@ -63,13 +64,14 @@ import {
   type GravitasMessageSnapshot,
   type GravitasRewriteSnapshot,
   type GravitasWorkspaceSnapshot,
+  type WorkspaceHydrationState,
 } from "@/lib/gravitas-workspace";
 import {
   consumeWorkspaceSnapshot,
   deleteWorkspaceSnapshot,
   isStorageQuotaError,
   loadWorkspaceSnapshot,
-  saveWorkspaceSnapshot,
+  saveWorkspaceSnapshotSafely,
 } from "@/lib/gravitas-workspace-store";
 
 type Msg = {
@@ -1817,6 +1819,8 @@ const gravitonGroups = [
   const [workspaceStorageWarning, setWorkspaceStorageWarning] = useState<string | null>(null);
   const [restoredWorkspaceNotice, setRestoredWorkspaceNotice] = useState(false);
   const [restoredSessionId, setRestoredSessionId] = useState<string | null>(null);
+  const [workspaceHydration, setWorkspaceHydration] =
+    useState<WorkspaceHydrationState>(isJumpIn ? "pending" : "ready");
 
   const jumpInExpired = isJumpInExpired(
     jumpInSession?.startedAt ?? null,
@@ -1829,11 +1833,13 @@ const gravitonGroups = [
   const isDemoLocked = isJumpIn && jumpInExpired;
   const apiEndpoint = isJumpIn ? "/api/jump-in/mr" : "/api/mr";
   const signalSurface = isJumpIn ? "jump-in" as const : "paid" as const;
+  const jumpInSessionId = jumpInSession?.sessionId ?? null;
 
   const persistJumpInWorkspace = useCallback(async () => {
     if (!isJumpIn || !jumpInSession || workspacePersistencePausedRef.current) {
       return true;
     }
+    if (!canAutosaveWorkspace(workspaceHydration)) return false;
 
     const completedRunIds = new Set(
       messages
@@ -1874,8 +1880,8 @@ const gravitonGroups = [
             lastSavedWorkspaceRef.current ??
             (await loadWorkspaceSnapshot(jumpInSession.sessionId));
           const snapshot = createWorkspaceSnapshot(snapshotInput, previous);
-          await saveWorkspaceSnapshot(snapshot);
-          lastSavedWorkspaceRef.current = snapshot;
+          const storedSnapshot = await saveWorkspaceSnapshotSafely(snapshot);
+          lastSavedWorkspaceRef.current = storedSnapshot;
           setWorkspaceStorageWarning(null);
           return true;
         } catch (error) {
@@ -1901,6 +1907,7 @@ const gravitonGroups = [
     messages,
     selectedGraviton,
     urlDraft,
+    workspaceHydration,
   ]);
 
   useEffect(() => {
@@ -2165,12 +2172,100 @@ useEffect(() => {
   }, [isJumpIn]);
 
   useEffect(() => {
-    if (!isJumpIn || !jumpInSession) return;
+    if (!isJumpIn || !jumpInSessionId) return;
+
+    let cancelled = false;
+    setWorkspaceHydration("hydrating");
+    void (async () => {
+      try {
+        const snapshot = await loadWorkspaceSnapshot(jumpInSessionId);
+        if (cancelled) return;
+
+        if (snapshot) {
+          const restoredFiles = snapshot.uploadedFiles.map(
+            (asset) =>
+              new File([asset.blob], asset.name, {
+                type: asset.type,
+                lastModified: asset.lastModified,
+              })
+          );
+          const restoredMessages = snapshot.messages as Msg[];
+          const restoredSourceKey = getActiveSourceKey(
+            snapshot.inputMode === "url"
+              ? { type: "url", url: snapshot.urlDraft }
+              : snapshot.inputMode === "images"
+                ? {
+                    type: "images",
+                    images: restoredFiles.map((file) => ({
+                      name: file.name,
+                      size: file.size,
+                      lastModified: file.lastModified,
+                    })),
+                  }
+                : { type: "text", text: snapshot.draft }
+          );
+          const restoredCompletedRuns = new Set<string>();
+          restoredMessages.forEach((message) => {
+            if (
+              message.role === "assistant" &&
+              message.analysisStatus === "success" &&
+              message.graviton
+            ) {
+              restoredCompletedRuns.add(
+                getAnalysisRunKey(restoredSourceKey, message.graviton)
+              );
+            }
+          });
+
+          lastSavedWorkspaceRef.current = snapshot;
+          setInputMode(snapshot.inputMode);
+          setDraft(snapshot.draft);
+          setUrlDraft(snapshot.urlDraft);
+          setImportedUrl(snapshot.importedUrl);
+          setImageFiles(restoredFiles);
+          setSelectedGraviton(snapshot.selectedGraviton);
+          setCadence(snapshot.cadence);
+          setMessages(restoredMessages);
+          setCompletedAnalysisRuns(restoredCompletedRuns);
+        }
+
+        setWorkspaceStorageWarning(null);
+        setWorkspaceHydration("ready");
+      } catch {
+        if (cancelled) return;
+        setWorkspaceStorageWarning(
+          "Your saved Jump In work could not be opened in this browser. You can continue, but copy your work before checkout."
+        );
+        setWorkspaceHydration("failed");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isJumpIn, jumpInSessionId]);
+
+  useEffect(() => {
+    if (
+      isJumpIn &&
+      canAutosaveWorkspace(workspaceHydration) &&
+      (draft.trim() ||
+        urlDraft.trim() ||
+        importedUrl ||
+        imageFiles.length > 0 ||
+        messages.length > 0)
+    ) {
+      workspacePersistencePausedRef.current = false;
+    }
+  }, [draft, imageFiles.length, importedUrl, isJumpIn, messages.length, urlDraft, workspaceHydration]);
+
+  useEffect(() => {
+    if (!isJumpIn || !jumpInSession || !canAutosaveWorkspace(workspaceHydration)) return;
     const timeout = window.setTimeout(() => {
       void persistJumpInWorkspace();
     }, 150);
     return () => window.clearTimeout(timeout);
-  }, [isJumpIn, jumpInSession, persistJumpInWorkspace]);
+  }, [isJumpIn, jumpInSession, persistJumpInWorkspace, workspaceHydration]);
 
   useEffect(() => {
     if (!isJumpIn || jumpInSession?.startedAt === null) return;
@@ -2581,6 +2676,8 @@ if (trialActive && trialEndDate) {
     setUrlDraft("");
     setUrlError(null);
     setImportedUrl(null);
+    setImageFiles([]);
+    setCompletedAnalysisRuns(new Set());
     setCopiedAllKey(null);
     setCopiedMessageKey(null);
     setRestoredWorkspaceNotice(false);

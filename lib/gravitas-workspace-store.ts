@@ -1,4 +1,5 @@
 import {
+  chooseWorkspaceSnapshotForSave,
   isValidWorkspaceSnapshot,
   type GravitasWorkspaceSnapshot,
 } from "@/lib/gravitas-workspace";
@@ -38,11 +39,28 @@ function transact<T>(
   );
 }
 
-export async function saveWorkspaceSnapshot(snapshot: GravitasWorkspaceSnapshot) {
-  await transact<void>("readwrite", (store, resolve, reject) => {
-    const request = store.put(snapshot);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+export async function saveWorkspaceSnapshotSafely(
+  snapshot: GravitasWorkspaceSnapshot,
+  now = Date.now()
+) {
+  return transact<GravitasWorkspaceSnapshot>("readwrite", (store, resolve, reject) => {
+    const readRequest = store.get(snapshot.sessionId);
+    readRequest.onerror = () => reject(readRequest.error);
+    readRequest.onsuccess = () => {
+      const selected = chooseWorkspaceSnapshotForSave(
+        readRequest.result,
+        snapshot,
+        now
+      );
+      if (selected !== snapshot) {
+        resolve(selected);
+        return;
+      }
+
+      const writeRequest = store.put(snapshot);
+      writeRequest.onsuccess = () => resolve(snapshot);
+      writeRequest.onerror = () => reject(writeRequest.error);
+    };
   });
 }
 
