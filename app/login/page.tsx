@@ -107,21 +107,19 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-950 px-4 text-neutral-100 bg-[radial-gradient(circle_at_center,rgba(180,150,80,0.08)_0%,rgba(0,0,0,0)_60%)]">
-      <div className="w-full max-w-sm">
-        <div className="mb-10 flex justify-center">
-          <div className="rounded-md bg-white/90 px-4 py-2">
-            <img
-              src="/MR_Logo1.png"
-              alt="Multirrupt"
-              style={{ width: "280px", height: "auto" }}
-            />
-          </div>
+    <main className="gravitas-shell flex min-h-screen items-center justify-center px-4 py-10 text-neutral-100">
+      <div className="relative z-10 w-full max-w-sm">
+        <div className="mb-9 flex justify-center">
+          <div
+            role="img"
+            aria-label="Gravitas Narrative Intelligence"
+            className="gravitas-blue-logo gravitas-login-logo"
+          />
         </div>
 
         <form
           onSubmit={handleLogin}
-          className="flex w-full flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-950/80 p-6 shadow-[0_0_40px_rgba(180,150,80,0.15)]"
+          className="gravitas-header flex w-full flex-col gap-4 rounded-2xl p-6 sm:p-7"
         >
           <div className="text-center">
             <h1 className="text-xl font-semibold">Sign in to Gravitas</h1>
@@ -145,15 +143,15 @@ export default function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={sending}
-            className="rounded border border-neutral-700 bg-neutral-900 p-3 text-neutral-100 outline-none focus:border-neutral-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-xl border border-neutral-700 bg-black/30 p-3 text-neutral-100 shadow-inner outline-none transition focus:border-sky-500/70 disabled:cursor-not-allowed disabled:opacity-60"
             required
           />
 
           <button
             type="submit"
             disabled={sending}
-            className={`rounded p-3 font-semibold text-black transition hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-70 ${
-              sending ? "animate-pulse bg-neutral-200" : "bg-white"
+            className={`rounded-xl border border-sky-300/30 p-3 font-semibold text-[#07111d] shadow-[0_10px_30px_rgba(46,139,236,0.18)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70 ${
+              sending ? "animate-pulse bg-sky-200" : "bg-[#58a6ff]"
             }`}
           >
             {sending ? "Sending..." : "Send login link"}

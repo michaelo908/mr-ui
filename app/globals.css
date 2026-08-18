@@ -56,6 +56,11 @@
   filter: drop-shadow(0 0 20px rgba(70, 153, 248, 0.24));
 }
 
+.gravitas-login-logo {
+  width: min(220px, 72vw);
+  height: 47px;
+}
+
 .gravitas-workbench textarea,
 .gravitas-workbench input,
 .gravitas-workbench select {
