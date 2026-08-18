@@ -55,6 +55,22 @@ import {
 import { emitSignal, initializeSignalIdentity, signalHeaders, toSignalIdentifier } from "@/lib/signals/client";
 import type { SignalName } from "@/lib/signals/registry";
 import type { AcquisitionFunnel } from "@/lib/acquisition-funnels";
+import {
+  createWorkspaceSnapshot,
+  GRAVITAS_RESUME_MARKER_KEY,
+  GRAVITAS_RESUME_TARGET,
+  isValidResumeTarget,
+  type GravitasMessageSnapshot,
+  type GravitasRewriteSnapshot,
+  type GravitasWorkspaceSnapshot,
+} from "@/lib/gravitas-workspace";
+import {
+  consumeWorkspaceSnapshot,
+  deleteWorkspaceSnapshot,
+  isStorageQuotaError,
+  loadWorkspaceSnapshot,
+  saveWorkspaceSnapshot,
+} from "@/lib/gravitas-workspace-store";
 
 type Msg = {
   role: "user" | "assistant";
@@ -65,14 +81,13 @@ type Msg = {
   imageData?: string[];
   sourceImages?: SourceImage[];
   sourceIdentity?: SourceIdentity;
+  graviton?: string;
+  cadence?: CadenceMode;
+  completedAt?: number;
+  rewrites?: RewriteVariant[];
 };
 type CopyFormat = "email" | "word";
-type RewriteVariant = {
-  id: string;
-  label: string;
-  content: string;
-  copyFormat: CopyFormat;
-};
+type RewriteVariant = GravitasRewriteSnapshot;
 
 type TelemetrySeed = {
   dateKey: string;
@@ -804,8 +819,10 @@ function StructuredAssistantMessage({
   cadence,
   apiEndpoint,
   interactionLocked,
+  initialRewrites,
   onSessionExpired,
   onRewriteProduced,
+  onRewritesChange,
   onInteractionSignal,
 }: {
   content: string;
@@ -816,8 +833,10 @@ function StructuredAssistantMessage({
   cadence: CadenceMode;
   apiEndpoint: string;
   interactionLocked: boolean;
+  initialRewrites?: RewriteVariant[];
   onSessionExpired?: () => void;
   onRewriteProduced?: () => void;
+  onRewritesChange?: (rewrites: RewriteVariant[]) => void;
   onInteractionSignal?: (name: SignalName, properties?: Record<string, unknown>) => void;
 }) {
   const { hasStructured, sections } = useMemo(() => parseStructuredMR(content), [content]);
@@ -828,6 +847,8 @@ function StructuredAssistantMessage({
   const [rewriteState, setRewriteState] = useState<"idle" | "working">("idle");
   const [copiedRewriteKey, setCopiedRewriteKey] = useState<string | null>(null);
   const [rewrites, setRewrites] = useState<RewriteVariant[]>([]);
+  const initialRewritesRef = useRef(initialRewrites);
+  const onRewritesChangeRef = useRef(onRewritesChange);
   const [isGeneratingAlternate, setIsGeneratingAlternate] = useState(false);
   const [activeLightboxIndex, setActiveLightboxIndex] = useState<number | null>(
     null
@@ -842,6 +863,10 @@ function StructuredAssistantMessage({
   const textEvidenceRefs = useRef(new Map<number, HTMLDivElement>());
   const textEvidenceHighlightTimeoutRef =
     useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    onRewritesChangeRef.current = onRewritesChange;
+  }, [onRewritesChange]);
 
   const summary = sections.summary?.trim();
   const performance = useMemo(
@@ -1004,7 +1029,9 @@ function StructuredAssistantMessage({
     setHighlightedTextEvidence(null);
     textEvidenceRefs.current.clear();
 
-    if (rewrite) {
+    if (initialRewritesRef.current && initialRewritesRef.current.length > 0) {
+      setRewrites(initialRewritesRef.current);
+    } else if (rewrite) {
       setRewrites([makeRewriteVariant(rewrite, 0)]);
     } else {
       setRewrites([]);
@@ -1016,6 +1043,10 @@ function StructuredAssistantMessage({
 
     return () => clearTimeout(id);
   }, [content, rewrite]);
+
+  useEffect(() => {
+    onRewritesChangeRef.current?.(rewrites);
+  }, [rewrites]);
 
   useEffect(() => {
     if (interactionLocked && rewrite) {
@@ -1780,6 +1811,12 @@ const gravitonGroups = [
   const supabase = createClient();
   const sendLockRef = useRef(false);
   const runCoordinatorRef = useRef(createAnalysisRunCoordinator());
+  const workspaceSaveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const workspacePersistencePausedRef = useRef(false);
+  const lastSavedWorkspaceRef = useRef<GravitasWorkspaceSnapshot | null>(null);
+  const [workspaceStorageWarning, setWorkspaceStorageWarning] = useState<string | null>(null);
+  const [restoredWorkspaceNotice, setRestoredWorkspaceNotice] = useState(false);
+  const [restoredSessionId, setRestoredSessionId] = useState<string | null>(null);
 
   const jumpInExpired = isJumpInExpired(
     jumpInSession?.startedAt ?? null,
@@ -1792,6 +1829,79 @@ const gravitonGroups = [
   const isDemoLocked = isJumpIn && jumpInExpired;
   const apiEndpoint = isJumpIn ? "/api/jump-in/mr" : "/api/mr";
   const signalSurface = isJumpIn ? "jump-in" as const : "paid" as const;
+
+  const persistJumpInWorkspace = useCallback(async () => {
+    if (!isJumpIn || !jumpInSession || workspacePersistencePausedRef.current) {
+      return true;
+    }
+
+    const completedRunIds = new Set(
+      messages
+        .filter(
+          (message) =>
+            message.role === "assistant" &&
+            message.analysisStatus === "success" &&
+            typeof message.runId === "string"
+        )
+        .map((message) => message.runId as string)
+    );
+    const completedMessages = messages.filter(
+      (message) => message.runId && completedRunIds.has(message.runId)
+    ) as GravitasMessageSnapshot[];
+
+    const snapshotInput = {
+      sessionId: jumpInSession.sessionId,
+      inputMode,
+      draft,
+      urlDraft,
+      importedUrl,
+      uploadedFiles: imageFiles.map((file) => ({
+        name: file.name,
+        type: file.type,
+        lastModified: file.lastModified,
+        blob: file,
+      })),
+      selectedGraviton,
+      cadence,
+      messages: completedMessages,
+    };
+
+    const save = workspaceSaveQueueRef.current
+      .catch(() => false)
+      .then(async () => {
+        try {
+          const previous =
+            lastSavedWorkspaceRef.current ??
+            (await loadWorkspaceSnapshot(jumpInSession.sessionId));
+          const snapshot = createWorkspaceSnapshot(snapshotInput, previous);
+          await saveWorkspaceSnapshot(snapshot);
+          lastSavedWorkspaceRef.current = snapshot;
+          setWorkspaceStorageWarning(null);
+          return true;
+        } catch (error) {
+          setWorkspaceStorageWarning(
+            isStorageQuotaError(error)
+              ? "This browser does not have enough storage to carry your current work through checkout. Remove some large images or copy your work before continuing."
+              : "Your current work could not be prepared for checkout in this browser. Copy it before continuing."
+          );
+          return false;
+        }
+      });
+
+    workspaceSaveQueueRef.current = save;
+    return save;
+  }, [
+    cadence,
+    draft,
+    imageFiles,
+    importedUrl,
+    inputMode,
+    isJumpIn,
+    jumpInSession,
+    messages,
+    selectedGraviton,
+    urlDraft,
+  ]);
 
   useEffect(() => {
     const key = `gravitasSignalSessionStartedV1:${signalSurface}`;
@@ -2055,6 +2165,14 @@ useEffect(() => {
   }, [isJumpIn]);
 
   useEffect(() => {
+    if (!isJumpIn || !jumpInSession) return;
+    const timeout = window.setTimeout(() => {
+      void persistJumpInWorkspace();
+    }, 150);
+    return () => window.clearTimeout(timeout);
+  }, [isJumpIn, jumpInSession, persistJumpInWorkspace]);
+
+  useEffect(() => {
     if (!isJumpIn || jumpInSession?.startedAt === null) return;
 
     const interval = window.setInterval(() => {
@@ -2218,6 +2336,102 @@ if (trialActive && trialEndDate) {
     checkSubscription();
   }, [isJumpIn, supabase]);
 
+  useEffect(() => {
+    if (
+      isJumpIn ||
+      !accessResolved ||
+      (!isSubscribed && !isBookTrial) ||
+      restoredSessionId
+    ) {
+      return;
+    }
+
+    const resumeTarget = window.localStorage.getItem(GRAVITAS_RESUME_MARKER_KEY);
+    if (!isValidResumeTarget(resumeTarget)) return;
+
+    const rawSession = window.localStorage.getItem(JUMP_IN_STORAGE_KEY);
+    if (!rawSession) return;
+
+    let sessionId: string | null = null;
+    try {
+      const parsed = JSON.parse(rawSession) as JumpInSessionState;
+      if (typeof parsed.sessionId === "string") sessionId = parsed.sessionId;
+    } catch {
+      return;
+    }
+    if (!sessionId) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const snapshot = await loadWorkspaceSnapshot(sessionId);
+        if (!snapshot || cancelled) return;
+
+        const restoredFiles = snapshot.uploadedFiles.map(
+          (asset) =>
+            new File([asset.blob], asset.name, {
+              type: asset.type,
+              lastModified: asset.lastModified,
+            })
+        );
+        const restoredMessages = snapshot.messages as Msg[];
+        const restoredSourceKey = getActiveSourceKey(
+          snapshot.inputMode === "url"
+            ? { type: "url", url: snapshot.urlDraft }
+            : snapshot.inputMode === "images"
+              ? {
+                  type: "images",
+                  images: restoredFiles.map((file) => ({
+                    name: file.name,
+                    size: file.size,
+                    lastModified: file.lastModified,
+                  })),
+                }
+              : { type: "text", text: snapshot.draft }
+        );
+        const restoredCompletedRuns = new Set<string>();
+        restoredMessages.forEach((message) => {
+          if (
+            message.role === "assistant" &&
+            message.analysisStatus === "success" &&
+            message.graviton
+          ) {
+            restoredCompletedRuns.add(
+              getAnalysisRunKey(restoredSourceKey, message.graviton)
+            );
+          }
+        });
+
+        setInputMode(snapshot.inputMode);
+        setDraft(snapshot.draft);
+        setUrlDraft(snapshot.urlDraft);
+        setImportedUrl(snapshot.importedUrl);
+        setImageFiles(restoredFiles);
+        setSelectedGraviton(snapshot.selectedGraviton);
+        setCadence(snapshot.cadence);
+        setMessages(restoredMessages);
+        setCompletedAnalysisRuns(restoredCompletedRuns);
+        setRestoredSessionId(snapshot.sessionId);
+        setRestoredWorkspaceNotice(true);
+
+        await new Promise<void>((resolve) => {
+          window.requestAnimationFrame(() => resolve());
+        });
+        if (cancelled) return;
+        const consumed = await consumeWorkspaceSnapshot(snapshot.sessionId);
+        if (consumed && !cancelled) {
+          window.localStorage.removeItem(GRAVITAS_RESUME_MARKER_KEY);
+        }
+      } catch {
+        // A malformed or unavailable workspace must never block paid access.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessResolved, isBookTrial, isJumpIn, isSubscribed, restoredSessionId]);
+
   function startJumpInSession() {
     if (!isJumpIn) return null;
 
@@ -2243,7 +2457,14 @@ if (trialActive && trialEndDate) {
     );
   }
 
-  function handleDayPassClick() {
+  async function handleDayPassClick(event: React.MouseEvent<HTMLAnchorElement>) {
+    event.preventDefault();
+    const workspaceReady = await persistJumpInWorkspace();
+    if (!workspaceReady) return;
+    window.localStorage.setItem(
+      GRAVITAS_RESUME_MARKER_KEY,
+      GRAVITAS_RESUME_TARGET
+    );
     emitSignal("discovery.day_pass_clicked", signalSurface, {
       reason: jumpInExpired ? "session_expired" : "manual",
     });
@@ -2258,6 +2479,7 @@ if (trialActive && trialEndDate) {
         keepalive: true,
       });
     }
+    window.location.assign(JUMP_IN_DAY_PASS_URL);
   }
 
   async function handleLogout() {
@@ -2268,7 +2490,12 @@ if (trialActive && trialEndDate) {
 
   async function handleSubscribe() {
     try {
+      const workspaceReady = await persistJumpInWorkspace();
+      if (!workspaceReady) return;
       const signalIdentity = initializeSignalIdentity();
+      const storedResumeTarget = window.localStorage.getItem(
+        GRAVITAS_RESUME_MARKER_KEY
+      );
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: {
@@ -2278,6 +2505,9 @@ if (trialActive && trialEndDate) {
         body: JSON.stringify({
           firstTouch: signalIdentity.firstTouch,
           lastTouch: signalIdentity.lastTouch,
+          resumeTarget: isValidResumeTarget(storedResumeTarget)
+            ? storedResumeTarget
+            : undefined,
         }),
       });
 
@@ -2336,6 +2566,16 @@ if (trialActive && trialEndDate) {
 
   function onClear() {
     if (isLoading) return;
+    workspacePersistencePausedRef.current = true;
+    const workspaceSessionId = jumpInSession?.sessionId ?? restoredSessionId;
+    if (workspaceSessionId) {
+      void workspaceSaveQueueRef.current
+        .catch(() => false)
+        .then(() => deleteWorkspaceSnapshot(workspaceSessionId))
+        .catch(() => undefined);
+    }
+    window.localStorage.removeItem(GRAVITAS_RESUME_MARKER_KEY);
+    lastSavedWorkspaceRef.current = null;
     setMessages([]);
     setDraft("");
     setUrlDraft("");
@@ -2343,11 +2583,15 @@ if (trialActive && trialEndDate) {
     setImportedUrl(null);
     setCopiedAllKey(null);
     setCopiedMessageKey(null);
+    setRestoredWorkspaceNotice(false);
+    setRestoredSessionId(null);
+    setWorkspaceStorageWarning(null);
     messageContentRefs.current = {};
   }
 
   async function onSend() {
     if (sendLockRef.current || isRepeatedGraviton) return;
+    workspacePersistencePausedRef.current = false;
 
      if (!isJumpIn && !isSubscribed && !isBookTrial) {
 
@@ -2453,12 +2697,6 @@ ${selectedGraviton}
 `;
 
 const finalInput = gravitonPrefix + raw;
-   if (imageFiles.length > 0) {
-  console.log(
-    "Images selected:",
-    imageFiles.map((file) => file.name)
-  );
-}
     if (
       (!raw.trim() && imageFiles.length === 0 && urlSourceImages.length === 0) ||
       isLoading ||
@@ -2483,8 +2721,6 @@ const finalInput = gravitonPrefix + raw;
     }
 
     const parsed = parseCommand(finalInput);
-    console.log("GRAVITON:", selectedGraviton);
-    console.log("FINAL INPUT:", finalInput);
     const text = parsed.content;
 
     if (!text && imageFiles.length === 0 && urlSourceImages.length === 0) {
@@ -2513,6 +2749,9 @@ const finalInput = gravitonPrefix + raw;
       ...m,
       {
         role: "user",
+        runId,
+        graviton: selectedGraviton,
+        cadence,
         content:
           sourceIdentity?.type === "url"
             ? `${sourceIdentity.title}\n${sourceIdentity.originalLocation ?? ""}`
@@ -2658,6 +2897,9 @@ if (urlSourceImages.length > 0) {
                 content: normalizedOutput,
                 runId,
                 analysisStatus: "success",
+                graviton: selectedGraviton,
+                cadence,
+                completedAt: Date.now(),
               }
             : msg
         )
@@ -2687,6 +2929,9 @@ if (urlSourceImages.length > 0) {
                content: `Something went wrong while analysing: ${String(err)}`,
                runId,
                analysisStatus: "error",
+               graviton: selectedGraviton,
+               cadence,
+               completedAt: Date.now(),
              }
             : msg
         )
@@ -2728,6 +2973,23 @@ if (urlSourceImages.length > 0) {
     rewritesToday,
     Math.floor(analysesToday * 1.2)
   );
+  const orderedMessageEntries = (() => {
+    const runs: Array<Array<{ message: Msg; index: number }>> = [];
+    messages.forEach((message, index) => {
+      if (message.role === "user" || runs.length === 0) {
+        runs.push([{ message, index }]);
+      } else {
+        runs[runs.length - 1].push({ message, index });
+      }
+    });
+    return runs.reverse().flatMap((run, runPosition) =>
+      run.map((entry, entryPosition) => ({
+        ...entry,
+        isEarlier: runPosition > 0,
+        isFirstEarlier: runPosition === 1 && entryPosition === 0,
+      }))
+    );
+  })();
 
   void telemetryMinuteTick;
 
@@ -2849,6 +3111,15 @@ if (urlSourceImages.length > 0) {
           </div>
         </header>
 
+        {restoredWorkspaceNotice ? (
+          <div
+            className="mb-5 rounded-xl border border-sky-500/25 bg-sky-950/20 px-4 py-3 text-sm text-sky-100/85"
+            role="status"
+          >
+            Jump In work restored.
+          </div>
+        ) : null}
+
         {isJumpIn && jumpInExpired ? (
           <section className="mb-4 rounded-2xl border border-amber-700/60 bg-amber-950/30 p-5">
             <h2 className="text-lg font-semibold text-amber-100">
@@ -2870,6 +3141,14 @@ if (urlSourceImages.length > 0) {
             >
               Get the US$19 48-Hour Day Pass
             </a>
+            <p className="mt-3 text-xs text-amber-100/65">
+              Your current work will continue in this browser.
+            </p>
+            {workspaceStorageWarning ? (
+              <p className="mt-3 text-sm font-medium text-amber-200" role="alert">
+                {workspaceStorageWarning}
+              </p>
+            ) : null}
           </section>
         ) : null}
 
@@ -2913,7 +3192,8 @@ if (urlSourceImages.length > 0) {
             </div>
           ) : (
             <div className="space-y-4">
-              {messages.map((m, i) => {
+              {orderedMessageEntries.map(
+                ({ message: m, index: i, isEarlier, isFirstEarlier }) => {
                 const isThinking =
                   m.role === "assistant" && m.content === THINKING_TOKEN;
 
@@ -2944,10 +3224,16 @@ if (urlSourceImages.length > 0) {
                     : [];
 
                 return (
+                  <div key={`${m.runId ?? "message"}-${i}`}>
+                    {isFirstEarlier ? (
+                      <div className="mb-3 mt-8 border-t border-neutral-800 pt-6 text-xs font-semibold uppercase tracking-[0.24em] text-neutral-500">
+                        Earlier Work
+                      </div>
+                    ) : null}
                   <div
-                    key={i}
                    className={classNames(
                      "group rounded-2xl border px-4 py-4",
+                    isEarlier && "opacity-90",
                     m.role === "user"
                       ? "border-neutral-800 bg-neutral-950/60"
                       : isThinking
@@ -3000,13 +3286,34 @@ if (urlSourceImages.length > 0) {
                             sourceImageData={sourceImageData}
                             sourceImages={sourceImages}
                             sourceIdentity={sourceIdentity}
-                            cadence={cadence}
+                            cadence={m.cadence ?? cadence}
                             apiEndpoint={apiEndpoint}
                             interactionLocked={isDemoLocked}
+                            initialRewrites={m.rewrites}
                             onSessionExpired={markJumpInExpired}
                             onRewriteProduced={() => {
                               setAnalysisBoost((prev) => prev + getRandomInt(6, 14));
                               setRewriteBoost((prev) => prev + getRandomInt(24, 46));
+                            }}
+                            onRewritesChange={(nextRewrites) => {
+                              if (!m.runId) return;
+                              setMessages((current) =>
+                                current.map((message) => {
+                                  if (
+                                    message.role !== "assistant" ||
+                                    message.runId !== m.runId
+                                  ) {
+                                    return message;
+                                  }
+                                  const currentSerialized = JSON.stringify(
+                                    message.rewrites ?? []
+                                  );
+                                  const nextSerialized = JSON.stringify(nextRewrites);
+                                  return currentSerialized === nextSerialized
+                                    ? message
+                                    : { ...message, rewrites: nextRewrites };
+                                })
+                              );
                             }}
                             onInteractionSignal={(name, properties) =>
                               emitSignal(name, signalSurface, properties)
@@ -3028,6 +3335,7 @@ if (urlSourceImages.length > 0) {
                       )}
                     </div>
                   </div>
+                  </div>
                 );
               })}
             </div>
@@ -3045,6 +3353,7 @@ if (urlSourceImages.length > 0) {
         key={value}
         type="button"
         onClick={() => {
+          workspacePersistencePausedRef.current = false;
           emitSignal("discovery.source_selected", signalSurface, {
             source_mode: value,
           });
@@ -3097,6 +3406,7 @@ if (urlSourceImages.length > 0) {
         type="url"
         value={urlDraft}
         onChange={(event) => {
+          workspacePersistencePausedRef.current = false;
           setUrlDraft(event.target.value);
           setUrlError(null);
           setImportedUrl(null);
@@ -3147,6 +3457,7 @@ if (urlSourceImages.length > 0) {
   <textarea
     value={draft}
     onChange={(e) => {
+  workspacePersistencePausedRef.current = false;
   setDraft(e.target.value);
 
   if (e.target.value.trim().length > 0 && imageFiles.length > 0) {
@@ -3166,7 +3477,10 @@ if (urlSourceImages.length > 0) {
   <div className="mt-3 flex flex-col gap-2 sm:flex-row">
     <select
       value={selectedGraviton}
-      onChange={(e) => setSelectedGraviton(e.target.value)}
+      onChange={(e) => {
+        workspacePersistencePausedRef.current = false;
+        setSelectedGraviton(e.target.value);
+      }}
       disabled={isDemoLocked}
       aria-label="Gravitons"
       className="h-[56px] w-full min-w-0 flex-1 rounded-xl border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-200 disabled:cursor-not-allowed disabled:opacity-60"
@@ -3186,7 +3500,10 @@ if (urlSourceImages.length > 0) {
 
     <select
       value={cadence}
-      onChange={(event) => setCadence(event.target.value as CadenceMode)}
+      onChange={(event) => {
+        workspacePersistencePausedRef.current = false;
+        setCadence(event.target.value as CadenceMode);
+      }}
       disabled={isDemoLocked}
       aria-label="Cadence"
       title={CADENCE_OPTIONS.find((option) => option.value === cadence)?.description}
@@ -3213,6 +3530,11 @@ if (urlSourceImages.length > 0) {
       {analysisProgress}
     </p>
   ) : null}
+  {workspaceStorageWarning ? (
+    <p className="mt-2 text-sm font-medium text-amber-300" role="alert">
+      {workspaceStorageWarning}
+    </p>
+  ) : null}
   {isRepeatedGraviton ? (
     <p className="mt-2 text-sm text-[#C6A75A]">
       Select a different Graviton to analyse this source again.
@@ -3225,6 +3547,7 @@ if (urlSourceImages.length > 0) {
     multiple
     accept="image/png,image/jpeg,image/webp"
     onChange={async (e) => {
+      workspacePersistencePausedRef.current = false;
       const files = Array.from(e.target.files ?? []);
       const limitedFiles = files.slice(0, 10);
       const compressedFiles = await Promise.all(

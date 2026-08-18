@@ -3,6 +3,7 @@ import { stripe } from "../../../../lib/supabase/stripe";
 import { createClient } from "../../../../lib/supabase/server";
 import { recordSignal, signalContextFromRequest } from "@/lib/signals/server";
 import { sanitizeAttribution, type SignalAttribution } from "@/lib/signals/contracts";
+import { isValidResumeTarget } from "@/lib/gravitas-workspace";
 
 function attributionMetadata(prefix: "ft" | "lt", attribution?: SignalAttribution) {
   if (!attribution) return {};
@@ -27,6 +28,9 @@ export async function POST(req: Request) {
     const requestBody = await req.json().catch(() => ({}));
     const firstTouch = sanitizeAttribution(requestBody?.firstTouch);
     const lastTouch = sanitizeAttribution(requestBody?.lastTouch);
+    const resumeTarget = isValidResumeTarget(requestBody?.resumeTarget)
+      ? requestBody.resumeTarget
+      : "/";
     const supabase = await createClient();
     const {
       data: { user },
@@ -60,8 +64,8 @@ export async function POST(req: Request) {
           quantity: 1,
         },
       ],
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}`,
+      success_url: new URL(resumeTarget, process.env.NEXT_PUBLIC_APP_URL).toString(),
+      cancel_url: new URL(resumeTarget, process.env.NEXT_PUBLIC_APP_URL).toString(),
       metadata: {
         user_id: user.id,
         ...(signalContext.visitorId ? { gravitas_visitor_id: signalContext.visitorId } : {}),

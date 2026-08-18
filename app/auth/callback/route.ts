@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { isValidResumeTarget } from "@/lib/gravitas-workspace";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
@@ -8,9 +9,11 @@ export async function GET(request: Request) {
   const token_hash = requestUrl.searchParams.get("token_hash");
   const type = requestUrl.searchParams.get("type");
   const origin = requestUrl.origin;
+  const requestedNext = requestUrl.searchParams.get("next");
+  const nextTarget = isValidResumeTarget(requestedNext) ? requestedNext : "/";
 
   const cookieStore = await cookies();
-  const response = NextResponse.redirect(`${origin}/`);
+  const response = NextResponse.redirect(new URL(nextTarget, origin));
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

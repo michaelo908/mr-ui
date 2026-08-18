@@ -2,6 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  GRAVITAS_RESUME_MARKER_KEY,
+  isValidResumeTarget,
+} from "@/lib/gravitas-workspace";
+
+function getValidatedNextTarget() {
+  const queryTarget = new URLSearchParams(window.location.search).get("next");
+  if (isValidResumeTarget(queryTarget)) return queryTarget;
+  const storedTarget = window.localStorage.getItem(GRAVITAS_RESUME_MARKER_KEY);
+  return isValidResumeTarget(storedTarget) ? storedTarget : "/";
+}
 
 export default function LoginPage() {
   const supabase = createClient();
@@ -31,7 +42,7 @@ export default function LoginPage() {
 
         if (!error) {
           window.history.replaceState({}, "", "/login");
-          window.location.href = "/";
+          window.location.href = getValidatedNextTarget();
           return true;
         }
       }
@@ -48,7 +59,7 @@ export default function LoginPage() {
       } = await supabase.auth.getSession();
 
       if (mounted && session) {
-        window.location.href = "/";
+        window.location.href = getValidatedNextTarget();
       }
     }
 
@@ -60,7 +71,7 @@ export default function LoginPage() {
       if (!mounted) return;
 
       if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
-        window.location.href = "/";
+        window.location.href = getValidatedNextTarget();
       }
     });
 
@@ -80,7 +91,9 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(
+          getValidatedNextTarget()
+        )}`,
       },
     });
 
