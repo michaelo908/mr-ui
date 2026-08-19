@@ -2903,7 +2903,7 @@ if (trialActive && trialEndDate) {
 
         content:
 
-          "Full Gravitas access requires an active Day Pass or subscription.\n\nIf you only need another working session, you can get a new 48-hour Day Pass here:\n\nhttps://multirrupt.com/day-pass",
+          `Full Gravitas access requires an active Day Pass or subscription.\n\nIf you only need another working session, you can get a new 48-hour Day Pass here:\n\n${JUMP_IN_DAY_PASS_URL}`,
 
       },
 

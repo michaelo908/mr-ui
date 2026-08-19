@@ -34,6 +34,18 @@ test("Day Pass UI promises US$19 for 48 hours without a bundled asset", () => {
   assert.match(entitlement, /process\.env\.NEXT_PUBLIC_DAY_PASS_URL/);
 });
 
+test("Jump In and paid renewal share the configured Day Pass destination", () => {
+  const app = read("components/GravitasApp.tsx");
+
+  assert.match(app, /href=\{JUMP_IN_DAY_PASS_URL\}/);
+  assert.match(app, /window\.location\.assign\(JUMP_IN_DAY_PASS_URL\)/);
+  assert.match(
+    app,
+    /new 48-hour Day Pass here:\\n\\n\$\{JUMP_IN_DAY_PASS_URL\}/
+  );
+  assert.doesNotMatch(app, /https:\/\/multirrupt\.com\/day-pass/);
+});
+
 test("The Hidden Campaign remains independently available to Gravitas analysis", () => {
   const analysisRoute = read("app/api/mr/route.ts");
   assert.match(analysisRoute, /hidden campaign/i);
