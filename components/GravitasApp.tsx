@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -84,6 +84,7 @@ import {
   promotePendingToActive,
   saveActiveWorkspaceSafely,
 } from "@/lib/gravitas-active-workspace-store";
+import { createRevisionedPersistenceCoordinator } from "@/lib/gravitas-persistence-coordinator";
 
 type Msg = {
   role: "user" | "assistant";
@@ -832,10 +833,11 @@ function StructuredAssistantMessage({
   cadence,
   apiEndpoint,
   interactionLocked,
-  initialRewrites,
+  rewrites,
   onSessionExpired,
   onRewriteProduced,
-  onRewritesChange,
+  onRewriteAdded,
+  onRewriteFormatChanged,
   onInteractionSignal,
 }: {
   content: string;
@@ -846,10 +848,11 @@ function StructuredAssistantMessage({
   cadence: CadenceMode;
   apiEndpoint: string;
   interactionLocked: boolean;
-  initialRewrites?: RewriteVariant[];
+  rewrites: RewriteVariant[];
   onSessionExpired?: () => void;
   onRewriteProduced?: () => void;
-  onRewritesChange?: (rewrites: RewriteVariant[]) => void;
+  onRewriteAdded?: (rewrite: RewriteVariant) => void;
+  onRewriteFormatChanged?: (rewriteId: string, format: CopyFormat) => void;
   onInteractionSignal?: (name: SignalName, properties?: Record<string, unknown>) => void;
 }) {
   const { hasStructured, sections } = useMemo(() => parseStructuredMR(content), [content]);
@@ -859,10 +862,6 @@ function StructuredAssistantMessage({
   const [showRewriteButton, setShowRewriteButton] = useState(false);
   const [rewriteState, setRewriteState] = useState<"idle" | "working">("idle");
   const [copiedRewriteKey, setCopiedRewriteKey] = useState<string | null>(null);
-  const [rewrites, setRewrites] = useState<RewriteVariant[]>([]);
-  const initialRewritesRef = useRef(initialRewrites);
-  const onRewritesChangeRef = useRef(onRewritesChange);
-  const rewritesInitializedRef = useRef(false);
   const [isGeneratingAlternate, setIsGeneratingAlternate] = useState(false);
   const [activeLightboxIndex, setActiveLightboxIndex] = useState<number | null>(
     null
@@ -877,10 +876,6 @@ function StructuredAssistantMessage({
   const textEvidenceRefs = useRef(new Map<number, HTMLDivElement>());
   const textEvidenceHighlightTimeoutRef =
     useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    onRewritesChangeRef.current = onRewritesChange;
-  }, [onRewritesChange]);
 
   const summary = sections.summary?.trim();
   const performance = useMemo(
@@ -1043,14 +1038,6 @@ function StructuredAssistantMessage({
     setHighlightedTextEvidence(null);
     textEvidenceRefs.current.clear();
 
-    if (initialRewritesRef.current && initialRewritesRef.current.length > 0) {
-      setRewrites(initialRewritesRef.current);
-    } else if (rewrite) {
-      setRewrites([makeRewriteVariant(rewrite, 0)]);
-    } else {
-      setRewrites([]);
-    }
-
     const id = setTimeout(() => {
       setShowRewriteButton(true);
     }, 700);
@@ -1059,12 +1046,8 @@ function StructuredAssistantMessage({
   }, [content, rewrite]);
 
   useEffect(() => {
-    if (!rewritesInitializedRef.current) {
-      rewritesInitializedRef.current = true;
-      if (rewrites.length === 0) return;
-    }
-    onRewritesChangeRef.current?.(rewrites);
-  }, [rewrites]);
+    if (rewrites.length > 0) setShowRewrite(true);
+  }, [rewrites.length]);
 
   useEffect(() => {
     if (interactionLocked && rewrite) {
@@ -1085,11 +1068,7 @@ function StructuredAssistantMessage({
 
   function handleFormatChange(rewriteId: string, value: CopyFormat) {
     window.localStorage.setItem("mr-copy-format", value);
-    setRewrites((prev) =>
-      prev.map((rw) =>
-        rw.id === rewriteId ? { ...rw, copyFormat: value } : rw
-      )
-    );
+    onRewriteFormatChanged?.(rewriteId, value);
   }
 
   function formatLabel(format: CopyFormat) {
@@ -1189,10 +1168,9 @@ ${cadenceInstruction(cadence)}`;
       const alternateRewrite =
         parsedAlt.sections.rewrite?.trim() || rawOutput;
 
-      setRewrites((prev) => {
-        if (prev.length >= 3) return prev;
-        return [...prev, makeRewriteVariant(alternateRewrite, prev.length)];
-      });
+      if (rewrites.length < 3) {
+        onRewriteAdded?.(makeRewriteVariant(alternateRewrite, rewrites.length));
+      }
 
       onInteractionSignal?.("workflow.rewrite_created");
       onRewriteProduced?.();
@@ -1713,7 +1691,15 @@ export default function GravitasApp({
 }) {
   const isJumpIn = experience === "jump-in";
 
-  const [messages, setMessages] = useState<Msg[]>([]);
+  const [messages, rawSetMessages] = useState<Msg[]>([]);
+  const messagesRef = useRef<Msg[]>([]);
+  const setMessages = useCallback((action: SetStateAction<Msg[]>) => {
+    const next = typeof action === "function"
+      ? action(messagesRef.current)
+      : action;
+    messagesRef.current = next;
+    rawSetMessages(next);
+  }, []);
   const [draft, setDraft] = useState("");
   const [inputMode, setInputMode] = useState<"text" | "url" | "images">(funnel?.preferredSource ?? "text");
   const [urlDraft, setUrlDraft] = useState("");
@@ -1830,12 +1816,13 @@ const gravitonGroups = [
   const supabase = createClient();
   const sendLockRef = useRef(false);
   const runCoordinatorRef = useRef(createAnalysisRunCoordinator());
-  const workspaceSaveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const workspacePersistenceCoordinatorRef = useRef(
+    createRevisionedPersistenceCoordinator()
+  );
   const workspacePersistencePausedRef = useRef(false);
   const activeWorkspacePersistencePausedRef = useRef(false);
   const lastSavedWorkspaceRef = useRef<GravitasWorkspaceSnapshot | null>(null);
   const lastSavedActiveWorkspaceRef = useRef<GravitasActiveWorkspace | null>(null);
-  const activeWorkspaceSaveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
   const hydratedPaidUserIdRef = useRef<string | null>(null);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [activeWorkspaceOriginSessionId, setActiveWorkspaceOriginSessionId] = useState<string | null>(null);
@@ -1898,9 +1885,7 @@ const gravitonGroups = [
       messages: completedMessages,
     };
 
-    const save = workspaceSaveQueueRef.current
-      .catch(() => false)
-      .then(async () => {
+    const save = workspacePersistenceCoordinatorRef.current.enqueue(async () => {
         try {
           const previous =
             lastSavedWorkspaceRef.current ??
@@ -1919,8 +1904,6 @@ const gravitonGroups = [
           return false;
         }
       });
-
-    workspaceSaveQueueRef.current = save;
     return save;
   }, [
     cadence,
@@ -1962,39 +1945,37 @@ const gravitonGroups = [
     const completedMessages = workspaceMessages.filter(
       (message) => message.runId && completedRunIds.has(message.runId)
     ) as GravitasMessageSnapshot[];
-    const previous = lastSavedActiveWorkspaceRef.current;
-    const now = Date.now();
-    const record: GravitasActiveWorkspace = {
-      version: GRAVITAS_ACTIVE_WORKSPACE_VERSION,
-      workspaceId: activeWorkspaceId,
-      ownerUserId: authenticatedUserId,
-      originatingJumpInSessionId: activeWorkspaceOriginSessionId,
-      inputMode,
-      draft,
-      urlDraft,
-      importedUrl,
-      uploadedFiles: imageFiles.map((file) => ({
-        name: file.name,
-        type: file.type,
-        lastModified: file.lastModified,
-        blob: file,
-      })),
-      selectedGraviton,
-      cadence,
-      messages: completedMessages,
-      createdAt: previous?.createdAt ?? now,
-      updatedAt: now,
-      handoff: previous?.handoff ?? {
-        kind: "paid",
-        pendingSnapshotVersion: null,
-        importedAt: null,
-      },
-    };
-
-    const save = activeWorkspaceSaveQueueRef.current
-      .catch(() => false)
-      .then(async () => {
+    const save = workspacePersistenceCoordinatorRef.current.enqueue(async () => {
         try {
+          const previous = lastSavedActiveWorkspaceRef.current;
+          const now = Date.now();
+          const record: GravitasActiveWorkspace = {
+            version: GRAVITAS_ACTIVE_WORKSPACE_VERSION,
+            revision: (previous?.revision ?? 0) + 1,
+            workspaceId: activeWorkspaceId,
+            ownerUserId: authenticatedUserId,
+            originatingJumpInSessionId: activeWorkspaceOriginSessionId,
+            inputMode,
+            draft,
+            urlDraft,
+            importedUrl,
+            uploadedFiles: imageFiles.map((file) => ({
+              name: file.name,
+              type: file.type,
+              lastModified: file.lastModified,
+              blob: file,
+            })),
+            selectedGraviton,
+            cadence,
+            messages: completedMessages,
+            createdAt: previous?.createdAt ?? now,
+            updatedAt: now,
+            handoff: previous?.handoff ?? {
+              kind: "paid",
+              pendingSnapshotVersion: null,
+              importedAt: null,
+            },
+          };
           const stored = previous
             ? await saveActiveWorkspaceSafely(record)
             : await promotePendingToActive(record);
@@ -2010,7 +1991,6 @@ const gravitonGroups = [
           return false;
         }
       });
-    activeWorkspaceSaveQueueRef.current = save;
     return save;
   }, [
     activeWorkspaceId,
@@ -2027,6 +2007,28 @@ const gravitonGroups = [
     selectedGraviton,
     urlDraft,
   ]);
+
+  const commitAnalysisRewrites = useCallback(
+    (
+      runId: string,
+      update: (current: RewriteVariant[]) => RewriteVariant[]
+    ) => {
+      const nextMessages = messagesRef.current.map((message) => {
+          if (message.role !== "assistant" || message.runId !== runId) {
+            return message;
+          }
+          const currentRewrites = message.rewrites ?? [];
+          const nextRewrites = update(currentRewrites);
+          return nextRewrites === currentRewrites
+            ? message
+            : { ...message, rewrites: nextRewrites };
+        });
+      setMessages(nextMessages);
+      void persistJumpInWorkspace(nextMessages);
+      void persistPaidWorkspace(nextMessages);
+    },
+    [persistJumpInWorkspace, persistPaidWorkspace, setMessages]
+  );
 
   useEffect(() => {
     const key = `gravitasSignalSessionStartedV1:${signalSurface}`;
@@ -2361,7 +2363,7 @@ useEffect(() => {
     return () => {
       cancelled = true;
     };
-  }, [isJumpIn, jumpInSessionId]);
+  }, [isJumpIn, jumpInSessionId, setMessages]);
 
   useEffect(() => {
     if (
@@ -2715,7 +2717,7 @@ if (trialActive && trialEndDate) {
     return () => {
       cancelled = true;
     };
-  }, [accessResolved, authenticatedUserId, isBookTrial, isJumpIn, isSubscribed]);
+  }, [accessResolved, authenticatedUserId, isBookTrial, isJumpIn, isSubscribed, setMessages]);
 
   function startJumpInSession() {
     if (!isJumpIn) return null;
@@ -2855,18 +2857,16 @@ if (trialActive && trialEndDate) {
     activeWorkspacePersistencePausedRef.current = true;
     const workspaceSessionId =
       jumpInSession?.sessionId ?? activeWorkspaceOriginSessionId ?? restoredSessionId;
-    if (workspaceSessionId) {
-      void workspaceSaveQueueRef.current
-        .catch(() => false)
-        .then(() => deleteWorkspaceSnapshot(workspaceSessionId))
-        .catch(() => undefined);
-    }
-    if (!isJumpIn && authenticatedUserId) {
-      void activeWorkspaceSaveQueueRef.current
-        .catch(() => false)
-        .then(() => deleteActiveWorkspaceForUser(authenticatedUserId, activeWorkspaceId))
-        .catch(() => undefined);
-    }
+    void workspacePersistenceCoordinatorRef.current
+      .enqueue(async () => {
+        if (workspaceSessionId) {
+          await deleteWorkspaceSnapshot(workspaceSessionId);
+        }
+        if (!isJumpIn && authenticatedUserId) {
+          await deleteActiveWorkspaceForUser(authenticatedUserId, activeWorkspaceId);
+        }
+      })
+      .catch(() => undefined);
     window.localStorage.removeItem(GRAVITAS_RESUME_MARKER_KEY);
     lastSavedWorkspaceRef.current = null;
     setMessages([]);
@@ -3185,6 +3185,11 @@ if (urlSourceImages.length > 0) {
       const normalizedOutput = normalizeAssistantHeadings(
         data.output || "No response."
       );
+      const initialRewriteContent =
+        parseStructuredMR(normalizedOutput).sections.rewrite?.trim();
+      const initialRewrites = initialRewriteContent
+        ? [makeRewriteVariant(initialRewriteContent, 0)]
+        : [];
 
       setMessages((m) =>
         m.map((msg) =>
@@ -3199,6 +3204,7 @@ if (urlSourceImages.length > 0) {
                 graviton: selectedGraviton,
                 cadence,
                 completedAt: Date.now(),
+                rewrites: initialRewrites,
               }
             : msg
         )
@@ -3600,32 +3606,29 @@ if (urlSourceImages.length > 0) {
                             cadence={m.cadence ?? cadence}
                             apiEndpoint={apiEndpoint}
                             interactionLocked={isDemoLocked}
-                            initialRewrites={m.rewrites}
+                            rewrites={m.rewrites ?? []}
                             onSessionExpired={markJumpInExpired}
                             onRewriteProduced={() => {
                               setAnalysisBoost((prev) => prev + getRandomInt(6, 14));
                               setRewriteBoost((prev) => prev + getRandomInt(24, 46));
                             }}
-                            onRewritesChange={(nextRewrites) => {
+                            onRewriteAdded={(rewriteRecord) => {
                               if (!m.runId) return;
-                              const nextMessages = messages.map((message) => {
-                                  if (
-                                    message.role !== "assistant" ||
-                                    message.runId !== m.runId
-                                  ) {
-                                    return message;
-                                  }
-                                  const currentSerialized = JSON.stringify(
-                                    message.rewrites ?? []
-                                  );
-                                  const nextSerialized = JSON.stringify(nextRewrites);
-                                  return currentSerialized === nextSerialized
-                                    ? message
-                                    : { ...message, rewrites: nextRewrites };
-                                });
-                              setMessages(nextMessages);
-                              void persistJumpInWorkspace(nextMessages);
-                              void persistPaidWorkspace(nextMessages);
+                              commitAnalysisRewrites(m.runId, (current) =>
+                                current.some((rewrite) => rewrite.id === rewriteRecord.id)
+                                  ? current
+                                  : [...current, rewriteRecord]
+                              );
+                            }}
+                            onRewriteFormatChanged={(rewriteId, copyFormat) => {
+                              if (!m.runId) return;
+                              commitAnalysisRewrites(m.runId, (current) =>
+                                current.map((rewrite) =>
+                                  rewrite.id === rewriteId
+                                    ? { ...rewrite, copyFormat }
+                                    : rewrite
+                                )
+                              );
                             }}
                             onInteractionSignal={(name, properties) =>
                               emitSignal(name, signalSurface, properties)

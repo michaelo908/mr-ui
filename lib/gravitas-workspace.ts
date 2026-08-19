@@ -1,7 +1,7 @@
 import type { CadenceMode } from "@/lib/cadence";
 import type { SourceIdentity, SourceImage, UrlSource } from "@/lib/sources";
 
-export const GRAVITAS_WORKSPACE_VERSION = 1 as const;
+export const GRAVITAS_WORKSPACE_VERSION = 2 as const;
 export const GRAVITAS_WORKSPACE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const GRAVITAS_RESUME_MARKER_KEY = "gravitasResumeMarkerV1";
 export const GRAVITAS_RESUME_TARGET = "/?resume=jump-in";
@@ -39,6 +39,8 @@ export type GravitasUploadedFileSnapshot = {
 
 export type GravitasWorkspaceSnapshot = {
   version: typeof GRAVITAS_WORKSPACE_VERSION;
+  workspaceId: string;
+  revision: number;
   state: "pending" | "consumed";
   sessionId: string;
   createdAt: number;
@@ -53,6 +55,7 @@ export type GravitasWorkspaceSnapshot = {
   selectedGraviton: string;
   cadence: CadenceMode;
   messages: GravitasMessageSnapshot[];
+  provenance: { kind: "jump-in"; schemaMigratedFrom: number | null };
 };
 
 export function isCadenceMode(value: unknown): value is CadenceMode {
@@ -72,6 +75,9 @@ export function isValidWorkspaceSnapshot(
   const snapshot = value as Partial<GravitasWorkspaceSnapshot>;
   if (
     snapshot.version !== GRAVITAS_WORKSPACE_VERSION ||
+    typeof snapshot.workspaceId !== "string" ||
+    !Number.isSafeInteger(snapshot.revision) ||
+    (snapshot.revision ?? 0) < 0 ||
     snapshot.state !== "pending" ||
     typeof snapshot.sessionId !== "string" ||
     (expectedSessionId !== undefined && snapshot.sessionId !== expectedSessionId) ||
@@ -85,24 +91,38 @@ export function isValidWorkspaceSnapshot(
     typeof snapshot.selectedGraviton !== "string" ||
     !isCadenceMode(snapshot.cadence) ||
     !Array.isArray(snapshot.messages) ||
-    !Array.isArray(snapshot.uploadedFiles)
+    !Array.isArray(snapshot.uploadedFiles) ||
+    snapshot.provenance?.kind !== "jump-in" ||
+    (snapshot.provenance.schemaMigratedFrom !== null &&
+      typeof snapshot.provenance.schemaMigratedFrom !== "number")
   ) {
     return false;
   }
 
-  const filesAreValid = snapshot.uploadedFiles.every(
-    (file) =>
+  if (!hasValidWorkspaceFiles(snapshot.uploadedFiles)) return false;
+  return hasValidWorkspaceMessages(snapshot.messages);
+}
+
+export function hasValidWorkspaceFiles(files: unknown[]): files is GravitasUploadedFileSnapshot[] {
+  return files.every(
+    (value) => {
+      const file = value as Partial<GravitasUploadedFileSnapshot>;
+      return (
       file &&
       typeof file.name === "string" &&
       typeof file.type === "string" &&
       typeof file.lastModified === "number" &&
       typeof Blob !== "undefined" &&
       file.blob instanceof Blob
+      );
+    }
   );
-  if (!filesAreValid) return false;
+}
 
-  return snapshot.messages.every((message) => {
-    if (!message || typeof message !== "object") return false;
+export function hasValidWorkspaceMessages(messages: unknown[]): messages is GravitasMessageSnapshot[] {
+  return messages.every((value) => {
+    if (!value || typeof value !== "object") return false;
+    const message = value as Partial<GravitasMessageSnapshot>;
     if (message.role !== "user" && message.role !== "assistant") return false;
     if (typeof message.content !== "string") return false;
     if (message.content === "__MR_THINKING__") return false;
@@ -121,7 +141,7 @@ export function isValidWorkspaceSnapshot(
       message.rewrites !== undefined &&
       (!Array.isArray(message.rewrites) ||
         !message.rewrites.every(
-          (rewrite) =>
+          (rewrite: GravitasRewriteSnapshot) =>
             rewrite &&
             typeof rewrite.id === "string" &&
             typeof rewrite.label === "string" &&
@@ -136,18 +156,45 @@ export function isValidWorkspaceSnapshot(
 }
 
 export function createWorkspaceSnapshot(
-  input: Omit<GravitasWorkspaceSnapshot, "version" | "state" | "createdAt" | "updatedAt" | "expiresAt">,
+  input: Omit<GravitasWorkspaceSnapshot, "version" | "workspaceId" | "revision" | "state" | "createdAt" | "updatedAt" | "expiresAt" | "provenance">,
   previous?: GravitasWorkspaceSnapshot | null,
   now = Date.now()
 ): GravitasWorkspaceSnapshot {
   return {
     ...input,
     version: GRAVITAS_WORKSPACE_VERSION,
+    workspaceId: previous?.workspaceId ?? `jump-in:${input.sessionId}`,
+    revision: (previous?.revision ?? 0) + 1,
     state: "pending",
     createdAt: previous?.createdAt ?? now,
     updatedAt: now,
     expiresAt: previous?.expiresAt ?? now + GRAVITAS_WORKSPACE_TTL_MS,
+    provenance: previous?.provenance ?? {
+      kind: "jump-in",
+      schemaMigratedFrom: null,
+    },
   };
+}
+
+export function migrateWorkspaceSnapshot(
+  value: unknown,
+  expectedSessionId?: string,
+  now = Date.now()
+): GravitasWorkspaceSnapshot | null {
+  if (isValidWorkspaceSnapshot(value, expectedSessionId, now)) return value;
+  if (!value || typeof value !== "object") return null;
+  const legacy = value as Record<string, unknown>;
+  if (legacy.version !== 1 || typeof legacy.sessionId !== "string") return null;
+  const migrated = {
+    ...legacy,
+    version: GRAVITAS_WORKSPACE_VERSION,
+    workspaceId: `jump-in:${legacy.sessionId}`,
+    revision: 1,
+    provenance: { kind: "jump-in", schemaMigratedFrom: 1 },
+  };
+  return isValidWorkspaceSnapshot(migrated, expectedSessionId, now)
+    ? migrated
+    : null;
 }
 
 export function hasWorkspaceContent(snapshot: GravitasWorkspaceSnapshot) {
@@ -169,29 +216,14 @@ export function chooseWorkspaceSnapshotForSave(
   incoming: GravitasWorkspaceSnapshot,
   now = Date.now()
 ) {
+  const current = migrateWorkspaceSnapshot(existing, incoming.sessionId, now);
+  if (current && current.revision >= incoming.revision) return current;
   if (
-    isValidWorkspaceSnapshot(existing, incoming.sessionId, now) &&
-    hasWorkspaceContent(existing) &&
+    current &&
+    hasWorkspaceContent(current) &&
     !hasWorkspaceContent(incoming)
   ) {
-    return existing;
-  }
-  if (isValidWorkspaceSnapshot(existing, incoming.sessionId, now)) {
-    const existingByRunId = new Map(
-      existing.messages.map((message) => [message.runId, message])
-    );
-    const messages = incoming.messages.map((message) => {
-      const retained = existingByRunId.get(message.runId);
-      if (
-        message.role === "assistant" &&
-        retained?.role === "assistant" &&
-        (retained.rewrites?.length ?? 0) > (message.rewrites?.length ?? 0)
-      ) {
-        return { ...message, rewrites: retained.rewrites };
-      }
-      return message;
-    });
-    return { ...incoming, messages };
+    return current;
   }
   return incoming;
 }

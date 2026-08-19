@@ -1,13 +1,20 @@
-import type { GravitasMessageSnapshot, GravitasUploadedFileSnapshot, GravitasWorkspaceSnapshot } from "@/lib/gravitas-workspace";
+import {
+  hasValidWorkspaceFiles,
+  hasValidWorkspaceMessages,
+  type GravitasMessageSnapshot,
+  type GravitasUploadedFileSnapshot,
+  type GravitasWorkspaceSnapshot,
+} from "@/lib/gravitas-workspace";
 import type { CadenceMode } from "@/lib/cadence";
 import type { UrlSource } from "@/lib/sources";
 
-export const GRAVITAS_ACTIVE_WORKSPACE_VERSION = 1 as const;
+export const GRAVITAS_ACTIVE_WORKSPACE_VERSION = 2 as const;
 export const GRAVITAS_ACTIVE_POINTER_VERSION = 1 as const;
 const JUMP_IN_WORKSPACE_PREFIX = "jump-in:";
 
 export type GravitasActiveWorkspace = {
   version: typeof GRAVITAS_ACTIVE_WORKSPACE_VERSION;
+  revision: number;
   workspaceId: string;
   ownerUserId: string;
   originatingJumpInSessionId: string | null;
@@ -45,6 +52,8 @@ export function isValidActiveWorkspace(
   const baseIsValid = Boolean(
     record.version === GRAVITAS_ACTIVE_WORKSPACE_VERSION &&
       typeof record.workspaceId === "string" &&
+      Number.isSafeInteger(record.revision) &&
+      (record.revision ?? 0) >= 0 &&
       (!expectedWorkspaceId || record.workspaceId === expectedWorkspaceId) &&
       typeof record.ownerUserId === "string" &&
       (!expectedUserId || record.ownerUserId === expectedUserId) &&
@@ -63,27 +72,8 @@ export function isValidActiveWorkspace(
       (record.handoff.importedAt === null || typeof record.handoff.importedAt === "number")
   );
   if (!baseIsValid) return false;
-  const filesAreValid = record.uploadedFiles!.every(
-    (file) =>
-      file && typeof file.name === "string" && typeof file.type === "string" &&
-      typeof file.lastModified === "number" && typeof Blob !== "undefined" &&
-      file.blob instanceof Blob
-  );
-  if (!filesAreValid) return false;
-  return record.messages!.every((message) => {
-    if (!message || (message.role !== "user" && message.role !== "assistant")) return false;
-    if (typeof message.content !== "string" || message.content === "__MR_THINKING__") return false;
-    if (typeof message.runId !== "string") return false;
-    if (message.cadence !== undefined && message.cadence !== "dynamic" && message.cadence !== "sustained") return false;
-    if (message.role === "assistant" &&
-      (message.analysisStatus !== "success" || typeof message.completedAt !== "number" ||
-        typeof message.graviton !== "string" ||
-        (message.cadence !== "dynamic" && message.cadence !== "sustained"))) return false;
-    return message.rewrites === undefined || (Array.isArray(message.rewrites) && message.rewrites.every(
-      (rewrite) => rewrite && typeof rewrite.id === "string" && typeof rewrite.label === "string" &&
-        typeof rewrite.content === "string" && (rewrite.copyFormat === "email" || rewrite.copyFormat === "word")
-    ));
-  });
+  return hasValidWorkspaceFiles(record.uploadedFiles!) &&
+    hasValidWorkspaceMessages(record.messages!);
 }
 
 export function isValidActivePointer(
@@ -106,6 +96,7 @@ export function activeWorkspaceFromPending(
 ): GravitasActiveWorkspace {
   return {
     version: GRAVITAS_ACTIVE_WORKSPACE_VERSION,
+    revision: snapshot.revision,
     workspaceId,
     ownerUserId,
     originatingJumpInSessionId: snapshot.sessionId,
@@ -142,26 +133,31 @@ export function chooseActiveWorkspaceForSave(
   existing: unknown,
   incoming: GravitasActiveWorkspace
 ) {
-  if (!isValidActiveWorkspace(existing, incoming.ownerUserId, incoming.workspaceId)) return incoming;
-  if (hasActiveWorkspaceContent(existing) && !hasActiveWorkspaceContent(incoming)) return existing;
-  const existingByRunId = new Map(existing.messages.map((message) => [message.runId, message]));
-  const incomingRunIds = new Set(incoming.messages.map((message) => message.runId));
-  const retainedCompletedWork = existing.messages.filter(
-    (message) => !incomingRunIds.has(message.runId)
-  );
+  const current = migrateActiveWorkspace(existing, incoming.ownerUserId, incoming.workspaceId);
+  if (!current) return incoming;
+  if (current.revision >= incoming.revision) return current;
+  if (hasActiveWorkspaceContent(current) && !hasActiveWorkspaceContent(incoming)) return current;
   return {
     ...incoming,
-    createdAt: existing.createdAt,
-    messages: [
-      ...incoming.messages.map((message) => {
-        const retained = existingByRunId.get(message.runId);
-        if (message.role === "assistant" && retained?.role === "assistant" &&
-          (retained.rewrites?.length ?? 0) > (message.rewrites?.length ?? 0)) {
-          return { ...message, rewrites: retained.rewrites };
-        }
-        return message;
-      }),
-      ...retainedCompletedWork,
-    ],
+    createdAt: current.createdAt,
   };
+}
+
+export function migrateActiveWorkspace(
+  value: unknown,
+  expectedUserId?: string,
+  expectedWorkspaceId?: string
+): GravitasActiveWorkspace | null {
+  if (isValidActiveWorkspace(value, expectedUserId, expectedWorkspaceId)) return value;
+  if (!value || typeof value !== "object") return null;
+  const legacy = value as Record<string, unknown>;
+  if (legacy.version !== 1) return null;
+  const migrated = {
+    ...legacy,
+    version: GRAVITAS_ACTIVE_WORKSPACE_VERSION,
+    revision: 1,
+  };
+  return isValidActiveWorkspace(migrated, expectedUserId, expectedWorkspaceId)
+    ? migrated
+    : null;
 }

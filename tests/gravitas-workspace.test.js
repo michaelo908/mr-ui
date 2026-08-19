@@ -9,7 +9,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 test("workspace schema is versioned, session-bound, seven-day and cadence-limited", () => {
   const model = read("lib/gravitas-workspace.ts");
-  assert.match(model, /GRAVITAS_WORKSPACE_VERSION = 1/);
+  assert.match(model, /GRAVITAS_WORKSPACE_VERSION = 2/);
+  assert.match(model, /revision: number/);
+  assert.match(model, /migrateWorkspaceSnapshot/);
   assert.match(model, /7 \* 24 \* 60 \* 60 \* 1000/);
   assert.match(model, /snapshot\.sessionId !== expectedSessionId/);
   assert.match(model, /value === "dynamic" \|\| value === "sustained"/);

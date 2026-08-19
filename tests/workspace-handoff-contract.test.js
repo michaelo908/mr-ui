@@ -45,12 +45,12 @@ test("only completed analyses are persisted and restoration does not call analys
 
 test("rewrites are parent-owned and restored with their original cadence", () => {
   const app = read("components/GravitasApp.tsx");
-  assert.match(app, /initialRewrites=\{m\.rewrites\}/);
-  assert.match(app, /onRewritesChange=\{\(nextRewrites\)/);
-  assert.match(app, /message\.rewrites \?\? \[\]/);
+  assert.match(app, /rewrites=\{m\.rewrites \?\? \[\]\}/);
+  assert.match(app, /onRewriteAdded=\{\(rewriteRecord\)/);
+  assert.match(app, /commitAnalysisRewrites/);
   assert.match(app, /cadence=\{m\.cadence \?\? cadence\}/);
-  assert.match(app, /setMessages\(nextMessages\);[\s\S]*persistJumpInWorkspace\(nextMessages\)/);
-  assert.match(app, /rewritesInitializedRef[\s\S]*if \(rewrites\.length === 0\) return/);
+  assert.doesNotMatch(app, /const \[rewrites, setRewrites\]/);
+  assert.doesNotMatch(app, /onRewritesChange/);
   assert.doesNotMatch(app, /Conversion Rewrite|Authority Rewrite|Concise Rewrite/);
 });
 
@@ -95,8 +95,8 @@ test("Jump In hydration gates autosave and storage independently rejects empty r
   assert.match(app, /setMessages\(restoredMessages\)[\s\S]*setWorkspaceHydration\("ready"\)/);
   assert.match(app, /canAutosaveWorkspace\(workspaceHydration\)/);
   assert.match(store, /chooseWorkspaceSnapshotForSave/);
-  assert.match(model, /hasWorkspaceContent\(existing\)[\s\S]*!hasWorkspaceContent\(incoming\)/);
-  assert.match(model, /retained\.rewrites[\s\S]*message\.rewrites/);
+  assert.match(model, /hasWorkspaceContent\(current\)[\s\S]*!hasWorkspaceContent\(incoming\)/);
+  assert.match(model, /current\.revision >= incoming\.revision/);
 });
 
 test("resume intent is validated and contains no source content", () => {

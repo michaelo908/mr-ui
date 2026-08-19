@@ -8,6 +8,7 @@ import {
   GRAVITAS_ACTIVE_POINTER_VERSION,
   isValidActivePointer,
   isValidActiveWorkspace,
+  migrateActiveWorkspace,
   type GravitasActiveWorkspace,
   type GravitasActiveWorkspacePointer,
 } from "@/lib/gravitas-active-workspace";
@@ -32,7 +33,7 @@ export async function loadActiveWorkspaceForUser(userId: string) {
   try {
     const transaction = database.transaction(
       [ACTIVE_WORKSPACE_POINTER_STORE, ACTIVE_WORKSPACE_STORE],
-      "readonly"
+      "readwrite"
     );
     const pointer = await requestValue(
       transaction.objectStore(ACTIVE_WORKSPACE_POINTER_STORE).get(userId)
@@ -41,9 +42,14 @@ export async function loadActiveWorkspaceForUser(userId: string) {
     const workspace = await requestValue(
       transaction.objectStore(ACTIVE_WORKSPACE_STORE).get(pointer.workspaceId)
     );
-    return isValidActiveWorkspace(workspace, userId, pointer.workspaceId)
-      ? workspace
-      : null;
+    const migrated = migrateActiveWorkspace(workspace, userId, pointer.workspaceId);
+    if (migrated && workspace !== migrated) {
+      await requestValue(
+        transaction.objectStore(ACTIVE_WORKSPACE_STORE).put(migrated)
+      );
+    }
+    await waitForTransaction(transaction);
+    return migrated;
   } finally {
     database.close();
   }
@@ -71,7 +77,7 @@ export async function promotePendingToActive(
       existingRead.onsuccess = () => {
         if (
           existingRead.result !== undefined &&
-          !isValidActiveWorkspace(existingRead.result, record.ownerUserId, record.workspaceId)
+          !migrateActiveWorkspace(existingRead.result, record.ownerUserId, record.workspaceId)
         ) {
           transaction.abort();
           return;

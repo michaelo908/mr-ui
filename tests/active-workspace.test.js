@@ -7,6 +7,18 @@ const vm = require("node:vm");
 const ts = require("typescript");
 
 const root = path.resolve(__dirname, "..");
+const workspaceSource = fs.readFileSync(path.join(root, "lib/gravitas-workspace.ts"), "utf8");
+const workspaceCompiled = ts.transpileModule(workspaceSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const workspaceModule = { exports: {} };
+vm.runInNewContext(workspaceCompiled, {
+  module: workspaceModule,
+  exports: workspaceModule.exports,
+  require: () => ({}),
+  Blob,
+  Date,
+});
 const source = fs.readFileSync(path.join(root, "lib/gravitas-active-workspace.ts"), "utf8");
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -15,7 +27,7 @@ const moduleUnderTest = { exports: {} };
 vm.runInNewContext(compiled, {
   module: moduleUnderTest,
   exports: moduleUnderTest.exports,
-  require: () => ({}),
+  require: (specifier) => specifier === "@/lib/gravitas-workspace" ? workspaceModule.exports : {},
   Blob,
   Date,
 });
@@ -41,7 +53,9 @@ const viewport = {
 
 function pending(overrides = {}) {
   return {
-    version: 1,
+    version: 2,
+    workspaceId: `jump-in:${sessionId}`,
+    revision: 4,
     state: "pending",
     sessionId,
     createdAt: now - 100,
@@ -76,13 +90,15 @@ function pending(overrides = {}) {
         ],
       },
     ],
+    provenance: { kind: "jump-in", schemaMigratedFrom: null },
     ...overrides,
   };
 }
 
 test("pending handoff promotes into an exact versioned user-owned active workspace", () => {
   const active = activeWorkspaceFromPending(pending(), userId, undefined, now);
-  assert.equal(active.version, 1);
+  assert.equal(active.version, 2);
+  assert.equal(active.revision, 4);
   assert.equal(active.workspaceId, activeWorkspaceIdForPending(sessionId));
   assert.equal(active.ownerUserId, userId);
   assert.equal(active.originatingJumpInSessionId, sessionId);
@@ -104,20 +120,22 @@ test("active workspace validation rejects another user and incomplete analysis",
 
 test("empty or stale saves cannot destroy durable paid work or rewrites", () => {
   const active = activeWorkspaceFromPending(pending(), userId, undefined, now);
-  const empty = { ...active, draft: "", urlDraft: "", importedUrl: null, uploadedFiles: [], messages: [] };
+  const empty = { ...active, revision: active.revision + 1, draft: "", urlDraft: "", importedUrl: null, uploadedFiles: [], messages: [] };
   assert.equal(chooseActiveWorkspaceForSave(active, empty), active);
   assert.equal(hasActiveWorkspaceContent(active), true);
 
   const stale = structuredClone(active);
+  stale.revision = active.revision - 1;
   stale.messages[1].rewrites = [];
   const selected = chooseActiveWorkspaceForSave(active, stale);
   assert.equal(selected.messages[1].rewrites.length, 2);
   assert.equal(selected.createdAt, active.createdAt);
 
   const laterRun = structuredClone(active);
+  laterRun.revision = active.revision + 1;
   laterRun.messages = laterRun.messages.map((message) => ({ ...message, runId: "run-3" }));
   laterRun.messages[1].content = "Later completed analysis";
-  const durable = { ...active, messages: [...active.messages, ...laterRun.messages] };
+  const durable = { ...active, revision: active.revision + 2, messages: [...active.messages, ...laterRun.messages] };
   const staleWithoutLaterRun = chooseActiveWorkspaceForSave(durable, active);
   assert.equal(staleWithoutLaterRun.messages.length, 4);
   assert.equal(staleWithoutLaterRun.messages[3].content, "Later completed analysis");

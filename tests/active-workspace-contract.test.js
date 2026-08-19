@@ -11,14 +11,15 @@ test("active paid workspace uses versioned IndexedDB records and user-owned poin
   const model = read("lib/gravitas-active-workspace.ts");
   const store = read("lib/gravitas-active-workspace-store.ts");
   const database = read("lib/gravitas-workspace-store.ts");
-  assert.match(model, /GRAVITAS_ACTIVE_WORKSPACE_VERSION = 1/);
+  assert.match(model, /GRAVITAS_ACTIVE_WORKSPACE_VERSION = 2/);
+  assert.match(model, /revision: number/);
   assert.match(model, /ownerUserId: string/);
   assert.match(model, /originatingJumpInSessionId/);
   assert.match(model, /handoff:/);
   assert.match(database, /active-paid-workspaces/);
   assert.match(database, /active-paid-workspace-pointers/);
   assert.match(store, /isValidActivePointer\(pointer, userId\)/);
-  assert.match(store, /isValidActiveWorkspace\(workspace, userId, pointer\.workspaceId\)/);
+  assert.match(store, /migrateActiveWorkspace\(workspace, userId, pointer\.workspaceId\)/);
 });
 
 test("promotion verifies the active write and pointer before pending consumption", () => {

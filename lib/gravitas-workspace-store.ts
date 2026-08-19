@@ -1,6 +1,6 @@
 import {
   chooseWorkspaceSnapshotForSave,
-  isValidWorkspaceSnapshot,
+  migrateWorkspaceSnapshot,
   type GravitasWorkspaceSnapshot,
 } from "@/lib/gravitas-workspace";
 
@@ -88,11 +88,19 @@ export async function loadWorkspaceSnapshot(sessionId: string, now = Date.now())
     return null;
   }
 
-  if (!isValidWorkspaceSnapshot(value, sessionId, now)) {
+  const migrated = migrateWorkspaceSnapshot(value, sessionId, now);
+  if (!migrated) {
     if (value !== undefined) await deleteWorkspaceSnapshot(sessionId).catch(() => undefined);
     return null;
   }
-  return value;
+  if (migrated !== value) {
+    await transact<void>("readwrite", (store, resolve, reject) => {
+      const request = store.put(migrated);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+  return migrated;
 }
 
 export async function consumeWorkspaceSnapshot(sessionId: string, consumedAt = Date.now()) {
