@@ -21,12 +21,14 @@ test("the shared report contract defines Editor's Summary as findings, not reaso
 test("text, URL, image, paid, Jump-In, and Gravitons share the same summary contract", () => {
   const route = read("app/api/mr/route.ts");
   const app = read("components/GravitasApp.tsx");
+  const request = read("lib/gravitas-analysis-request.ts");
   const jumpIn = read("app/api/jump-in/mr/route.ts");
 
   assert.match(route, /\$\{EDITOR_SUMMARY_CONTRACT\}/);
   assert.match(route, /visualAnalysisContext/);
   assert.match(route, /renderedUrlContext/);
-  assert.match(app, /Analysis Lens:/);
+  assert.match(request, /Analysis Lens:/);
+  assert.match(app, /buildAnalysisInput/);
   assert.match(app, /const apiEndpoint = isJumpIn \? "\/api\/jump-in\/mr" : "\/api\/mr"/);
   assert.match(jumpIn, /handleMrRequest/);
 });

@@ -20,10 +20,12 @@ test("successful analyses scroll to Editor's Summary instead of the report botto
 
 test("the shared completion path covers every source and entitlement mode", () => {
   const app = read("components/GravitasApp.tsx");
+  const request = read("lib/gravitas-analysis-request.ts");
   assert.match(app, /const apiEndpoint = isJumpIn \? "\/api\/jump-in\/mr" : "\/api\/mr"/);
   assert.match(app, /inputMode === "url"/);
   assert.match(app, /inputMode === "images"/);
-  assert.match(app, /Analysis Lens:/);
+  assert.match(request, /Analysis Lens:/);
+  assert.match(app, /buildAnalysisInput/);
   assert.equal((app.match(/scrollToLatestEditorSummary\(\);/g) ?? []).length, 1);
 });
 

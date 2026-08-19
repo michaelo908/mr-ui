@@ -15,6 +15,7 @@ import {
   hasCompletedAnalysis,
   isValidPublicHttpUrl,
 } from "@/lib/graviton-runs";
+import { buildAnalysisInput } from "@/lib/gravitas-analysis-request";
 import {
   buildRenderedUrlAnalysisInput,
   MAX_URL_VIEWPORTS,
@@ -2985,17 +2986,12 @@ if (trialActive && trialEndDate) {
         return;
       }
     }
-    const gravitonPrefix =
-  selectedGraviton === "Full Analysis"
-    ? ""
-    : `Analysis Lens:
-${selectedGraviton}
-
-----------------------------------------
-
-`;
-
-const finalInput = gravitonPrefix + raw;
+    const finalInput = buildAnalysisInput({
+      inputMode,
+      raw,
+      selectedGraviton,
+      imageCount: imageFiles.length,
+    });
     if (
       (!raw.trim() && imageFiles.length === 0 && urlSourceImages.length === 0) ||
       isLoading ||
@@ -3341,7 +3337,7 @@ if (urlSourceImages.length > 0) {
             </div>
             <div className="mt-1 text-sm text-neutral-500">
               {isJumpIn
-                ? funnel ? "Your reader-side diagnostic is unlocked for 20 minutes." : "Full Gravitas. 20 minutes. No signup required."
+                ? funnel ? "Your reader-side diagnostic is unlocked for 20 minutes." : "Full Gravitas. 20 minutes."
                 : "See the narrative from the other side."}
             </div>
             {isJumpIn ? (

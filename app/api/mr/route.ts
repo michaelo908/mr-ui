@@ -6,6 +6,7 @@ import {
   assessEditorSummary,
   EDITOR_SUMMARY_CONTRACT,
 } from "@/lib/editor-summary";
+import { sourceAvailabilityInstruction } from "@/lib/gravitas-analysis-request";
 import { recordSignal, signalContextFromRequest } from "@/lib/signals/server";
 
 /**
@@ -28,7 +29,7 @@ analysis of written material — not medical, health, legal, or clinical diagnos
 
 CRITICAL BEHAVIOUR:
 - Do not mention whether images, visual input, files, attachments, screenshots, or other modalities were or were not supplied. If no images are supplied, simply analyse the available text. Never include meta-commentary about missing images, visual flags, prompt format, API state, or input modality.
-- If the user has NOT pasted the text yet (they ask "can we do a diagnosis?" etc),
+- If the user has supplied neither usable text nor visual input (for example, they ask "can we do a diagnosis?"),
   respond briefly and professionally. Ask for the text.
   Use this exact style of wording:
   "Paste the email/landing page/ad copy you want diagnosed.
@@ -217,6 +218,8 @@ export async function handleMrRequest(
   const hasImageData = Array.isArray(imageData)
     ? imageData.length > 0
     : typeof imageData === "string" && imageData.trim().length > 0;
+  const hasUsableText =
+    typeof body?.input === "string" && body.input.trim().length > 0;
 
   const maxUrlViewports = options.maxUrlViewports ?? MAX_URL_VIEWPORTS;
 
@@ -298,10 +301,15 @@ Any extracted page text in the input is supporting readability assistance only. 
   // - Normal mode: MR_DOMAIN_FRAME (+ originalContext), except continuation where we keep originalContext only
   // - MR Heresy mode: MR_HERESY_CHARTER only (+ originalContext), never MR_DOMAIN_FRAME
   const rewriteCadenceContext = heresyMode ? "" : cadenceInstruction(cadence);
+  const sourceAvailabilityContext = sourceAvailabilityInstruction({
+    hasUsableText,
+    hasVisualInput: hasImageData,
+  });
   const combinedOriginalContext = [
     originalContext,
     visualAnalysisContext,
     renderedUrlContext,
+    sourceAvailabilityContext,
     rewriteCadenceContext,
   ]
     .filter(Boolean)
