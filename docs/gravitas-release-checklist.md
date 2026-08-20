@@ -6,6 +6,9 @@ Use this path for every Gravitas release: local → staging → review → produ
 
 - Work on `staging` or a short-lived branch based on `staging`; never develop directly on `main`.
 - Confirm `git status` contains only intended files and no credentials or generated artifacts.
+- During a Jump In signing-key rotation, configure the old signing value only as
+  `JUMP_IN_PREVIOUS_SESSION_SECRET` for the bounded seven-day transition window,
+  then remove it after all previously issued cookies have expired.
 - Run `npm test`, `npm run lint`, `npx tsc --noEmit`, and `npm run build`.
 - Review migrations, environment requirements, privacy boundaries, and rollback notes.
 

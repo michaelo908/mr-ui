@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { handleMrRequest } from "@/app/api/mr/route";
 import {
   createJumpInToken,
+  getJumpInTokenAbsoluteExpiry,
+  getJumpInTokenRemainingCookieSeconds,
   isJumpInTokenExpired,
   isJumpInTokenResetEligible,
   JUMP_IN_COOKIE_NAME,
@@ -16,8 +18,11 @@ import {
 
 export async function POST(req: Request) {
   const cookieStore = await cookies();
-  const existing = readJumpInToken(cookieStore.get(JUMP_IN_COOKIE_NAME)?.value);
   const now = Date.now();
+  const existing = readJumpInToken(
+    cookieStore.get(JUMP_IN_COOKIE_NAME)?.value,
+    now
+  );
   const requestedSessionId = req.headers.get("X-Jump-In-Session-Id");
   const safeRequestedSessionId =
     requestedSessionId &&
@@ -35,10 +40,27 @@ export async function POST(req: Request) {
       event: "session_expired",
       sessionId: existing.sessionId,
     });
-    return NextResponse.json(
+    const response = NextResponse.json(
       { error: "Your 20-minute Jump In session has ended.", expired: true },
       { status: 403 }
     );
+
+    if (existing.needsResign) {
+      response.cookies.set(
+        JUMP_IN_COOKIE_NAME,
+        createJumpInToken(existing.startedAt, existing.sessionId),
+        {
+          httpOnly: true,
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+          expires: new Date(getJumpInTokenAbsoluteExpiry(existing)),
+          maxAge: getJumpInTokenRemainingCookieSeconds(existing, now),
+          path: "/",
+        }
+      );
+    }
+
+    return response;
   }
 
   const activeExisting = resetEligible ? null : existing;
@@ -53,7 +75,8 @@ export async function POST(req: Request) {
     maxPastedTextWords: JUMP_IN_MAX_PASTED_WORDS,
   });
 
-  if (!activeExisting) {
+  if (!activeExisting || existing?.needsResign) {
+    const isTransitionResign = Boolean(activeExisting?.needsResign);
     response.cookies.set(
       JUMP_IN_COOKIE_NAME,
       createJumpInToken(session.startedAt, session.sessionId),
@@ -61,15 +84,22 @@ export async function POST(req: Request) {
         httpOnly: true,
         sameSite: "lax",
         secure: process.env.NODE_ENV === "production",
-        maxAge: JUMP_IN_RESET_MS / 1000,
+        ...(isTransitionResign
+          ? {
+              expires: new Date(getJumpInTokenAbsoluteExpiry(session)),
+              maxAge: getJumpInTokenRemainingCookieSeconds(session, now),
+            }
+          : { maxAge: JUMP_IN_RESET_MS / 1000 }),
         path: "/",
       }
     );
 
-    console.log("Jump In analytics", {
-      event: "first_analysis_performed",
-      sessionId: session.sessionId,
-    });
+    if (!activeExisting) {
+      console.log("Jump In analytics", {
+        event: "first_analysis_performed",
+        sessionId: session.sessionId,
+      });
+    }
   }
 
   response.headers.set("X-Jump-In-Started-At", String(session.startedAt));
