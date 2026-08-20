@@ -1421,7 +1421,7 @@ ${cadenceInstruction(cadence)}`;
                   {variant.label}
                 </h3>
 
-                <div className="flex items-center gap-2" data-copy-ui="true">
+                <div className="flex min-w-0 items-center gap-2" data-copy-ui="true">
                   <button
                     onClick={() => handleCopyRewrite(variant, variant.copyFormat)}
                     className="rounded-xl border px-4 py-2 text-sm font-semibold text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
@@ -1444,7 +1444,7 @@ ${cadenceInstruction(cadence)}`;
                     onChange={(e) =>
                       handleFormatChange(variant.id, e.target.value as CopyFormat)
                     }
-                    className="h-[42px] rounded-xl border border-neutral-800 bg-neutral-900 px-3 pr-8 text-sm font-medium text-neutral-200 outline-none transition hover:border-neutral-600 focus:border-neutral-500 appearance-none"
+                    className="h-[42px] min-w-0 rounded-xl border border-neutral-800 bg-neutral-900 px-3 pr-8 text-sm font-medium text-neutral-200 outline-none transition hover:border-neutral-600 focus:border-neutral-500 appearance-none"
                     style={{
                       backgroundImage:
                         "linear-gradient(45deg, transparent 50%, #a3a3a3 50%), linear-gradient(135deg, #a3a3a3 50%, transparent 50%)",
