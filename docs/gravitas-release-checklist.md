@@ -39,3 +39,12 @@ Use this path for every Gravitas release: local → staging → review → produ
 ## Isolation rule
 
 `mr-ui-staging` owns `gravitas-staging.multirrupt.ai` and staging/test resources. `mr-ui` owns `multirrupt.ai` and `www.multirrupt.ai` and remains production-only. Never copy production Supabase or live Stripe secrets into staging.
+
+## Active production follow-up
+
+- Production Supabase modern-key cutover recorded at `2026-08-20T13:05:50Z`.
+- On or after `2026-08-27T13:05:50Z`, remove
+  `JUMP_IN_PREVIOUS_SESSION_SECRET` from the production `mr-ui` environment.
+- Redeploy production commit `60b268cc8dca425973e1b13249e9c63ecaf7c731`
+  with the updated configuration and confirm current-key Jump In operation.
+- Keep the production Supabase legacy `anon` and `service_role` API keys inactive.
