@@ -9,13 +9,17 @@ const app = fs.readFileSync(
   "utf8"
 );
 
-test("rewrite copy-format controls may shrink within narrow report rows", () => {
+test("rewrite copy-format controls wrap intact within narrow report rows", () => {
   assert.match(
     app,
-    /className="flex min-w-0 items-center gap-2" data-copy-ui="true"/
+    /className="mb-4 flex flex-wrap items-center justify-between gap-3 sm:flex-nowrap"/
   );
   assert.match(
     app,
-    /id=\{`mr-copy-format-\$\{variant\.id\}`\}[\s\S]*?className="h-\[42px\] min-w-0 rounded-xl/
+    /className="ml-auto flex items-center gap-2" data-copy-ui="true"/
+  );
+  assert.match(
+    app,
+    /id=\{`mr-copy-format-\$\{variant\.id\}`\}[\s\S]*?className="h-\[42px\] rounded-xl/
   );
 });
