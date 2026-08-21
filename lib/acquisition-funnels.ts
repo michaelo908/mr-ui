@@ -6,14 +6,15 @@ export type AcquisitionFunnel = {
   slug: FunnelSlug;
   mailchimpTag: string;
   eyebrow: string;
+  heroImage: string;
+  heroPosition: string;
+  heroMobilePosition: string;
   headline: string;
-  subhead: string;
-  problemTitle: string;
-  problem: string;
-  missedTitle: string;
-  missed: string;
-  sees: readonly string[];
+  supportingLine: string;
+  formHeading: string;
+  formExplanation: string;
   cta: string;
+  footerLine: string;
   jumpInTitle: string;
   jumpInPrompt: string;
   preferredSource: "text" | "url";
@@ -24,14 +25,15 @@ export const ACQUISITION_FUNNELS: Record<FunnelSlug, AcquisitionFunnel> = {
     slug: "email",
     mailchimpTag: "gravitas_email_check_lead",
     eyebrow: "Gravitas Email Check",
+    heroImage: "/doorways/email-hero.png",
+    heroPosition: "40% center",
+    heroMobilePosition: "48% center",
     headline: "Before you send an important email, know how it will land.",
-    subhead: "See the likely reader reaction before tone, clarity or an unintended signal costs you the response.",
-    problemTitle: "You know what you meant. Your reader only sees what arrived.",
-    problem: "Important emails fail in the gap between intention and reception. Once you have written the message, that gap is difficult to see from inside your own words.",
-    missedTitle: "Writing tools improve sentences. They do not judge the encounter.",
-    missed: "Gravitas reads for the response your message is likely to create: confidence, trust, resistance, uncertainty and momentum.",
-    sees: ["Clarity and unintended interpretation", "Tone, trust and emotional pressure", "Response friction and the strength of the next step"],
-    cta: "Unlock my free email check",
+    supportingLine: "See the likely reader reaction before tone, clarity or an unintended signal costs you dearly.",
+    formHeading: "Give Gravitas 20 minutes with your email.",
+    formExplanation: "See the reaction it is likely to create, uncover the signals working against you, and produce a stronger version before you send it.",
+    cta: "Start my free 20-minute email check",
+    footerLine: "No card required. Your 20 minutes begins with your first analysis.",
     jumpInTitle: "your free email check is ready.",
     jumpInPrompt: "Paste the email before you send it.",
     preferredSource: "text",
@@ -40,14 +42,15 @@ export const ACQUISITION_FUNNELS: Record<FunnelSlug, AcquisitionFunnel> = {
     slug: "proposal",
     mailchimpTag: "gravitas_proposal_check_lead",
     eyebrow: "Gravitas Proposal Check",
+    heroImage: "/doorways/proposal-hero.png",
+    heroPosition: "40% center",
+    heroMobilePosition: "50% center",
     headline: "Before you send the proposal, find the hesitation.",
-    subhead: "See where confidence weakens, risk rises or the decision loses momentum before the proposal reaches your buyer.",
-    problemTitle: "A proposal is judged by what the buyer believes after reading it.",
-    problem: "Effort, detail and polish do not guarantee movement. A buyer can understand every word and still hesitate for reasons the writer cannot see.",
-    missedTitle: "Proofreading finds errors. Gravitas finds decision friction.",
-    missed: "Gravitas examines differentiation, evidence, perceived risk and the sequence of belief that turns consideration into action.",
-    sees: ["Where confidence or differentiation weakens", "Questions, risk and unsupported claims", "Decision momentum and clarity of the next action"],
-    cta: "Unlock my free proposal check",
+    supportingLine: "See where confidence weakens, risk rises or the decision loses momentum before it reaches your buyer.",
+    formHeading: "Give Gravitas 20 minutes with your proposal.",
+    formExplanation: "See the proposal from the buyer’s side, identify the points that may stall the decision, and strengthen them before you send it.",
+    cta: "Start my free 20-minute proposal check",
+    footerLine: "No card required. Your 20 minutes begins with your first analysis.",
     jumpInTitle: "your free proposal check is ready.",
     jumpInPrompt: "Paste one important section of your proposal.",
     preferredSource: "text",
@@ -56,14 +59,15 @@ export const ACQUISITION_FUNNELS: Record<FunnelSlug, AcquisitionFunnel> = {
     slug: "landing-page",
     mailchimpTag: "gravitas_landing_page_check_lead",
     eyebrow: "Gravitas Landing Page Check",
+    heroImage: "/doorways/landing-page-hero.png",
+    heroPosition: "40% center",
+    heroMobilePosition: "50% center",
     headline: "Before you spend more on traffic, see what your visitors experience.",
-    subhead: "Gravitas analyses your page in its natural environment—section by section, viewport by viewport.",
-    problemTitle: "A landing page is not a block of copy. It is a journey.",
-    problem: "Visitors experience hierarchy, whitespace, sequencing, proof and calls to action together. The words cannot be judged properly after they are stripped from the page.",
-    missedTitle: "Most tools ask whether the copy is good. Gravitas asks what happens as someone experiences it.",
-    missed: "The page is rendered as your visitor sees it, then analysed across ordered viewports to reveal changes in attention, trust, clarity and momentum.",
-    sees: ["Where attention weakens from viewport to viewport", "Where trust drops or cognitive load rises", "Where the next action becomes unclear"],
-    cta: "Unlock my free landing page check",
+    supportingLine: "See where attention weakens, trust drops or the next action becomes unclear as the page unfolds on screen.",
+    formHeading: "Give Gravitas 20 minutes with your landing page.",
+    formExplanation: "Experience the page from your visitor’s side, locate where momentum breaks, and identify what to change before you spend more on traffic.",
+    cta: "Start my free 20-minute landing page check",
+    footerLine: "No card required. Your 20 minutes begins with your first analysis.",
     jumpInTitle: "your free landing page check is ready.",
     jumpInPrompt: "Enter the page URL to analyse it in context.",
     preferredSource: "url",
