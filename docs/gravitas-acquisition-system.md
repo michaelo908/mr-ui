@@ -19,7 +19,7 @@ All three acquisition pages render from `lib/acquisition-funnels.ts`. Adding a l
 - No Mailchimp code, acquisition signup endpoint, funnel config, or funnel-specific landing routes existed.
 - Available in-repository brand assets: `public/MR_Logo1.png` plus framework placeholder icons. The landing foundation uses only the Gravitas logo and CSS.
 
-## Mailchimp setup (inactive by default)
+## Mailchimp setup
 
 Required server-only environment variables:
 
@@ -27,16 +27,17 @@ Required server-only environment variables:
 MAILCHIMP_API_KEY=
 MAILCHIMP_AUDIENCE_ID=
 MAILCHIMP_SERVER_PREFIX=
-MAILCHIMP_SIGNUP_MODE=draft
+MAILCHIMP_SIGNUP_MODE=live
 ```
 
-`MAILCHIMP_SIGNUP_MODE` must remain `draft` during local and staging review. After Michael approves the audience, tags, consent language and journeys, create these audience tags and set the production value to `live`:
+Use `MAILCHIMP_SIGNUP_MODE=draft` only for an intentional local-development bypass. An absent, invalid, or partially configured mode is treated as an observable integration failure, never as successful capture. Live staging and production require all four variables and these audience tags:
 
 - `gravitas_email_check_lead`
 - `gravitas_proposal_check_lead`
 - `gravitas_landing_page_check_lead`
+- `gravitas_doorway_consent_v1`
 
-The endpoint upserts the contact, sets `FNAME`, then applies exactly one acquisition tag. It never sends email or activates a journey. Email addresses and names are sent only to Mailchimp in live mode and are never written to Gravitas Signals.
+The endpoint upserts the contact, sets `FNAME`, and applies the matching acquisition tag plus the stable consent-version tag. It does not force an unsubscribed or otherwise restricted contact back to subscribed status. Mailchimp holds the contact identity, API source, contact timestamp and tags; Signals records only the funnel, consent version and non-personal integration outcome. A Mailchimp outage remains observable but does not destroy valid Jump In access.
 
 ## Lifecycle automation drafts
 
@@ -94,5 +95,5 @@ Before production activation:
 - Confirm Mailchimp audience ID and exact tag names.
 - Build journeys from these drafts and keep them paused for content review.
 - Add verified Day Pass/subscriber Mailchimp lifecycle sync and test journey exits.
-- Verify staging with designated test contacts, then obtain Michael's approval to set `MAILCHIMP_SIGNUP_MODE=live`.
+- Verify live staging with one designated test contact before any production activation.
 - Do not publish ads or activate journeys as part of this foundation release.

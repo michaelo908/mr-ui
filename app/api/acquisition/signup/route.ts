@@ -1,6 +1,13 @@
 import { after, NextResponse } from "next/server";
-import { getAcquisitionFunnel } from "@/lib/acquisition-funnels";
-import { addMailchimpLead } from "@/lib/mailchimp";
+import {
+  ACQUISITION_CONSENT_VERSION,
+  getAcquisitionFunnel,
+} from "@/lib/acquisition-funnels";
+import {
+  addMailchimpLead,
+  describeMailchimpFailure,
+  type MailchimpSignupResult,
+} from "@/lib/mailchimp";
 import { sanitizeAttribution } from "@/lib/signals/contracts";
 import { consumeSignalRateLimit, recordSignal, signalContextFromRequest } from "@/lib/signals/server";
 
@@ -14,22 +21,50 @@ export async function POST(req: Request) {
     const funnel = getAcquisitionFunnel(String(body?.funnel || ""));
     const firstName = String(body?.firstName || "").trim().slice(0, 60);
     const email = String(body?.email || "").trim().toLowerCase().slice(0, 254);
-    if (!funnel || !firstName || !EMAIL.test(email) || body?.consent !== true) {
-      return NextResponse.json({ error: "Enter a valid name and email and confirm consent." }, { status: 400 });
+    if (!funnel || !firstName || !EMAIL.test(email)) {
+      return NextResponse.json({ error: "Enter a valid name and email." }, { status: 400 });
     }
 
-    const mailchimp = await addMailchimpLead({ email, firstName, tag: funnel.mailchimpTag });
     const context = signalContextFromRequest(req);
+    let mailchimp: MailchimpSignupResult | null = null;
+    let failure: ReturnType<typeof describeMailchimpFailure> | null = null;
+    try {
+      mailchimp = await addMailchimpLead({
+        email,
+        firstName,
+        tag: funnel.mailchimpTag,
+        consentTag: ACQUISITION_CONSENT_VERSION,
+      });
+    } catch (error) {
+      failure = describeMailchimpFailure(error);
+      console.warn("Acquisition Mailchimp capture failed", {
+        category: failure.category,
+        providerStatus: failure.providerStatus,
+        runtime: process.env.VERCEL_ENV || process.env.NODE_ENV || "unknown",
+        funnel: funnel.slug,
+      });
+    }
     after(() => recordSignal("acquisition.signup_completed", {
       ...context,
       surface: "acquisition",
       firstTouch: sanitizeAttribution(body.firstTouch),
       lastTouch: sanitizeAttribution(body.lastTouch),
-      properties: { funnel: funnel.slug, mailchimp_mode: mailchimp.mode, tagged: mailchimp.tagged },
-      verified: mailchimp.mode === "live" && mailchimp.tagged,
+      properties: {
+        funnel: funnel.slug,
+        consent_version: ACQUISITION_CONSENT_VERSION,
+        mailchimp_mode: mailchimp?.mode ?? "live",
+        mailchimp_outcome: mailchimp?.outcome ?? "failed",
+        mailchimp_failure_category: failure?.category ?? null,
+        mailchimp_provider_status: failure?.providerStatus ?? null,
+        tagged: mailchimp?.tagged ?? false,
+      },
+      verified: mailchimp?.outcome === "captured" && mailchimp.tagged,
       dedupeKey: context.sessionId ? `acquisition-signup:${context.sessionId}:${funnel.slug}` : null,
     }));
-    return NextResponse.json({ ok: true, mode: mailchimp.mode });
+    return NextResponse.json({
+      ok: true,
+      integration: mailchimp?.outcome ?? "unavailable",
+    });
   } catch (error) {
     console.warn("Acquisition signup failed", { reason: error instanceof Error ? error.message : "unknown" });
     return NextResponse.json({ error: "We could not unlock the check. Please try again." }, { status: 502 });

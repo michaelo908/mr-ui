@@ -3,13 +3,15 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import type { AcquisitionFunnel } from "@/lib/acquisition-funnels";
+import {
+  ACQUISITION_CONSENT_DISCLOSURE,
+  type AcquisitionFunnel,
+} from "@/lib/acquisition-funnels";
 import { emitSignal, initializeSignalIdentity, signalHeaders } from "@/lib/signals/client";
 
 export default function AcquisitionLandingPage({ funnel }: { funnel: AcquisitionFunnel }) {
   const [firstName, setFirstName] = useState("");
   const [email, setEmail] = useState("");
-  const [consent, setConsent] = useState(false);
   const [status, setStatus] = useState<"idle" | "working" | "error">("idle");
   const [error, setError] = useState("");
 
@@ -29,7 +31,6 @@ export default function AcquisitionLandingPage({ funnel }: { funnel: Acquisition
         body: JSON.stringify({
           firstName,
           email,
-          consent,
           funnel: funnel.slug,
           firstTouch: identity.firstTouch,
           lastTouch: identity.lastTouch,
@@ -83,15 +84,11 @@ export default function AcquisitionLandingPage({ funnel }: { funnel: Acquisition
             <input id="first-name" required autoComplete="given-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-neutral-700 bg-[#080a0c] px-4 py-3 outline-none transition-colors focus:border-[#C6A75A]" />
             <label className="mt-4 block text-sm font-medium" htmlFor="email">Email</label>
             <input id="email" required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-neutral-700 bg-[#080a0c] px-4 py-3 outline-none transition-colors focus:border-[#C6A75A]" />
-            <label className="mt-5 flex gap-3 text-xs leading-5 text-neutral-400">
-              <input required type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-1 size-4 shrink-0 accent-[#C6A75A]" />
-              <span>Send me this check and a short series of useful Gravitas follow-ups. I can unsubscribe at any time.</span>
-            </label>
             {status === "error" ? <p role="alert" className="mt-4 text-sm text-red-300">{error}</p> : null}
             <button disabled={status === "working"} className="mt-6 min-h-12 w-full rounded-xl border border-[#C6A75A] bg-[#C6A75A] px-5 py-3 font-semibold text-black transition hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f0d37d] disabled:opacity-60">
               {status === "working" ? "Unlocking…" : funnel.cta}
             </button>
-            <p className="mt-3 text-center text-xs leading-5 text-neutral-500">{funnel.footerLine}</p>
+            <p className="mt-3 text-center text-xs leading-5 text-neutral-500">{ACQUISITION_CONSENT_DISCLOSURE}</p>
           </form>
         </div>
       </section>

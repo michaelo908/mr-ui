@@ -14,11 +14,14 @@ export type AcquisitionFunnel = {
   formHeading: string;
   formExplanation: string;
   cta: string;
-  footerLine: string;
   jumpInTitle: string;
   jumpInPrompt: string;
   preferredSource: "text" | "url";
 };
+
+export const ACQUISITION_CONSENT_VERSION = "gravitas_doorway_consent_v1";
+export const ACQUISITION_CONSENT_DISCLOSURE =
+  "By starting your free check, you agree to receive occasional Gravitas emails. You can unsubscribe at any time.";
 
 export const ACQUISITION_FUNNELS: Record<FunnelSlug, AcquisitionFunnel> = {
   email: {
@@ -33,7 +36,6 @@ export const ACQUISITION_FUNNELS: Record<FunnelSlug, AcquisitionFunnel> = {
     formHeading: "Give Gravitas 20 minutes with your email.",
     formExplanation: "See the reaction it is likely to create, uncover the signals working against you, and produce a stronger version before you send it.",
     cta: "Start my free 20-minute email check",
-    footerLine: "No card required. Your 20 minutes begins with your first analysis.",
     jumpInTitle: "your free email check is ready.",
     jumpInPrompt: "Paste the email before you send it.",
     preferredSource: "text",
@@ -50,7 +52,6 @@ export const ACQUISITION_FUNNELS: Record<FunnelSlug, AcquisitionFunnel> = {
     formHeading: "Give Gravitas 20 minutes with your proposal.",
     formExplanation: "See the proposal from the buyer’s side, identify the points that may stall the decision, and strengthen them before you send it.",
     cta: "Start my free 20-minute proposal check",
-    footerLine: "No card required. Your 20 minutes begins with your first analysis.",
     jumpInTitle: "your free proposal check is ready.",
     jumpInPrompt: "Paste one important section of your proposal.",
     preferredSource: "text",
@@ -67,7 +68,6 @@ export const ACQUISITION_FUNNELS: Record<FunnelSlug, AcquisitionFunnel> = {
     formHeading: "Give Gravitas 20 minutes with your landing page.",
     formExplanation: "Experience the page from your visitor’s side, locate where momentum breaks, and identify what to change before you spend more on traffic.",
     cta: "Start my free 20-minute landing page check",
-    footerLine: "No card required. Your 20 minutes begins with your first analysis.",
     jumpInTitle: "your free landing page check is ready.",
     jumpInPrompt: "Enter the page URL to analyse it in context.",
     preferredSource: "url",
