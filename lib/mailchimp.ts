@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 type MailchimpSignup = { email: string; firstName: string; tag: string; consentTag: string };
+type MailchimpBuyer = { email: string };
 
 export type MailchimpSignupResult = {
   mode: "draft" | "live";
@@ -96,4 +97,44 @@ export async function addMailchimpLead(input: MailchimpSignup): Promise<Mailchim
     throw new MailchimpIntegrationError("tag_rejected", tagResponse.status);
   }
   return { mode: "live", outcome: "captured", tagged: true, contactStatus: member.status };
+}
+
+export async function tagExistingMailchimpDayPassBuyer(input: MailchimpBuyer) {
+  const mode = process.env.MAILCHIMP_SIGNUP_MODE;
+  const apiKey = process.env.MAILCHIMP_API_KEY;
+  const audienceId = process.env.MAILCHIMP_AUDIENCE_ID;
+  const server = process.env.MAILCHIMP_SERVER_PREFIX || apiKey?.split("-").at(-1);
+  if (mode !== "live" || !apiKey || !audienceId || !server) {
+    throw new MailchimpIntegrationError("missing_configuration");
+  }
+
+  const normalizedEmail = input.email.trim().toLowerCase();
+  const memberHash = createHash("md5").update(normalizedEmail).digest("hex");
+  const endpoint = `https://${server}.api.mailchimp.com/3.0/lists/${audienceId}/members/${memberHash}`;
+  const authorization = `Basic ${Buffer.from(`gravitas:${apiKey}`).toString("base64")}`;
+  const memberResponse = await mailchimpFetch(endpoint, {
+    method: "GET",
+    headers: { Authorization: authorization },
+  });
+  if (memberResponse.status === 404) return { outcome: "not_permitted" as const, tagged: false };
+  if (!memberResponse.ok) {
+    throw new MailchimpIntegrationError("member_rejected", memberResponse.status);
+  }
+  const member = await memberResponse.json().catch(() => null) as { status?: unknown } | null;
+  if (!member || typeof member.status !== "string") {
+    throw new MailchimpIntegrationError("invalid_response", memberResponse.status);
+  }
+  if (member.status !== "subscribed") {
+    return { outcome: "restricted" as const, tagged: false };
+  }
+
+  const tagResponse = await mailchimpFetch(`${endpoint}/tags`, {
+    method: "POST",
+    headers: { Authorization: authorization, "Content-Type": "application/json" },
+    body: JSON.stringify({ tags: [{ name: "gravitas-day-pass-buyer", status: "active" }] }),
+  });
+  if (!tagResponse.ok) {
+    throw new MailchimpIntegrationError("tag_rejected", tagResponse.status);
+  }
+  return { outcome: "tagged" as const, tagged: true };
 }

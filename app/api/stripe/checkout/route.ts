@@ -74,6 +74,9 @@ export async function POST(req: Request) {
         ...attributionMetadata("ft", firstTouch),
         ...attributionMetadata("lt", lastTouch),
       },
+      subscription_data: {
+        metadata: { user_id: user.id },
+      },
     });
 
     after(() => recordSignal("purchase.checkout_started", {
@@ -87,8 +90,12 @@ export async function POST(req: Request) {
     }));
 
     return NextResponse.json({ url: session.url });
-  } catch (error) {
-    console.error(error);
+  } catch {
+    console.warn("Stripe checkout creation failed", {
+      provider: "stripe",
+      category: "checkout_creation_failed",
+      retryable: true,
+    });
     after(() => recordSignal("purchase.checkout_failed", {
       ...signalContext,
       verified: true,
