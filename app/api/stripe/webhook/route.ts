@@ -163,8 +163,9 @@ async function upsertSubscription(input: {
   graceEndsAt: string | null;
   cancelAtPeriodEnd: boolean;
   eventCreatedAt: number;
+  authority: "initial" | "subscription" | "payment";
 }) {
-  const { data, error } = await supabase.rpc("upsert_gravitas_subscription", {
+  const { data, error } = await supabase.rpc("upsert_gravitas_subscription_v2", {
     p_user_id: input.userId,
     p_customer_id: input.customerId,
     p_subscription_id: input.subscriptionId,
@@ -173,6 +174,7 @@ async function upsertSubscription(input: {
     p_grace_ends_at: input.graceEndsAt,
     p_cancel_at_period_end: input.cancelAtPeriodEnd,
     p_event_created_at: new Date(input.eventCreatedAt * 1000).toISOString(),
+    p_authority: input.authority,
   });
   if (error || typeof data !== "boolean") throw new WebhookFailure("subscription_entitlement_write_failed");
   return data;
@@ -354,6 +356,7 @@ async function processSubscriptionCreated(
     graceEndsAt: null,
     cancelAtPeriodEnd: subscriptionCancellationScheduled(subscription),
     eventCreatedAt: event.created,
+    authority: "initial",
   });
   if (!updated) return;
   const email = await subscriptionEmail(subscription);
@@ -382,7 +385,7 @@ function invoiceSubscriptionId(invoice: Stripe.Invoice) {
 
 async function processSubscriptionUpdated(event: Stripe.Event, subscription: Stripe.Subscription) {
   const { data: existing, error: existingError } = await supabase.from("subscriptions")
-    .select("grace_ends_at")
+    .select("paid_through, grace_ends_at")
     .eq("stripe_subscription_id", subscription.id)
     .maybeSingle();
   if (existingError) throw new WebhookFailure("subscription_lookup_failed");
@@ -391,12 +394,11 @@ async function processSubscriptionUpdated(event: Stripe.Event, subscription: Str
     customerId: typeof subscription.customer === "string" ? subscription.customer : null,
     subscriptionId: subscription.id,
     status: subscription.status,
-    paidThrough: subscriptionPaidThrough(subscription),
-    graceEndsAt: subscription.status === "active" || subscription.status === "trialing"
-      ? null
-      : existing?.grace_ends_at ?? null,
+    paidThrough: existing?.paid_through ?? null,
+    graceEndsAt: existing?.grace_ends_at ?? null,
     cancelAtPeriodEnd: subscriptionCancellationScheduled(subscription),
     eventCreatedAt: event.created,
+    authority: "subscription",
   });
   if (!updated) return;
   const email = await subscriptionEmail(subscription);
@@ -446,6 +448,7 @@ async function processInvoice(event: Stripe.Event, invoice: Stripe.Invoice) {
       graceEndsAt: null,
       cancelAtPeriodEnd: subscriptionCancellationScheduled(subscription),
       eventCreatedAt: event.created,
+      authority: "payment",
     });
     if (email) {
       await runSideEffect(event.id, `mailchimp:subscriber:${subscription.id}`, async () => {
@@ -474,6 +477,7 @@ async function processInvoice(event: Stripe.Event, invoice: Stripe.Invoice) {
     graceEndsAt,
     cancelAtPeriodEnd: subscriptionCancellationScheduled(subscription),
     eventCreatedAt: event.created,
+    authority: "payment",
   });
   if (email) {
     await runSideEffect(event.id, `email:payment-failed:${subscriptionId}:${invoice.id}`, async () => {
@@ -529,6 +533,7 @@ async function processEvent(event: Stripe.Event) {
         graceEndsAt: null,
         cancelAtPeriodEnd: false,
         eventCreatedAt: event.created,
+        authority: "subscription",
       });
       const { data: stored, error: storedError } = await supabase.from("subscriptions")
         .select("user_id")

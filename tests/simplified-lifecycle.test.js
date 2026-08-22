@@ -118,6 +118,41 @@ test("Stripe cancel_at and cancel_at_period_end both normalize to scheduled canc
   assert.match(route, /if \(subscriptionCancellationScheduled\(subscription\) && paidThrough && email\)/);
 });
 
+test("subscription updates cannot claim renewal payment authority", () => {
+  const route = read("app/api/stripe/webhook/route.ts");
+  const updated = route.slice(
+    route.indexOf("async function processSubscriptionUpdated"),
+    route.indexOf("async function processInvoice"),
+  );
+  assert.match(updated, /select\("paid_through, grace_ends_at"\)/);
+  assert.match(updated, /paidThrough: existing\?\.paid_through \?\? null/);
+  assert.match(updated, /graceEndsAt: existing\?\.grace_ends_at \?\? null/);
+  assert.match(updated, /authority: "subscription"/);
+  assert.doesNotMatch(updated, /status === "active"[\s\S]*graceEndsAt/);
+});
+
+test("invoice events exclusively advance paid-through and clear or establish grace", () => {
+  const route = read("app/api/stripe/webhook/route.ts");
+  const invoice = route.slice(
+    route.indexOf("async function processInvoice"),
+    route.indexOf("async function processEvent"),
+  );
+  assert.match(invoice, /event\.type === "invoice\.paid"[\s\S]*paidThrough: subscriptionPaidThrough\(subscription\)[\s\S]*graceEndsAt: null[\s\S]*authority: "payment"/);
+  assert.match(invoice, /calculateGraceEnd[\s\S]*status: "past_due"[\s\S]*authority: "payment"/);
+  assert.match(invoice, /email:payment-failed:\$\{subscriptionId\}:\$\{invoice\.id\}/);
+});
+
+test("subscription and payment ordering are independently idempotent", () => {
+  const sql = read("supabase/migrations/202608220003_separate_subscription_payment_authority.sql");
+  assert.match(sql, /stripe_subscription_event_created_at timestamptz/);
+  assert.match(sql, /stripe_payment_event_created_at timestamptz/);
+  assert.match(sql, /p_authority = 'subscription'[\s\S]*existing_subscription_event > p_event_created_at[\s\S]*status = p_status[\s\S]*cancel_at_period_end = p_cancel_at_period_end/);
+  const subscriptionBranch = sql.slice(sql.indexOf("if p_authority = 'subscription'"), sql.indexOf("if p_authority = 'payment'"));
+  assert.doesNotMatch(subscriptionBranch, /paid_through =|grace_ends_at =/);
+  assert.match(sql, /p_authority = 'payment'[\s\S]*existing_payment_event > p_event_created_at[\s\S]*paid_through = coalesce\(p_paid_through, paid_through\)[\s\S]*grace_ends_at = p_grace_ends_at/);
+  assert.match(sql, /return false;/);
+});
+
 test("billing portal is authenticated, server-owned and return-path constrained", () => {
   const portal = read("app/api/stripe/portal/route.ts");
   assert.match(portal, /supabase\.auth\.getUser\(\)/);
