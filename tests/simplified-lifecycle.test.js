@@ -111,6 +111,13 @@ test("signed subscription events are not replaced by an eventually stale Stripe 
   assert.doesNotMatch(createdCase + updatedCase, /stripe\.subscriptions\.retrieve/);
 });
 
+test("Stripe cancel_at and cancel_at_period_end both normalize to scheduled cancellation", () => {
+  const route = read("app/api/stripe/webhook/route.ts");
+  assert.match(route, /subscription\.cancel_at_period_end \|\| typeof subscription\.cancel_at === "number"/);
+  assert.match(route, /cancelAtPeriodEnd: subscriptionCancellationScheduled\(subscription\)/);
+  assert.match(route, /if \(subscriptionCancellationScheduled\(subscription\) && paidThrough && email\)/);
+});
+
 test("billing portal is authenticated, server-owned and return-path constrained", () => {
   const portal = read("app/api/stripe/portal/route.ts");
   assert.match(portal, /supabase\.auth\.getUser\(\)/);

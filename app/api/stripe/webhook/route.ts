@@ -333,6 +333,10 @@ function subscriptionPaidThrough(subscription: Stripe.Subscription) {
   return stripeTime(paidThrough);
 }
 
+function subscriptionCancellationScheduled(subscription: Stripe.Subscription) {
+  return subscription.cancel_at_period_end || typeof subscription.cancel_at === "number";
+}
+
 async function processSubscriptionCreated(
   event: Stripe.Event,
   subscription: Stripe.Subscription,
@@ -348,7 +352,7 @@ async function processSubscriptionCreated(
     status: subscription.status,
     paidThrough: subscriptionPaidThrough(subscription),
     graceEndsAt: null,
-    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    cancelAtPeriodEnd: subscriptionCancellationScheduled(subscription),
     eventCreatedAt: event.created,
   });
   if (!updated) return;
@@ -391,7 +395,7 @@ async function processSubscriptionUpdated(event: Stripe.Event, subscription: Str
     graceEndsAt: subscription.status === "active" || subscription.status === "trialing"
       ? null
       : existing?.grace_ends_at ?? null,
-    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    cancelAtPeriodEnd: subscriptionCancellationScheduled(subscription),
     eventCreatedAt: event.created,
   });
   if (!updated) return;
@@ -407,7 +411,7 @@ async function processSubscriptionUpdated(event: Stripe.Event, subscription: Str
     }
   }
   const paidThrough = subscriptionPaidThrough(subscription);
-  if (subscription.cancel_at_period_end && paidThrough && email) {
+  if (subscriptionCancellationScheduled(subscription) && paidThrough && email) {
     const cancellationVersion = subscription.canceled_at ?? event.created;
     try {
       await runSideEffect(event.id, `email:cancellation-scheduled:${subscription.id}:${cancellationVersion}`, async () => {
@@ -440,7 +444,7 @@ async function processInvoice(event: Stripe.Event, invoice: Stripe.Invoice) {
       status: subscription.status,
       paidThrough: subscriptionPaidThrough(subscription),
       graceEndsAt: null,
-      cancelAtPeriodEnd: subscription.cancel_at_period_end,
+      cancelAtPeriodEnd: subscriptionCancellationScheduled(subscription),
       eventCreatedAt: event.created,
     });
     if (email) {
@@ -468,7 +472,7 @@ async function processInvoice(event: Stripe.Event, invoice: Stripe.Invoice) {
     status: "past_due",
     paidThrough: existing?.paid_through ?? subscriptionPaidThrough(subscription),
     graceEndsAt,
-    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    cancelAtPeriodEnd: subscriptionCancellationScheduled(subscription),
     eventCreatedAt: event.created,
   });
   if (email) {
