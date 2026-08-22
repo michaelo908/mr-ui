@@ -501,12 +501,11 @@ async function processEvent(event: Stripe.Event) {
     case "customer.subscription.created":
       await processSubscriptionCreated(
         event,
-        await stripe.subscriptions.retrieve((event.data.object as Stripe.Subscription).id),
+        event.data.object as Stripe.Subscription,
       );
       return;
     case "customer.subscription.updated": {
-      const eventSubscription = event.data.object as Stripe.Subscription;
-      const subscription = await stripe.subscriptions.retrieve(eventSubscription.id);
+      const subscription = event.data.object as Stripe.Subscription;
       await processSubscriptionUpdated(event, subscription);
       after(() => recordSignal("purchase.subscription_updated", {
         surface: "paid", verified: true, isTest: !event.livemode,

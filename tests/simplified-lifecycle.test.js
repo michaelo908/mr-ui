@@ -96,6 +96,21 @@ test("webhook keeps access authoritative and communications independently retrya
   assert.doesNotMatch(route, /delete\(\)[\s\S]*workspace|removeActiveWorkspace/i);
 });
 
+test("signed subscription events are not replaced by an eventually stale Stripe read", () => {
+  const route = read("app/api/stripe/webhook/route.ts");
+  const createdCase = route.slice(
+    route.indexOf('case "customer.subscription.created"'),
+    route.indexOf('case "customer.subscription.updated"'),
+  );
+  const updatedCase = route.slice(
+    route.indexOf('case "customer.subscription.updated"'),
+    route.indexOf('case "customer.subscription.deleted"'),
+  );
+  assert.match(createdCase, /event\.data\.object as Stripe\.Subscription/);
+  assert.match(updatedCase, /event\.data\.object as Stripe\.Subscription/);
+  assert.doesNotMatch(createdCase + updatedCase, /stripe\.subscriptions\.retrieve/);
+});
+
 test("billing portal is authenticated, server-owned and return-path constrained", () => {
   const portal = read("app/api/stripe/portal/route.ts");
   assert.match(portal, /supabase\.auth\.getUser\(\)/);
