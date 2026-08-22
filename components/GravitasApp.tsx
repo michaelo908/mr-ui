@@ -1800,6 +1800,8 @@ const gravitonGroups = [
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
   const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
+  const [subscriptionQualifier, setSubscriptionQualifier] = useState<string | null>(null);
+  const [canManageBilling, setCanManageBilling] = useState(false);
   const [isBookTrial, setIsBookTrial] = useState(false);
   const [bookTrialDaysRemaining, setBookTrialDaysRemaining] = useState<number | null>(null);
   const [accessResolved, setAccessResolved] = useState(false);
@@ -2524,54 +2526,33 @@ useEffect(() => {
       }
 
       setAuthenticatedUserId(user.id);
-
-      const { data: subscriptionRows } = await supabase
-        .from("subscriptions")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .limit(1);
-
-      const subscribed = !!subscriptionRows && subscriptionRows.length > 0;
+      const accessResponse = await fetch("/api/access", { cache: "no-store" });
+      if (!accessResponse.ok) {
+        setIsSubscribed(false);
+        setIsBookTrial(false);
+        setCanManageBilling(false);
+        setAccessResolved(true);
+        return;
+      }
+      const access = await accessResponse.json() as {
+        state: "jump_in" | "day_pass" | "subscriber";
+        qualifier: string;
+        dayPassExpiresAt: string | null;
+        canManageBilling: boolean;
+      };
+      const subscribed = access.state === "subscriber";
+      const trialActive = access.state === "day_pass";
       setIsSubscribed(subscribed);
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("access_level, trial_end_date")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (!profile) {
-        await supabase.from("profiles").insert({
-          id: user.id,
-        });
+      setSubscriptionQualifier(subscribed ? access.qualifier : null);
+      setCanManageBilling(subscribed && access.canManageBilling);
+      setIsBookTrial(trialActive);
+      if (trialActive && access.dayPassExpiresAt) {
+        setBookTrialDaysRemaining(Math.max(0, Math.ceil(
+          (new Date(access.dayPassExpiresAt).getTime() - Date.now()) /
+          (1000 * 60 * 60 * 24)
+        )));
       } else {
-        const accessLevel = profile.access_level;
-
-        const trialEndDate = profile.trial_end_date
-        ? new Date(profile.trial_end_date)
-        : null;
-
-        const trialActive =
-        accessLevel === "trial" &&
-        trialEndDate &&
-        trialEndDate > new Date();
-
-setIsBookTrial(Boolean(trialActive));
-if (trialActive && trialEndDate) {
-  const daysRemaining = Math.max(
-    0,
-    Math.ceil(
-      (trialEndDate.getTime() - Date.now()) /
-      (1000 * 60 * 60 * 24)
-    )
-  );
-
-  setBookTrialDaysRemaining(daysRemaining);
-} else {
-  setBookTrialDaysRemaining(null);
-}
-
+        setBookTrialDaysRemaining(null);
       }
 
       setAccessResolved(true);
@@ -2808,6 +2789,21 @@ if (trialActive && trialEndDate) {
       }
     } catch {
       alert("Something went wrong starting checkout.");
+    }
+  }
+
+  async function handleManageBilling() {
+    try {
+      const response = await fetch("/api/stripe/portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ returnPath: "/" }),
+      });
+      const body = await response.json();
+      if (!response.ok || typeof body.url !== "string") throw new Error("unavailable");
+      window.location.assign(body.url);
+    } catch {
+      alert("Billing management is temporarily unavailable.");
     }
   }
 
@@ -3362,6 +3358,12 @@ if (urlSourceImages.length > 0) {
     {bookTrialDaysRemaining === 1 ? "" : "s"} remaining
   </div>
 )}
+            {!isJumpIn && subscriptionQualifier === "past_due_grace" ? (
+              <div className="mt-1 text-xs text-amber-300">Payment needs attention. Access remains active during the grace period.</div>
+            ) : null}
+            {!isJumpIn && subscriptionQualifier === "cancelled_entitled" ? (
+              <div className="mt-1 text-xs text-neutral-400">Subscription scheduled to end after the current paid period.</div>
+            ) : null}
 
             <div className="mt-1 space-y-0.5 text-xs text-neutral-500">
               <div>Analyses today: {analysesToday}</div>
@@ -3381,6 +3383,15 @@ if (urlSourceImages.length > 0) {
                 }}
               >
                 Subscribe
+              </button>
+            ) : null}
+            {!isJumpIn && canManageBilling ? (
+              <button
+                onClick={handleManageBilling}
+                data-copy-ui="true"
+                className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900"
+              >
+                Manage billing
               </button>
             ) : null}
 

@@ -24,16 +24,18 @@ test("webhook supports the bounded Stripe event set and ignores unsupported even
   assert.match(route, /ignored: true/);
   assert.match(route, /"cancelled"/);
   assert.match(route, /"past_due"/);
-  assert.match(route, /event\.type === "invoice\.paid" \? "active" : "past_due"/);
+  assert.match(route, /event\.type === "invoice\.paid"/);
+  assert.match(route, /status: subscription\.status/);
+  assert.match(route, /status: "past_due"/);
 });
 
 test("entitlement writes precede communication and every authoritative write is checked", () => {
   const route = read("app/api/stripe/webhook/route.ts");
   const fulfilment = route.slice(route.indexOf("async function fulfilDayPass"), route.indexOf("async function sendSubscriptionActivation"));
   assert.ok(fulfilment.indexOf("await grantDayPass") < fulfilment.indexOf("sendTransactionalEmail"));
-  assert.match(route, /grantDayPass\(userId, event\.created\)/);
-  assert.match(route, /if \(error\) throw new WebhookFailure\("day_pass_entitlement_write_failed"\)/);
-  assert.match(route, /if \(error\) throw new WebhookFailure\("subscription_entitlement_write_failed"\)/);
+  assert.match(route, /grantDayPass\(userId, event\)/);
+  assert.match(route, /throw new WebhookFailure\("day_pass_entitlement_write_failed"\)/);
+  assert.match(route, /throw new WebhookFailure\("subscription_entitlement_write_failed"\)/);
   assert.match(route, /failure\.retryable[\s\S]*status: 500[\s\S]*rejected: true/);
 });
 

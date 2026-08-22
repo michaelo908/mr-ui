@@ -32,12 +32,21 @@ function accessEmail(input: {
   return { html, text, loginUrl };
 }
 
-export function dayPassAccessEmail(appUrl: string) {
+function formatDate(value: string | Date) {
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }).format(new Date(value));
+}
+
+export function dayPassAccessEmail(appUrl: string, expiresAt?: string | Date | null) {
+  const expiry = expiresAt ? ` It now runs until ${formatDate(expiresAt)} UTC.` : "";
   return {
     subject: "Your Gravitas Day Pass is ready",
     ...accessEmail({
       heading: "Your Gravitas Day Pass is active",
-      introduction: "Your 48-hour Gravitas access is active from the time of purchase.",
+      introduction: `Your Gravitas Day Pass is active.${expiry}`,
       appUrl,
     }),
   };
@@ -52,4 +61,44 @@ export function subscriptionActivationEmail(appUrl: string) {
       appUrl,
     }),
   };
+}
+
+function billingEmail(input: {
+  appUrl: string;
+  subject: string;
+  heading: string;
+  introduction: string;
+}) {
+  const billingUrl = new URL("/billing", input.appUrl).toString();
+  const safeBillingUrl = escapeHtml(billingUrl);
+  const html = `<!doctype html>
+<html><body style="margin:0;background:#0b1015;color:#e8edf2;font-family:Arial,sans-serif">
+  <div style="max-width:600px;margin:0 auto;padding:32px 22px">
+    <h1 style="font-size:24px;margin:0 0 18px">${escapeHtml(input.heading)}</h1>
+    <p style="line-height:1.6">${escapeHtml(input.introduction)}</p>
+    <p style="margin:28px 0"><a href="${safeBillingUrl}" style="display:inline-block;background:#d4ae57;color:#111820;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:8px">Manage billing</a></p>
+    <p style="line-height:1.6">If the button does not work, open:<br><a href="${safeBillingUrl}" style="color:#69aefc">${safeBillingUrl}</a></p>
+    <p style="line-height:1.6">Need help? <a href="mailto:${SUPPORT_EMAIL}" style="color:#69aefc">${SUPPORT_EMAIL}</a></p>
+  </div>
+</body></html>`;
+  const text = `${input.heading}\n\n${input.introduction}\n\nManage billing: ${billingUrl}\n\nNeed help? ${SUPPORT_EMAIL}`;
+  return { subject: input.subject, html, text, billingUrl };
+}
+
+export function paymentFailedEmail(appUrl: string, graceEndsAt: string | Date) {
+  return billingEmail({
+    appUrl,
+    subject: "Action required for your Gravitas subscription",
+    heading: "Your subscription payment needs attention",
+    introduction: `Your Gravitas access remains available until ${formatDate(graceEndsAt)} UTC while you update your billing details.`,
+  });
+}
+
+export function cancellationScheduledEmail(appUrl: string, paidThrough: string | Date) {
+  return billingEmail({
+    appUrl,
+    subject: "Your Gravitas subscription is scheduled to end",
+    heading: "Your subscription cancellation is scheduled",
+    introduction: `Your Gravitas subscription remains active until ${formatDate(paidThrough)} UTC. You can manage or resume it before then.`,
+  });
 }

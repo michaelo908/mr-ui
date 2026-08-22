@@ -7,12 +7,17 @@ import { recordSignal } from "@/lib/signals/server";
 import { sanitizeAttribution } from "@/lib/signals/contracts";
 import {
   describeMailchimpFailure,
+  syncExistingMailchimpLifecycle,
   tagExistingMailchimpDayPassBuyer,
 } from "@/lib/mailchimp";
 import {
+  cancellationScheduledEmail,
   dayPassAccessEmail,
+  paymentFailedEmail,
   subscriptionActivationEmail,
 } from "@/lib/transactional-emails";
+import { calculateGraceEnd } from "@/lib/lifecycle";
+import { resolveLifecycleForUserId } from "@/lib/lifecycle-server";
 
 const SUPPORTED_EVENTS = new Set<Stripe.Event.Type>([
   "checkout.session.completed",
@@ -98,13 +103,31 @@ async function finishEvent(eventId: string, status: ReceiptStatus, category?: st
   if (error) throw new WebhookFailure("receipt_finish_failed");
 }
 
-async function claimEffect(eventId: string, effectKey: string) {
-  const { data, error } = await supabase.rpc("claim_stripe_webhook_effect", {
+async function runSideEffect(
+  eventId: string,
+  effectKey: string,
+  operation: () => Promise<void>,
+) {
+  const { data, error } = await supabase.rpc("claim_stripe_webhook_side_effect", {
     p_event_id: eventId,
     p_effect_key: effectKey,
   });
-  if (error || typeof data !== "boolean") throw new WebhookFailure("effect_claim_failed");
-  return data;
+  if (error || typeof data !== "boolean") throw new WebhookFailure("side_effect_claim_failed");
+  if (!data) return;
+  try {
+    await operation();
+    const { error: finishError } = await supabase.rpc("finish_stripe_webhook_side_effect", {
+      p_effect_key: effectKey,
+      p_status: "completed",
+    });
+    if (finishError) throw new WebhookFailure("side_effect_finish_failed");
+  } catch (error) {
+    await supabase.rpc("finish_stripe_webhook_side_effect", {
+      p_effect_key: effectKey,
+      p_status: "retryable_failed",
+    });
+    throw error;
+  }
 }
 
 async function findOrCreateUser(email: string) {
@@ -118,47 +141,48 @@ async function findOrCreateUser(email: string) {
   return created.data.user.id;
 }
 
-async function grantDayPass(userId: string, eventCreatedAt: number) {
-  const trialStartDate = new Date(eventCreatedAt * 1000);
-  const trialEndDate = new Date(trialStartDate.getTime() + 48 * 60 * 60 * 1000);
-  const { error } = await supabase.from("profiles").upsert({
-    id: userId,
-    access_level: "trial",
-    trial_start_date: trialStartDate.toISOString(),
-    trial_end_date: trialEndDate.toISOString(),
-  }, { onConflict: "id" });
-  if (error) throw new WebhookFailure("day_pass_entitlement_write_failed");
+async function grantDayPass(userId: string, event: Stripe.Event) {
+  const { data, error } = await supabase.rpc("grant_gravitas_day_pass", {
+    p_user_id: userId,
+    p_event_id: event.id,
+    p_purchase_time: new Date(event.created * 1000).toISOString(),
+  });
+  const row = Array.isArray(data) ? data[0] : data;
+  if (error || !row || typeof row.expires_at !== "string") {
+    throw new WebhookFailure("day_pass_entitlement_write_failed");
+  }
+  return { applied: Boolean(row.applied), expiresAt: row.expires_at as string };
 }
 
 async function upsertSubscription(input: {
-  userId: string;
+  userId: string | null;
   customerId: string | null;
   subscriptionId: string;
   status: string;
+  paidThrough: string | null;
+  graceEndsAt: string | null;
+  cancelAtPeriodEnd: boolean;
+  eventCreatedAt: number;
 }) {
-  const { error } = await supabase.from("subscriptions").upsert({
-    user_id: input.userId,
-    stripe_customer_id: input.customerId,
-    stripe_subscription_id: input.subscriptionId,
-    status: input.status,
-  }, { onConflict: "user_id" });
-  if (error) throw new WebhookFailure("subscription_entitlement_write_failed");
-}
-
-async function updateSubscriptionStatus(subscriptionId: string, status: string) {
-  const { data, error } = await supabase.from("subscriptions")
-    .update({ status })
-    .eq("stripe_subscription_id", subscriptionId)
-    .select("id");
-  if (error) throw new WebhookFailure("subscription_status_write_failed");
-  return Array.isArray(data) && data.length > 0;
+  const { data, error } = await supabase.rpc("upsert_gravitas_subscription", {
+    p_user_id: input.userId,
+    p_customer_id: input.customerId,
+    p_subscription_id: input.subscriptionId,
+    p_status: input.status,
+    p_paid_through: input.paidThrough,
+    p_grace_ends_at: input.graceEndsAt,
+    p_cancel_at_period_end: input.cancelAtPeriodEnd,
+    p_event_created_at: new Date(input.eventCreatedAt * 1000).toISOString(),
+  });
+  if (error || typeof data !== "boolean") throw new WebhookFailure("subscription_entitlement_write_failed");
+  return data;
 }
 
 async function sendTransactionalEmail(input: {
   eventId: string;
-  effect: "day-pass" | "subscription-activation";
+  effect: "day-pass" | "subscription-activation" | "payment-failed" | "cancellation-scheduled";
   to: string;
-  email: ReturnType<typeof dayPassAccessEmail>;
+  email: { subject: string; html: string; text: string };
 }) {
   const { error } = await getResend().emails.send({
     from: GRAVITAS_EMAIL_SENDER,
@@ -186,25 +210,49 @@ async function syncDayPassMarketing(email: string) {
   }
 }
 
+async function syncLifecycleMarketing(
+  email: string,
+  state: "jump_in" | "day_pass" | "subscriber",
+  permanentTags: string[] = [],
+  authoritative = false,
+) {
+  try {
+    await syncExistingMailchimpLifecycle({ email, state, permanentTags, authoritative });
+  } catch (error) {
+    const failure = describeMailchimpFailure(error);
+    console.warn("Stripe Mailchimp lifecycle synchronization failed", {
+      provider: "mailchimp",
+      category: failure.category,
+      providerStatus: failure.providerStatus,
+      retryable: failure.category !== "member_rejected",
+    });
+    throw new WebhookFailure(`mailchimp_${failure.category}`);
+  }
+}
+
 async function fulfilDayPass(event: Stripe.Event, session: Stripe.Checkout.Session) {
   const email = session.customer_details?.email;
   if (!email) throw new WebhookFailure("checkout_email_missing", false);
   const userId = await findOrCreateUser(email);
-  await grantDayPass(userId, event.created);
+  const entitlement = await grantDayPass(userId, event);
 
   const communicationErrors: WebhookFailure[] = [];
   try {
-    await sendTransactionalEmail({
-      eventId: event.id,
-      effect: "day-pass",
-      to: email,
-      email: dayPassAccessEmail(GRAVITAS_APP_URL),
+    await runSideEffect(event.id, `email:day-pass:${event.id}`, async () => {
+      await sendTransactionalEmail({
+        eventId: event.id,
+        effect: "day-pass",
+        to: email,
+        email: dayPassAccessEmail(GRAVITAS_APP_URL, entitlement.expiresAt),
+      });
     });
   } catch (error) {
     communicationErrors.push(error instanceof WebhookFailure ? error : new WebhookFailure("resend_delivery_failed"));
   }
   try {
-    await syncDayPassMarketing(email);
+    await runSideEffect(event.id, `mailchimp:day-pass:${event.id}`, async () => {
+      await syncDayPassMarketing(email);
+    });
   } catch (error) {
     communicationErrors.push(error instanceof WebhookFailure ? error : new WebhookFailure("mailchimp_sync_failed"));
   }
@@ -217,13 +265,13 @@ async function sendSubscriptionActivation(
   email: string | null,
 ) {
   if (!email) throw new WebhookFailure("subscription_email_missing", false);
-  const claimed = await claimEffect(event.id, `subscription-activation:${subscriptionId}`);
-  if (!claimed) return;
-  await sendTransactionalEmail({
-    eventId: subscriptionId,
-    effect: "subscription-activation",
-    to: email,
-    email: subscriptionActivationEmail(GRAVITAS_APP_URL),
+  await runSideEffect(event.id, `email:subscription-activation:${subscriptionId}`, async () => {
+    await sendTransactionalEmail({
+      eventId: subscriptionId,
+      effect: "subscription-activation",
+      to: email,
+      email: subscriptionActivationEmail(GRAVITAS_APP_URL),
+    });
   });
 }
 
@@ -235,7 +283,6 @@ async function processCheckout(event: Stripe.Event, session: Stripe.Checkout.Ses
   const lineItems = await checkoutLineItems(session.id);
   const isDayPass = lineItems.data.some((item) => item.price?.id === GRAVITAS_DAY_PASS_PRICE_ID);
   if (isDayPass) {
-    if (!await claimEffect(event.id, `day-pass:${session.id}`)) return;
     await fulfilDayPass(event, session);
     after(() => recordSignal("purchase.day_pass_completed", {
       visitorId: session.metadata?.gravitas_visitor_id || null,
@@ -249,10 +296,9 @@ async function processCheckout(event: Stripe.Event, session: Stripe.Checkout.Ses
   } else {
     const userId = session.metadata?.user_id;
     const subscriptionId = typeof session.subscription === "string" ? session.subscription : null;
-    const customerId = typeof session.customer === "string" ? session.customer : null;
     if (userId && subscriptionId) {
-      await upsertSubscription({ userId, customerId, subscriptionId, status: "active" });
-      await sendSubscriptionActivation(event, subscriptionId, session.customer_details?.email || null);
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      await processSubscriptionCreated(event, subscription, userId);
     }
   }
   after(() => recordSignal("purchase.checkout_completed", {
@@ -275,17 +321,166 @@ async function subscriptionEmail(subscription: Stripe.Subscription) {
   return !customer.deleted ? customer.email : null;
 }
 
-async function processSubscriptionCreated(event: Stripe.Event, subscription: Stripe.Subscription) {
-  const userId = subscription.metadata.user_id;
+function stripeTime(value: number | null | undefined) {
+  return typeof value === "number" ? new Date(value * 1000).toISOString() : null;
+}
+
+function subscriptionPaidThrough(subscription: Stripe.Subscription) {
+  const itemEnds = subscription.items.data
+    .map((item) => item.current_period_end)
+    .filter((value): value is number => typeof value === "number");
+  const paidThrough = itemEnds.length ? Math.max(...itemEnds) : subscription.cancel_at;
+  return stripeTime(paidThrough);
+}
+
+async function processSubscriptionCreated(
+  event: Stripe.Event,
+  subscription: Stripe.Subscription,
+  suppliedUserId?: string,
+) {
+  const userId = suppliedUserId || subscription.metadata.user_id;
   const customerId = typeof subscription.customer === "string" ? subscription.customer : null;
   if (!userId) throw new WebhookFailure("subscription_user_missing", false);
-  await upsertSubscription({ userId, customerId, subscriptionId: subscription.id, status: subscription.status });
-  await sendSubscriptionActivation(event, subscription.id, await subscriptionEmail(subscription));
+  const updated = await upsertSubscription({
+    userId,
+    customerId,
+    subscriptionId: subscription.id,
+    status: subscription.status,
+    paidThrough: subscriptionPaidThrough(subscription),
+    graceEndsAt: null,
+    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    eventCreatedAt: event.created,
+  });
+  if (!updated) return;
+  const email = await subscriptionEmail(subscription);
+  const communicationErrors: unknown[] = [];
+  try {
+    await sendSubscriptionActivation(event, subscription.id, email);
+  } catch (error) {
+    communicationErrors.push(error);
+  }
+  if (email) {
+    try {
+      await runSideEffect(event.id, `mailchimp:subscriber:${subscription.id}`, async () => {
+        await syncLifecycleMarketing(email, "subscriber");
+      });
+    } catch (error) {
+      communicationErrors.push(error);
+    }
+  }
+  if (communicationErrors.length) throw communicationErrors[0];
 }
 
 function invoiceSubscriptionId(invoice: Stripe.Invoice) {
   const subscription = invoice.parent?.subscription_details?.subscription;
   return typeof subscription === "string" ? subscription : subscription?.id || null;
+}
+
+async function processSubscriptionUpdated(event: Stripe.Event, subscription: Stripe.Subscription) {
+  const { data: existing, error: existingError } = await supabase.from("subscriptions")
+    .select("grace_ends_at")
+    .eq("stripe_subscription_id", subscription.id)
+    .maybeSingle();
+  if (existingError) throw new WebhookFailure("subscription_lookup_failed");
+  const updated = await upsertSubscription({
+    userId: subscription.metadata.user_id || null,
+    customerId: typeof subscription.customer === "string" ? subscription.customer : null,
+    subscriptionId: subscription.id,
+    status: subscription.status,
+    paidThrough: subscriptionPaidThrough(subscription),
+    graceEndsAt: subscription.status === "active" || subscription.status === "trialing"
+      ? null
+      : existing?.grace_ends_at ?? null,
+    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    eventCreatedAt: event.created,
+  });
+  if (!updated) return;
+  const email = await subscriptionEmail(subscription);
+  const communicationErrors: unknown[] = [];
+  if (email) {
+    try {
+      await runSideEffect(event.id, `mailchimp:subscriber:${subscription.id}`, async () => {
+        await syncLifecycleMarketing(email, "subscriber");
+      });
+    } catch (error) {
+      communicationErrors.push(error);
+    }
+  }
+  const paidThrough = subscriptionPaidThrough(subscription);
+  if (subscription.cancel_at_period_end && paidThrough && email) {
+    const cancellationVersion = subscription.canceled_at ?? event.created;
+    try {
+      await runSideEffect(event.id, `email:cancellation-scheduled:${subscription.id}:${cancellationVersion}`, async () => {
+        await sendTransactionalEmail({
+          eventId: event.id,
+          effect: "cancellation-scheduled",
+          to: email,
+          email: cancellationScheduledEmail(GRAVITAS_APP_URL, paidThrough),
+        });
+      });
+    } catch (error) {
+      communicationErrors.push(error);
+    }
+  }
+  if (communicationErrors.length) throw communicationErrors[0];
+}
+
+async function processInvoice(event: Stripe.Event, invoice: Stripe.Invoice) {
+  const subscriptionId = invoiceSubscriptionId(invoice);
+  if (!subscriptionId) return;
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const customerId = typeof subscription.customer === "string" ? subscription.customer : null;
+  const email = await subscriptionEmail(subscription);
+
+  if (event.type === "invoice.paid") {
+    await upsertSubscription({
+      userId: subscription.metadata.user_id || null,
+      customerId,
+      subscriptionId,
+      status: subscription.status,
+      paidThrough: subscriptionPaidThrough(subscription),
+      graceEndsAt: null,
+      cancelAtPeriodEnd: subscription.cancel_at_period_end,
+      eventCreatedAt: event.created,
+    });
+    if (email) {
+      await runSideEffect(event.id, `mailchimp:subscriber:${subscription.id}`, async () => {
+        await syncLifecycleMarketing(email, "subscriber");
+      });
+    }
+    return;
+  }
+
+  const { data: existing, error } = await supabase.from("subscriptions")
+    .select("paid_through")
+    .eq("stripe_subscription_id", subscriptionId)
+    .maybeSingle();
+  if (error) throw new WebhookFailure("subscription_lookup_failed");
+  const storedPaidThrough = existing?.paid_through ? Date.parse(existing.paid_through) : 0;
+  const graceEndsAt = new Date(calculateGraceEnd(
+    Number.isFinite(storedPaidThrough) && storedPaidThrough > 0 ? storedPaidThrough : null,
+    event.created * 1000,
+  )).toISOString();
+  await upsertSubscription({
+    userId: subscription.metadata.user_id || null,
+    customerId,
+    subscriptionId,
+    status: "past_due",
+    paidThrough: existing?.paid_through ?? subscriptionPaidThrough(subscription),
+    graceEndsAt,
+    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    eventCreatedAt: event.created,
+  });
+  if (email) {
+    await runSideEffect(event.id, `email:payment-failed:${subscriptionId}:${invoice.id}`, async () => {
+      await sendTransactionalEmail({
+        eventId: event.id,
+        effect: "payment-failed",
+        to: email,
+        email: paymentFailedEmail(GRAVITAS_APP_URL, graceEndsAt),
+      });
+    });
+  }
 }
 
 async function processEvent(event: Stripe.Event) {
@@ -304,11 +499,15 @@ async function processEvent(event: Stripe.Event) {
       }));
       return;
     case "customer.subscription.created":
-      await processSubscriptionCreated(event, event.data.object as Stripe.Subscription);
+      await processSubscriptionCreated(
+        event,
+        await stripe.subscriptions.retrieve((event.data.object as Stripe.Subscription).id),
+      );
       return;
     case "customer.subscription.updated": {
-      const subscription = event.data.object as Stripe.Subscription;
-      await updateSubscriptionStatus(subscription.id, subscription.status);
+      const eventSubscription = event.data.object as Stripe.Subscription;
+      const subscription = await stripe.subscriptions.retrieve(eventSubscription.id);
+      await processSubscriptionUpdated(event, subscription);
       after(() => recordSignal("purchase.subscription_updated", {
         surface: "paid", verified: true, isTest: !event.livemode,
         dedupeKey: `stripe:${event.id}:subscription-updated`,
@@ -318,7 +517,32 @@ async function processEvent(event: Stripe.Event) {
     }
     case "customer.subscription.deleted": {
       const subscription = event.data.object as Stripe.Subscription;
-      await updateSubscriptionStatus(subscription.id, "cancelled");
+      await upsertSubscription({
+        userId: subscription.metadata.user_id || null,
+        customerId: typeof subscription.customer === "string" ? subscription.customer : null,
+        subscriptionId: subscription.id,
+        status: "cancelled",
+        paidThrough: subscriptionPaidThrough(subscription),
+        graceEndsAt: null,
+        cancelAtPeriodEnd: false,
+        eventCreatedAt: event.created,
+      });
+      const { data: stored, error: storedError } = await supabase.from("subscriptions")
+        .select("user_id")
+        .eq("stripe_subscription_id", subscription.id)
+        .maybeSingle();
+      if (storedError) throw new WebhookFailure("subscription_lookup_failed");
+      if (stored?.user_id) {
+        const [email, lifecycle] = await Promise.all([
+          subscriptionEmail(subscription),
+          resolveLifecycleForUserId(stored.user_id, supabase),
+        ]);
+        if (email) {
+          await runSideEffect(event.id, `mailchimp:subscription-ended:${subscription.id}`, async () => {
+            await syncLifecycleMarketing(email, lifecycle.state, [], true);
+          });
+        }
+      }
       after(() => recordSignal("purchase.subscription_cancelled", {
         surface: "paid", verified: true, isTest: !event.livemode,
         dedupeKey: `stripe:${event.id}:subscription-cancelled`,
@@ -328,10 +552,7 @@ async function processEvent(event: Stripe.Event) {
     }
     case "invoice.paid":
     case "invoice.payment_failed": {
-      const subscriptionId = invoiceSubscriptionId(event.data.object as Stripe.Invoice);
-      if (subscriptionId) {
-        await updateSubscriptionStatus(subscriptionId, event.type === "invoice.paid" ? "active" : "past_due");
-      }
+      await processInvoice(event, event.data.object as Stripe.Invoice);
       if (event.type === "invoice.payment_failed") {
         after(() => recordSignal("purchase.checkout_failed", {
           surface: "paid", verified: true, isTest: !event.livemode,

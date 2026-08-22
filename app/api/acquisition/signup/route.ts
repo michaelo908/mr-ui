@@ -10,6 +10,7 @@ import {
 } from "@/lib/mailchimp";
 import { sanitizeAttribution } from "@/lib/signals/contracts";
 import { consumeSignalRateLimit, recordSignal, signalContextFromRequest } from "@/lib/signals/server";
+import { resolveLifecycleForEmail } from "@/lib/lifecycle-server";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -28,12 +29,22 @@ export async function POST(req: Request) {
     const context = signalContextFromRequest(req);
     let mailchimp: MailchimpSignupResult | null = null;
     let failure: ReturnType<typeof describeMailchimpFailure> | null = null;
+    let lifecycleState: "jump_in" | "day_pass" | "subscriber" | undefined;
+    try {
+      lifecycleState = (await resolveLifecycleForEmail(email)).state;
+    } catch {
+      console.warn("Acquisition lifecycle lookup failed", {
+        category: "lifecycle_lookup_failed",
+        funnel: funnel.slug,
+      });
+    }
     try {
       mailchimp = await addMailchimpLead({
         email,
         firstName,
         tag: funnel.mailchimpTag,
         consentTag: ACQUISITION_CONSENT_VERSION,
+        lifecycleState,
       });
     } catch (error) {
       failure = describeMailchimpFailure(error);

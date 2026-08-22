@@ -9,11 +9,12 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 test("Day Pass fulfilment grants only 48-hour Gravitas access", () => {
   const webhook = read("app/api/stripe/webhook/route.ts");
+  const lifecycleMigration = read("supabase/migrations/202608220002_simplified_lifecycle.sql");
 
   assert.match(webhook, /process\.env\.STRIPE_DAY_PASS_PRICE_ID/);
   assert.match(webhook, /process\.env\.NEXT_PUBLIC_APP_URL/);
-  assert.match(webhook, /48 \* 60 \* 60 \* 1000/);
-  assert.match(webhook, /dayPassAccessEmail\(GRAVITAS_APP_URL\)/);
+  assert.match(lifecycleMigration, /interval '48 hours'/);
+  assert.match(webhook, /dayPassAccessEmail\(GRAVITAS_APP_URL, entitlement\.expiresAt\)/);
   assert.match(webhook, /getResend\(\)\.emails\.send/);
   assert.match(webhook, /Gravitas Staging <support@multirrupt\.ai>/);
   assert.match(webhook, /from: GRAVITAS_EMAIL_SENDER/);

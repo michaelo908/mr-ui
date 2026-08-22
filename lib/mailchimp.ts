@@ -1,7 +1,20 @@
 import { createHash } from "node:crypto";
+import { higherLifecycle, type GravitasLifecycleState } from "@/lib/lifecycle";
 
-type MailchimpSignup = { email: string; firstName: string; tag: string; consentTag: string };
+type MailchimpSignup = {
+  email: string;
+  firstName: string;
+  tag: string;
+  consentTag: string;
+  lifecycleState?: GravitasLifecycleState;
+};
 type MailchimpBuyer = { email: string };
+type MailchimpLifecycle = {
+  email: string;
+  state: GravitasLifecycleState;
+  permanentTags?: string[];
+  authoritative?: boolean;
+};
 
 export type MailchimpSignupResult = {
   mode: "draft" | "live";
@@ -42,23 +55,60 @@ async function mailchimpFetch(url: string, init: RequestInit) {
   }
 }
 
-export async function addMailchimpLead(input: MailchimpSignup): Promise<MailchimpSignupResult> {
+function config() {
   const mode = process.env.MAILCHIMP_SIGNUP_MODE;
-  if (mode === "draft") {
-    return { mode: "draft", outcome: "draft", tagged: false, contactStatus: null };
-  }
-
   const apiKey = process.env.MAILCHIMP_API_KEY;
   const audienceId = process.env.MAILCHIMP_AUDIENCE_ID;
   const server = process.env.MAILCHIMP_SERVER_PREFIX || apiKey?.split("-").at(-1);
   if (mode !== "live" || !apiKey || !audienceId || !server) {
     throw new MailchimpIntegrationError("missing_configuration");
   }
+  return {
+    audienceId,
+    server,
+    authorization: `Basic ${Buffer.from(`gravitas:${apiKey}`).toString("base64")}`,
+  };
+}
 
-  const normalizedEmail = input.email.trim().toLowerCase();
+function endpointFor(email: string, audienceId: string, server: string) {
+  const normalizedEmail = email.trim().toLowerCase();
   const memberHash = createHash("md5").update(normalizedEmail).digest("hex");
-  const endpoint = `https://${server}.api.mailchimp.com/3.0/lists/${audienceId}/members/${memberHash}`;
-  const authorization = `Basic ${Buffer.from(`gravitas:${apiKey}`).toString("base64")}`;
+  return {
+    normalizedEmail,
+    endpoint: `https://${server}.api.mailchimp.com/3.0/lists/${audienceId}/members/${memberHash}`,
+  };
+}
+
+async function updateLifecycleField(input: {
+  endpoint: string;
+  authorization: string;
+  current?: unknown;
+  proposed: GravitasLifecycleState;
+  authoritative?: boolean;
+}) {
+  const current = ["jump_in", "day_pass", "subscriber"].includes(String(input.current))
+    ? input.current as GravitasLifecycleState
+    : null;
+  const state = input.authoritative
+    ? input.proposed
+    : higherLifecycle(current, input.proposed);
+  const response = await mailchimpFetch(input.endpoint, {
+    method: "PATCH",
+    headers: { Authorization: input.authorization, "Content-Type": "application/json" },
+    body: JSON.stringify({ merge_fields: { GRAVSTATE: state } }),
+  });
+  if (!response.ok) throw new MailchimpIntegrationError("member_rejected", response.status);
+  return state;
+}
+
+export async function addMailchimpLead(input: MailchimpSignup): Promise<MailchimpSignupResult> {
+  const mode = process.env.MAILCHIMP_SIGNUP_MODE;
+  if (mode === "draft") {
+    return { mode: "draft", outcome: "draft", tagged: false, contactStatus: null };
+  }
+
+  const { audienceId, server, authorization } = config();
+  const { normalizedEmail, endpoint } = endpointFor(input.email, audienceId, server);
 
   const memberResponse = await mailchimpFetch(endpoint, {
     method: "PUT",
@@ -73,7 +123,10 @@ export async function addMailchimpLead(input: MailchimpSignup): Promise<Mailchim
     throw new MailchimpIntegrationError("member_rejected", memberResponse.status);
   }
 
-  const member = await memberResponse.json().catch(() => null) as { status?: unknown } | null;
+  const member = await memberResponse.json().catch(() => null) as {
+    status?: unknown;
+    merge_fields?: Record<string, unknown>;
+  } | null;
   if (!member || typeof member.status !== "string") {
     throw new MailchimpIntegrationError("invalid_response", memberResponse.status);
   }
@@ -84,6 +137,15 @@ export async function addMailchimpLead(input: MailchimpSignup): Promise<Mailchim
       tagged: false,
       contactStatus: member.status,
     };
+  }
+
+  if (input.lifecycleState) {
+    await updateLifecycleField({
+      endpoint,
+      authorization,
+      current: member.merge_fields?.GRAVSTATE,
+      proposed: input.lifecycleState,
+    });
   }
 
   const tagResponse = await mailchimpFetch(`${endpoint}/tags`, {
@@ -100,18 +162,16 @@ export async function addMailchimpLead(input: MailchimpSignup): Promise<Mailchim
 }
 
 export async function tagExistingMailchimpDayPassBuyer(input: MailchimpBuyer) {
-  const mode = process.env.MAILCHIMP_SIGNUP_MODE;
-  const apiKey = process.env.MAILCHIMP_API_KEY;
-  const audienceId = process.env.MAILCHIMP_AUDIENCE_ID;
-  const server = process.env.MAILCHIMP_SERVER_PREFIX || apiKey?.split("-").at(-1);
-  if (mode !== "live" || !apiKey || !audienceId || !server) {
-    throw new MailchimpIntegrationError("missing_configuration");
-  }
+  return syncExistingMailchimpLifecycle({
+    email: input.email,
+    state: "day_pass",
+    permanentTags: ["gravitas-day-pass-buyer"],
+  });
+}
 
-  const normalizedEmail = input.email.trim().toLowerCase();
-  const memberHash = createHash("md5").update(normalizedEmail).digest("hex");
-  const endpoint = `https://${server}.api.mailchimp.com/3.0/lists/${audienceId}/members/${memberHash}`;
-  const authorization = `Basic ${Buffer.from(`gravitas:${apiKey}`).toString("base64")}`;
+export async function syncExistingMailchimpLifecycle(input: MailchimpLifecycle) {
+  const { audienceId, server, authorization } = config();
+  const { endpoint } = endpointFor(input.email, audienceId, server);
   const memberResponse = await mailchimpFetch(endpoint, {
     method: "GET",
     headers: { Authorization: authorization },
@@ -120,7 +180,10 @@ export async function tagExistingMailchimpDayPassBuyer(input: MailchimpBuyer) {
   if (!memberResponse.ok) {
     throw new MailchimpIntegrationError("member_rejected", memberResponse.status);
   }
-  const member = await memberResponse.json().catch(() => null) as { status?: unknown } | null;
+  const member = await memberResponse.json().catch(() => null) as {
+    status?: unknown;
+    merge_fields?: Record<string, unknown>;
+  } | null;
   if (!member || typeof member.status !== "string") {
     throw new MailchimpIntegrationError("invalid_response", memberResponse.status);
   }
@@ -128,13 +191,24 @@ export async function tagExistingMailchimpDayPassBuyer(input: MailchimpBuyer) {
     return { outcome: "restricted" as const, tagged: false };
   }
 
-  const tagResponse = await mailchimpFetch(`${endpoint}/tags`, {
-    method: "POST",
-    headers: { Authorization: authorization, "Content-Type": "application/json" },
-    body: JSON.stringify({ tags: [{ name: "gravitas-day-pass-buyer", status: "active" }] }),
+  const state = await updateLifecycleField({
+    endpoint,
+    authorization,
+    current: member.merge_fields?.GRAVSTATE,
+    proposed: input.state,
+    authoritative: input.authoritative,
   });
-  if (!tagResponse.ok) {
-    throw new MailchimpIntegrationError("tag_rejected", tagResponse.status);
+
+  const permanentTags = [...new Set(input.permanentTags ?? [])];
+  if (permanentTags.length) {
+    const tagResponse = await mailchimpFetch(`${endpoint}/tags`, {
+      method: "POST",
+      headers: { Authorization: authorization, "Content-Type": "application/json" },
+      body: JSON.stringify({ tags: permanentTags.map((name) => ({ name, status: "active" })) }),
+    });
+    if (!tagResponse.ok) {
+      throw new MailchimpIntegrationError("tag_rejected", tagResponse.status);
+    }
   }
-  return { outcome: "tagged" as const, tagged: true };
+  return { outcome: "tagged" as const, tagged: permanentTags.length > 0, state };
 }

@@ -16,7 +16,14 @@ function loadMailchimp(env, fetchImpl) {
   vm.runInNewContext(compiled, {
     module: testModule,
     exports: testModule.exports,
-    require,
+    require: (id) => id === "@/lib/lifecycle"
+      ? {
+          higherLifecycle: (current, proposed) => {
+            const rank = { jump_in: 1, day_pass: 2, subscriber: 3 };
+            return current && rank[current] > rank[proposed] ? current : proposed;
+          },
+        }
+      : require(id),
     process: { env: { ...env } },
     fetch: fetchImpl,
     Buffer,
@@ -39,6 +46,37 @@ test("explicit draft mode is the only non-live success path", async () => {
   const result = await api.addMailchimpLead(input);
   assert.deepEqual({ ...result }, { mode: "draft", outcome: "draft", tagged: false, contactStatus: null });
   assert.equal(calls, 0);
+});
+
+test("lifecycle updates are mutually exclusive and never downgrade a subscribed contact", async () => {
+  const calls = [];
+  const api = loadMailchimp({
+    MAILCHIMP_SIGNUP_MODE: "live",
+    MAILCHIMP_API_KEY: "secret-us6",
+    MAILCHIMP_AUDIENCE_ID: "audience",
+    MAILCHIMP_SERVER_PREFIX: "us6",
+  }, async (url, init) => {
+    calls.push({ url, init });
+    if (calls.length === 1) {
+      return new Response(JSON.stringify({
+        status: "subscribed",
+        merge_fields: { GRAVSTATE: "subscriber" },
+      }), { status: 200 });
+    }
+    return new Response(null, { status: 204 });
+  });
+  const result = await api.syncExistingMailchimpLifecycle({
+    email: input.email,
+    state: "day_pass",
+    permanentTags: ["gravitas-day-pass-buyer"],
+  });
+  assert.equal(result.state, "subscriber");
+  assert.equal(calls.length, 3);
+  assert.deepEqual(JSON.parse(calls[1].init.body), { merge_fields: { GRAVSTATE: "subscriber" } });
+  assert.deepEqual(JSON.parse(calls[2].init.body), {
+    tags: [{ name: "gravitas-day-pass-buyer", status: "active" }],
+  });
+  assert.equal(JSON.stringify(calls).includes("status_if_new"), false);
 });
 
 test("missing or partial configuration fails truthfully without a provider request", async () => {

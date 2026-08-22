@@ -8,6 +8,7 @@ import {
 } from "@/lib/editor-summary";
 import { sourceAvailabilityInstruction } from "@/lib/gravitas-analysis-request";
 import { recordSignal, signalContextFromRequest } from "@/lib/signals/server";
+import { authenticatedLifecycle } from "@/lib/lifecycle-server";
 
 /**
  * Default domain frame (normal Multirrupt operation).
@@ -415,5 +416,10 @@ Any extracted page text in the input is supporting readability assistance only. 
 }
 
 export async function POST(req: Request) {
+  const access = await authenticatedLifecycle().catch(() => null);
+  if (!access) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  if (access.lifecycle.state === "jump_in") {
+    return NextResponse.json({ error: "Active Gravitas access required" }, { status: 403 });
+  }
   return handleMrRequest(req);
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { UrlSource } from "@/lib/sources";
 import { MAX_URL_VIEWPORTS } from "@/lib/sources";
 import { captureRenderedPage } from "@/lib/viewport-capture";
+import { authenticatedLifecycle } from "@/lib/lifecycle-server";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
@@ -65,5 +66,10 @@ export async function handleUrlSourceRequest(
 }
 
 export async function POST(req: Request) {
+  const access = await authenticatedLifecycle().catch(() => null);
+  if (!access) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  if (access.lifecycle.state === "jump_in") {
+    return NextResponse.json({ error: "Active Gravitas access required" }, { status: 403 });
+  }
   return handleUrlSourceRequest(req);
 }
