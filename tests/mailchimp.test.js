@@ -38,6 +38,7 @@ const input = {
   firstName: "  Alex  ",
   tag: "gravitas_email_check_lead",
   consentTag: "gravitas_doorway_consent_v1",
+  doorway: "email",
 };
 
 test("explicit draft mode is the only non-live success path", async () => {
@@ -95,7 +96,7 @@ test("missing or partial configuration fails truthfully without a provider reque
   }
 });
 
-test("live capture preserves identity fields and applies doorway and consent tags", async () => {
+test("live capture writes the current doorway and preserves permanent doorway and consent tags", async () => {
   const calls = [];
   const api = loadMailchimp({
     MAILCHIMP_SIGNUP_MODE: "live",
@@ -110,18 +111,48 @@ test("live capture preserves identity fields and applies doorway and consent tag
 
   const result = await api.addMailchimpLead(input);
   assert.deepEqual({ ...result }, { mode: "live", outcome: "captured", tagged: true, contactStatus: "subscribed" });
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.match(calls[0].url, /lists\/audience\/members\/[a-f0-9]{32}$/);
   const memberBody = JSON.parse(calls[0].init.body);
   assert.equal(memberBody.email_address, "person@example.net");
   assert.equal(memberBody.merge_fields.FNAME, "Alex");
   assert.equal(memberBody.status_if_new, "subscribed");
   assert.equal(Object.hasOwn(memberBody, "status"), false);
-  const tagBody = JSON.parse(calls[1].init.body);
+  assert.deepEqual(JSON.parse(calls[1].init.body), {
+    merge_fields: { GRAVDOOR: "email" },
+  });
+  const tagBody = JSON.parse(calls[2].init.body);
   assert.deepEqual(tagBody.tags, [
     { name: "gravitas_email_check_lead", status: "active" },
     { name: "gravitas_doorway_consent_v1", status: "active" },
   ]);
+});
+
+test("each doorway writes its exact current value and a later submission replaces it", async () => {
+  const env = {
+    MAILCHIMP_SIGNUP_MODE: "live",
+    MAILCHIMP_API_KEY: "secret-us6",
+    MAILCHIMP_AUDIENCE_ID: "audience",
+  };
+  const doorwayWrites = [];
+  const api = loadMailchimp(env, async (url, init) => {
+    if (init.method === "PUT") {
+      return new Response(JSON.stringify({ status: "subscribed" }), { status: 200 });
+    }
+    const body = JSON.parse(init.body);
+    if (init.method === "PATCH") doorwayWrites.push(body.merge_fields.GRAVDOOR);
+    return new Response(null, { status: 204 });
+  });
+
+  for (const doorway of ["email", "proposal", "landing-page"]) {
+    await api.addMailchimpLead({
+      ...input,
+      doorway,
+      tag: `gravitas_${doorway.replace("-", "_")}_check_lead`,
+    });
+  }
+
+  assert.deepEqual(doorwayWrites, ["email", "proposal", "landing-page"]);
 });
 
 test("restricted contacts are not resubscribed or tagged", async () => {
@@ -138,6 +169,7 @@ test("restricted contacts are not resubscribed or tagged", async () => {
   assert.deepEqual({ ...result }, { mode: "live", outcome: "restricted", tagged: false, contactStatus: "unsubscribed" });
   assert.equal(calls.length, 1);
   assert.equal(Object.hasOwn(JSON.parse(calls[0].init.body), "status"), false);
+  assert.equal(JSON.stringify(calls).includes("GRAVDOOR"), false);
 });
 
 test("provider failures expose only safe category and status", async () => {

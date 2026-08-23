@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
 import { higherLifecycle, type GravitasLifecycleState } from "@/lib/lifecycle";
+import type { FunnelSlug } from "@/lib/acquisition-funnels";
 
 type MailchimpSignup = {
   email: string;
   firstName: string;
   tag: string;
   consentTag: string;
+  doorway: FunnelSlug;
   lifecycleState?: GravitasLifecycleState;
 };
 type MailchimpBuyer = { email: string };
@@ -101,6 +103,19 @@ async function updateLifecycleField(input: {
   return state;
 }
 
+async function updateDoorwayField(input: {
+  endpoint: string;
+  authorization: string;
+  doorway: FunnelSlug;
+}) {
+  const response = await mailchimpFetch(input.endpoint, {
+    method: "PATCH",
+    headers: { Authorization: input.authorization, "Content-Type": "application/json" },
+    body: JSON.stringify({ merge_fields: { GRAVDOOR: input.doorway } }),
+  });
+  if (!response.ok) throw new MailchimpIntegrationError("member_rejected", response.status);
+}
+
 export async function addMailchimpLead(input: MailchimpSignup): Promise<MailchimpSignupResult> {
   const mode = process.env.MAILCHIMP_SIGNUP_MODE;
   if (mode === "draft") {
@@ -147,6 +162,8 @@ export async function addMailchimpLead(input: MailchimpSignup): Promise<Mailchim
       proposed: input.lifecycleState,
     });
   }
+
+  await updateDoorwayField({ endpoint, authorization, doorway: input.doorway });
 
   const tagResponse = await mailchimpFetch(`${endpoint}/tags`, {
     method: "POST",

@@ -44,6 +44,7 @@ export async function POST(req: Request) {
         firstName,
         tag: funnel.mailchimpTag,
         consentTag: ACQUISITION_CONSENT_VERSION,
+        doorway: funnel.slug,
         lifecycleState,
       });
     } catch (error) {
