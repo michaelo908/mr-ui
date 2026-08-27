@@ -64,6 +64,6 @@ test("the UI keeps Editor's Summary and legacy normalization changes headings on
 
 test("alternate rewrites bypass summary generation and output validation", () => {
   const route = read("app/api/mr/route.ts");
-  assert.match(route, /alternateRewrite \|\| continuation/);
-  assert.match(route, /if \(!alternateRewrite && typeof json\?\.output === "string"\)/);
+  assert.match(route, /rewriteOnlyRequest \|\| continuation/);
+  assert.match(route, /if \(!rewriteOnlyRequest && typeof json\?\.output === "string"\)/);
 });

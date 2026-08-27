@@ -29,7 +29,7 @@ test("alternate rewrites bypass the full analysis contract", () => {
 
   assert.match(app, /requestKind:\s*"alternate-rewrite"/);
   assert.match(route, /body\?\.requestKind === "alternate-rewrite"/);
-  assert.match(route, /alternateRewrite \|\| continuation/);
+  assert.match(route, /rewriteOnlyRequest \|\| continuation/);
 });
 
 test("panel is rendered after Editor's Summary and before in-depth notes", () => {

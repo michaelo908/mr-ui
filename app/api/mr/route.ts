@@ -9,6 +9,12 @@ import {
 import { sourceAvailabilityInstruction } from "@/lib/gravitas-analysis-request";
 import { recordSignal, signalContextFromRequest } from "@/lib/signals/server";
 import { authenticatedLifecycle } from "@/lib/lifecycle-server";
+import {
+  extractRewriteOrRaw,
+  gravitonRewriteInstruction,
+  isValidRewriteCandidate,
+  rewriteOnlyInstruction,
+} from "@/lib/graviton-rewrite";
 
 /**
  * Default domain frame (normal Multirrupt operation).
@@ -39,14 +45,17 @@ CRITICAL BEHAVIOUR:
 - If the user asks a meta or explanatory question (capabilities, scope, how it works),
   answer clearly and completely, then stop. Do NOT prompt them to paste text unless they explicitly signal intent.
 
-OUTPUT CONTRACT (MANDATORY WHEN TEXT IS PROVIDED):
-When the user has pasted text for diagnosis, output EXACTLY these five sections, in this exact order, using Markdown headings exactly as shown:
+OUTPUT CONTRACT (MANDATORY WHEN SOURCE MATERIAL IS PROVIDED):
+Follow the request's REWRITE CAPABILITY instruction.
+When it is REQUIRED, output EXACTLY these five sections, in this exact order, using Markdown headings exactly as shown:
 
 ## Editor's Summary
 ## Narrative Performance
 ## Diagnosis in Depth
 ## Rewrite
 ## Rewrite Debrief
+
+When REWRITE CAPABILITY is OMIT, output only the first three analytical sections and omit Rewrite and Rewrite Debrief.
 
 SECTION RULES:
 
@@ -205,6 +214,12 @@ export async function handleMrRequest(
 
   const heresyMode = isMrHeresyMode(body);
   const alternateRewrite = body?.requestKind === "alternate-rewrite";
+  const initialRewriteRepair = body?.requestKind === "initial-rewrite-repair";
+  const rewriteOnlyRequest = alternateRewrite || initialRewriteRepair;
+  const selectedGraviton =
+    typeof body?.selectedGraviton === "string" && body.selectedGraviton.trim()
+      ? body.selectedGraviton.trim()
+      : "Full Analysis";
   const cadence: CadenceMode =
     body?.cadence === "sustained" ? "sustained" : "dynamic";
 
@@ -312,6 +327,14 @@ Any extracted page text in the input is supporting readability assistance only. 
     renderedUrlContext,
     sourceAvailabilityContext,
     rewriteCadenceContext,
+    heresyMode
+      ? ""
+      : rewriteOnlyRequest
+        ? rewriteOnlyInstruction(
+            selectedGraviton,
+            initialRewriteRepair ? "initial" : "alternate"
+          )
+        : gravitonRewriteInstruction(selectedGraviton),
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -320,7 +343,7 @@ Any extracted page text in the input is supporting readability assistance only. 
     ? combinedOriginalContext
       ? `${MR_HERESY_CHARTER}\n\n${combinedOriginalContext}`
       : MR_HERESY_CHARTER
-    : alternateRewrite || continuation
+    : rewriteOnlyRequest || continuation
       ? combinedOriginalContext
       : combinedOriginalContext
         ? `${MR_DOMAIN_FRAME}\n\n${combinedOriginalContext}`
@@ -366,7 +389,11 @@ Any extracted page text in the input is supporting readability assistance only. 
         ? imageData.length : 0,
       image_count: body?.sourceMode !== "rendered-url" && Array.isArray(imageData)
         ? imageData.length : hasImageData ? 1 : 0,
-      request_kind: alternateRewrite ? "alternate_rewrite" : "analysis",
+      request_kind: alternateRewrite
+        ? "alternate_rewrite"
+        : initialRewriteRepair
+          ? "initial_rewrite_repair"
+          : "analysis",
       cadence,
       status_code: upstream.status,
     };
@@ -387,7 +414,17 @@ Any extracted page text in the input is supporting readability assistance only. 
 
     if (parsedResponse) {
       const json = parsedResponse;
-      if (!alternateRewrite && typeof json?.output === "string") {
+      if (
+        rewriteOnlyRequest &&
+        typeof json?.output === "string" &&
+        !isValidRewriteCandidate(extractRewriteOrRaw(json.output))
+      ) {
+        return NextResponse.json(
+          { error: "The rewrite could not be completed." },
+          { status: 502 }
+        );
+      }
+      if (!rewriteOnlyRequest && typeof json?.output === "string") {
         const summaryAssessment = assessEditorSummary(json.output);
         if (summaryAssessment.violations.length > 0) {
           console.warn("Editor’s Summary contract warning", {

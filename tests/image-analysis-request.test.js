@@ -86,7 +86,7 @@ test("image payload, selected lens, and rewrite extraction stay wired", () => {
   assert.match(app, /imageData = await Promise\.all\([\s\S]*fileToBase64/);
   assert.match(app, /buildAnalysisInput\(\{[\s\S]*selectedGraviton[\s\S]*imageCount/);
   assert.match(app, /body: JSON\.stringify\(payload\)/);
-  assert.match(app, /parseStructuredMR\(normalizedOutput\)\.sections\.rewrite/);
+  assert.match(app, /parsedInitialOutput\.sections\.rewrite/);
   assert.match(app, /rewrites: initialRewrites/);
 });
 

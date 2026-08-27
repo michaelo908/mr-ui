@@ -86,6 +86,13 @@ import {
   saveActiveWorkspaceSafely,
 } from "@/lib/gravitas-active-workspace-store";
 import { createRevisionedPersistenceCoordinator } from "@/lib/gravitas-persistence-coordinator";
+import {
+  extractRewriteOrRaw,
+  isRewriteCapableGraviton,
+  isValidRewriteCandidate,
+  removeStructuredRewrite,
+  replaceStructuredRewrite,
+} from "@/lib/graviton-rewrite";
 
 type Msg = {
   role: "user" | "assistant";
@@ -831,6 +838,7 @@ function StructuredAssistantMessage({
   sourceImageData,
   sourceImages,
   sourceIdentity,
+  graviton,
   cadence,
   apiEndpoint,
   interactionLocked,
@@ -846,6 +854,7 @@ function StructuredAssistantMessage({
   sourceImageData: string[];
   sourceImages: SourceImage[];
   sourceIdentity?: SourceIdentity;
+  graviton: string;
   cadence: CadenceMode;
   apiEndpoint: string;
   interactionLocked: boolean;
@@ -1047,14 +1056,10 @@ function StructuredAssistantMessage({
   }, [content, rewrite]);
 
   useEffect(() => {
-    if (rewrites.length > 0) setShowRewrite(true);
-  }, [rewrites.length]);
-
-  useEffect(() => {
-    if (interactionLocked && rewrite) {
+    if (interactionLocked && rewrites.length > 0) {
       setShowRewrite(true);
     }
-  }, [interactionLocked, rewrite]);
+  }, [interactionLocked, rewrites.length]);
 
   useEffect(() => {
     if (showRewrite && rewrites.length > 1) {
@@ -1131,6 +1136,7 @@ ${cadenceInstruction(cadence)}`;
             constraints: {},
             imageData: sourceImageData,
             cadence,
+            selectedGraviton: graviton,
             sourceMode: sourceIdentity?.type === "url" ? "rendered-url" : undefined,
           }
         : {
@@ -1141,6 +1147,7 @@ ${cadenceInstruction(cadence)}`;
             constraints: {},
             imageData: sourceImageData,
             cadence,
+            selectedGraviton: graviton,
             sourceMode: sourceIdentity?.type === "url" ? "rendered-url" : undefined,
           };
 
@@ -1165,9 +1172,9 @@ ${cadenceInstruction(cadence)}`;
       const rawOutput = (data.output || "").trim();
       if (!rawOutput) return;
 
-      const parsedAlt = parseStructuredMR(rawOutput);
-      const alternateRewrite =
-        parsedAlt.sections.rewrite?.trim() || rawOutput;
+      const alternateRewrite = extractRewriteOrRaw(rawOutput);
+
+      if (!isValidRewriteCandidate(alternateRewrite, content)) return;
 
       if (rewrites.length < 3) {
         onRewriteAdded?.(makeRewriteVariant(alternateRewrite, rewrites.length));
@@ -1228,7 +1235,7 @@ ${cadenceInstruction(cadence)}`;
           </h2>
           <div className="mt-3">{renderMR(summary)}</div>
 
-          {rewrite && !showRewrite && showRewriteButton ? (
+          {rewrites.length > 0 && !showRewrite && showRewriteButton ? (
             <div
               className={classNames(
                 "mt-5 transition-all duration-500",
@@ -3100,6 +3107,7 @@ if (urlSourceImages.length > 0) {
           constraints: {},
           imageData,
           cadence,
+          selectedGraviton,
           sourceMode: sourceIdentity?.type === "url" ? "rendered-url" : undefined,
           entitlementSourceText:
             isJumpIn && inputMode === "text" ? raw : undefined,
@@ -3111,6 +3119,7 @@ if (urlSourceImages.length > 0) {
           constraints: {},
           imageData,
           cadence,
+          selectedGraviton,
           sourceMode: sourceIdentity?.type === "url" ? "rendered-url" : undefined,
           entitlementSourceText:
             isJumpIn && inputMode === "text" ? raw : undefined,
@@ -3174,11 +3183,75 @@ if (urlSourceImages.length > 0) {
         throw new Error(data.error || "The analysis could not be completed.");
       }
 
-      const normalizedOutput = normalizeAssistantHeadings(
+      let normalizedOutput = normalizeAssistantHeadings(
         data.output || "No response."
       );
-      const initialRewriteContent =
-        parseStructuredMR(normalizedOutput).sections.rewrite?.trim();
+      const parsedInitialOutput = parseStructuredMR(normalizedOutput);
+      let initialRewriteContent = parsedInitialOutput.sections.rewrite?.trim();
+      const specialistAnalysisContext = [
+        parsedInitialOutput.sections.summary,
+        parsedInitialOutput.sections.performance,
+        parsedInitialOutput.sections.depth,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+      const rewriteRequired =
+        !isHeresy && isRewriteCapableGraviton(selectedGraviton);
+
+      if (
+        rewriteRequired &&
+        !isValidRewriteCandidate(initialRewriteContent, specialistAnalysisContext)
+      ) {
+        const repairResponse = await fetch(apiEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...signalHeaders(signalSurface),
+            "X-Gravitas-Analysis-Id": runId,
+            ...(activeJumpInSession
+              ? { "X-Jump-In-Session-Id": activeJumpInSession.sessionId }
+              : {}),
+          },
+          body: JSON.stringify({
+            mode: "general",
+            requestKind: "initial-rewrite-repair",
+            input: effectiveText,
+            context: `SPECIALIST ANALYSIS TO USE AS THE EDITORIAL BASIS:\n\n${specialistAnalysisContext}`,
+            constraints: {},
+            imageData,
+            cadence,
+            selectedGraviton,
+            sourceMode:
+              sourceIdentity?.type === "url" ? "rendered-url" : undefined,
+          }),
+        });
+        const repairData = await repairResponse.json();
+        if (repairResponse.ok) {
+          const repairedRewrite = extractRewriteOrRaw(
+            String(repairData.output || "")
+          );
+          if (
+            isValidRewriteCandidate(repairedRewrite, specialistAnalysisContext)
+          ) {
+            initialRewriteContent = repairedRewrite;
+            normalizedOutput = replaceStructuredRewrite(
+              normalizedOutput,
+              repairedRewrite
+            );
+          }
+        }
+      }
+
+      if (
+        rewriteRequired &&
+        !isValidRewriteCandidate(initialRewriteContent, specialistAnalysisContext)
+      ) {
+        throw new Error("The rewrite could not be completed. Please try again.");
+      }
+      if (!rewriteRequired) {
+        initialRewriteContent = undefined;
+        normalizedOutput = removeStructuredRewrite(normalizedOutput);
+      }
       const initialRewrites = initialRewriteContent
         ? [makeRewriteVariant(initialRewriteContent, 0)]
         : [];
@@ -3610,6 +3683,7 @@ if (urlSourceImages.length > 0) {
                             sourceImageData={sourceImageData}
                             sourceImages={sourceImages}
                             sourceIdentity={sourceIdentity}
+                            graviton={m.graviton ?? selectedGraviton}
                             cadence={m.cadence ?? cadence}
                             apiEndpoint={apiEndpoint}
                             interactionLocked={isDemoLocked}
