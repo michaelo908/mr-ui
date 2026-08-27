@@ -1056,12 +1056,6 @@ function StructuredAssistantMessage({
   }, [content, rewrite]);
 
   useEffect(() => {
-    if (interactionLocked && rewrites.length > 0) {
-      setShowRewrite(true);
-    }
-  }, [interactionLocked, rewrites.length]);
-
-  useEffect(() => {
     if (showRewrite && rewrites.length > 1) {
       setTimeout(() => {
         newestRewriteRef.current?.scrollIntoView({
@@ -1091,7 +1085,6 @@ function StructuredAssistantMessage({
   };
 
   const handleRewriteClick = () => {
-    if (interactionLocked) return;
     onInteractionSignal?.("workflow.rewrite_revealed");
     setRewriteState("working");
     setTimeout(() => {
@@ -1244,23 +1237,17 @@ ${cadenceInstruction(cadence)}`;
             >
               <button
                 onClick={handleRewriteClick}
-                disabled={interactionLocked}
                 data-copy-ui="true"
                 className={classNames(
                   "rounded-xl border px-6 py-3 text-sm font-semibold tracking-wide text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]",
-                  rewriteState === "working" && "animate-pulse",
-                  interactionLocked && "cursor-not-allowed opacity-50"
+                  rewriteState === "working" && "animate-pulse"
                 )}
                 style={{
                   backgroundColor: MR_GOLD,
                   borderColor: MR_GOLD,
                 }}
               >
-                {interactionLocked
-                  ? "Session ended"
-                  : rewriteState === "working"
-                    ? "Rewriting…"
-                    : "Rewrite"}
+                {rewriteState === "working" ? "Opening…" : "Rewrite"}
               </button>
             </div>
           ) : null}

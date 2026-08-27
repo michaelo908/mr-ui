@@ -115,3 +115,17 @@ test("client repairs invalid initial output and keeps the rewrite panel collapse
   );
   assert.match(app, /rewrites\.length > 0 && !showRewrite && showRewriteButton/);
 });
+
+test("fresh and restored analyses always initialise with closed rewrite panels", () => {
+  const app = read("components/GravitasApp.tsx");
+  const workspace = read("lib/gravitas-workspace.ts");
+
+  assert.match(app, /const \[showRewrite, setShowRewrite\] = useState\(false\)/);
+  assert.match(app, /setShowRewrite\(false\)/);
+  assert.doesNotMatch(
+    app,
+    /if \(interactionLocked && rewrites\.length > 0\) \{\s*setShowRewrite\(true\)/
+  );
+  assert.doesNotMatch(app, /const handleRewriteClick = \(\) => \{\s*if \(interactionLocked\) return/);
+  assert.doesNotMatch(workspace, /showRewrite|rewritePanelOpen/);
+});
