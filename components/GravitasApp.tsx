@@ -924,6 +924,10 @@ function StructuredAssistantMessage({
   );
   const lightboxImages =
     orderedViewportImages.length > 0 ? orderedViewportImages : displayImages;
+  const analysisIdentity = useMemo(
+    () => [sourceIdentity?.id ?? "", graviton, cadence, content].join("\u001f"),
+    [content, graviton, cadence, sourceIdentity?.id]
+  );
   const openImage = useCallback(
     (image: SourceImage) => {
       const index = lightboxImages.findIndex(
@@ -1053,7 +1057,7 @@ function StructuredAssistantMessage({
     }, 700);
 
     return () => clearTimeout(id);
-  }, [content, rewrite]);
+  }, [analysisIdentity, rewrite]);
 
   useEffect(() => {
     if (showRewrite && rewrites.length > 1) {
@@ -3608,7 +3612,7 @@ if (urlSourceImages.length > 0) {
                     : [];
 
                 return (
-                  <div key={`${m.runId ?? "message"}-${i}`}>
+                  <div key={`${m.runId ?? "message"}-${i}-${m.completedAt ?? "pending"}`}>
                     {isFirstEarlier ? (
                       <div className="mb-3 mt-8 border-t border-neutral-800 pt-6 text-xs font-semibold uppercase tracking-[0.24em] text-neutral-500">
                         Earlier Work

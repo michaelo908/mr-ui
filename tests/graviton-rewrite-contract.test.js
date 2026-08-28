@@ -122,10 +122,29 @@ test("fresh and restored analyses always initialise with closed rewrite panels",
 
   assert.match(app, /const \[showRewrite, setShowRewrite\] = useState\(false\)/);
   assert.match(app, /setShowRewrite\(false\)/);
+  assert.match(app, /const analysisIdentity = useMemo/);
+  assert.match(app, /\[analysisIdentity, rewrite\]/);
+  assert.match(app, /key=\{`\$\{m\.runId \?\? "message"\}-\$\{i\}-\$\{m\.completedAt \?\? "pending"\}`\}/);
   assert.doesNotMatch(
     app,
     /if \(interactionLocked && rewrites\.length > 0\) \{\s*setShowRewrite\(true\)/
   );
   assert.doesNotMatch(app, /const handleRewriteClick = \(\) => \{\s*if \(interactionLocked\) return/);
   assert.doesNotMatch(workspace, /showRewrite|rewritePanelOpen/);
+});
+
+test("rewrite open state cannot be restored or leaked between analyses", () => {
+  const app = read("components/GravitasApp.tsx");
+  const resetEffect = app.slice(
+    app.indexOf("setShowRewrite(false);"),
+    app.indexOf("function handleFormatChange")
+  );
+  assert.match(resetEffect, /setShowRewriteButton\(false\)/);
+  assert.match(resetEffect, /setRewriteState\("idle"\)/);
+  assert.match(resetEffect, /setIsGeneratingAlternate\(false\)/);
+  assert.match(resetEffect, /setActiveLightboxIndex\(null\)/);
+  assert.match(resetEffect, /setIsDepthOpen\(false\)/);
+  assert.match(app, /rewrites=\{m\.rewrites \?\? \[\]\}/);
+  assert.doesNotMatch(app, /showRewrite\s*:/);
+  assert.doesNotMatch(app, /rewritePanelOpen/);
 });
