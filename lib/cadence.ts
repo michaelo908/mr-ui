@@ -38,6 +38,11 @@ ${rhythm}
 
 This cadence instruction is mandatory for every Rewrite section and every rewrite-only response.
 
+For Sustained cadence, a valid rewrite should read as connected prose by default:
+normally two or more developed paragraphs, varied sentence length, and clear
+transitions between ideas. Do not substitute a stack of isolated punch lines,
+single-sentence paragraphs, or SaaS-style fragments for a sustained rewrite.
+
 Cadence governs prose rhythm only. It does not grant permission to compress,
 omit, summarise, add, reorder, restructure, or otherwise change substantive
 content beyond changes already required by the diagnosis. Do not let Cadence

@@ -417,7 +417,7 @@ Any extracted page text in the input is supporting readability assistance only. 
       if (
         rewriteOnlyRequest &&
         typeof json?.output === "string" &&
-        !isValidRewriteCandidate(extractRewriteOrRaw(json.output))
+        !isValidRewriteCandidate(extractRewriteOrRaw(json.output), "", cadence)
       ) {
         return NextResponse.json(
           { error: "The rewrite could not be completed." },

@@ -131,6 +131,7 @@ const THINKING_TOKEN = "__MR_THINKING__";
 const MR_GOLD = "#C6A75A";
 const TELEMETRY_LAUNCH_DATE = "2026-03-15";
 const TELEMETRY_STORAGE_KEY = "gravitasTelemetrySeedV1";
+const HOMEPAGE_JUMP_IN_RESUME_TARGET = "/?resume=jump-in#jump-in";
 
 function JumpInWelcome({ funnel, firstName }: { funnel?: AcquisitionFunnel; firstName?: string }) {
   const personalizedTitle = funnel
@@ -900,7 +901,6 @@ function StructuredAssistantMessage({
     () => (depth ? parseTextEvidenceBlocks(depth) : []),
     [depth]
   );
-  const rewrite = sections.rewrite?.trim();
   const debrief = sections.debrief?.trim();
   const displayImages = useMemo<SourceImage[]>(
     () =>
@@ -1057,7 +1057,7 @@ function StructuredAssistantMessage({
     }, 700);
 
     return () => clearTimeout(id);
-  }, [analysisIdentity, rewrite]);
+  }, [analysisIdentity]);
 
   useEffect(() => {
     if (showRewrite && rewrites.length > 1) {
@@ -1171,7 +1171,7 @@ ${cadenceInstruction(cadence)}`;
 
       const alternateRewrite = extractRewriteOrRaw(rawOutput);
 
-      if (!isValidRewriteCandidate(alternateRewrite, content)) return;
+      if (!isValidRewriteCandidate(alternateRewrite, content, cadence)) return;
 
       if (rewrites.length < 3) {
         onRewriteAdded?.(makeRewriteVariant(alternateRewrite, rewrites.length));
@@ -1683,10 +1683,14 @@ export default function GravitasApp({
   experience = "paid",
   funnel,
   firstName,
+  embedded = false,
+  requireAuthBeforeAnalysis = false,
 }: {
   experience?: "paid" | "jump-in";
   funnel?: AcquisitionFunnel;
   firstName?: string;
+  embedded?: boolean;
+  requireAuthBeforeAnalysis?: boolean;
 }) {
   const isJumpIn = experience === "jump-in";
 
@@ -1804,6 +1808,7 @@ const gravitonGroups = [
   const [bookTrialDaysRemaining, setBookTrialDaysRemaining] = useState<number | null>(null);
   const [accessResolved, setAccessResolved] = useState(false);
   const [authenticatedUserId, setAuthenticatedUserId] = useState<string | null>(null);
+  const [jumpInAuthenticated, setJumpInAuthenticated] = useState(false);
   const [telemetrySeed, setTelemetrySeed] = useState<TelemetrySeed | null>(null);
   const [telemetryMinuteTick, setTelemetryMinuteTick] = useState(0);
   const [analysisBoost, setAnalysisBoost] = useState(0);
@@ -2506,6 +2511,14 @@ useEffect(() => {
       setAccessResolved(false);
 
       if (isJumpIn) {
+        if (requireAuthBeforeAnalysis) {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          setJumpInAuthenticated(Boolean(user));
+        } else {
+          setJumpInAuthenticated(false);
+        }
         setAuthenticatedUserId(null);
         setIsSubscribed(false);
         setAccessResolved(true);
@@ -2557,7 +2570,7 @@ useEffect(() => {
     }
 
     checkSubscription();
-  }, [isJumpIn, supabase]);
+  }, [isJumpIn, requireAuthBeforeAnalysis, supabase]);
 
   useEffect(() => {
     if (isJumpIn || !accessResolved) return;
@@ -2887,6 +2900,22 @@ useEffect(() => {
     if (sendLockRef.current || isRepeatedGraviton) return;
     workspacePersistencePausedRef.current = false;
 
+    if (isJumpIn && requireAuthBeforeAnalysis && !jumpInAuthenticated) {
+      const workspaceReady = await persistJumpInWorkspace();
+      if (!workspaceReady) return;
+      window.localStorage.setItem(
+        GRAVITAS_RESUME_MARKER_KEY,
+        HOMEPAGE_JUMP_IN_RESUME_TARGET
+      );
+      emitSignal("discovery.jump_in_auth_requested", signalSurface, {
+        source_mode: inputMode,
+        graviton: toSignalIdentifier(selectedGraviton),
+        cadence,
+      });
+      router.push(`/login?next=${encodeURIComponent(HOMEPAGE_JUMP_IN_RESUME_TARGET)}`);
+      return;
+    }
+
      if (!isJumpIn && !isSubscribed && !isBookTrial) {
 
     setMessages([
@@ -3191,7 +3220,7 @@ if (urlSourceImages.length > 0) {
 
       if (
         rewriteRequired &&
-        !isValidRewriteCandidate(initialRewriteContent, specialistAnalysisContext)
+        !isValidRewriteCandidate(initialRewriteContent, specialistAnalysisContext, cadence)
       ) {
         const repairResponse = await fetch(apiEndpoint, {
           method: "POST",
@@ -3222,7 +3251,7 @@ if (urlSourceImages.length > 0) {
             String(repairData.output || "")
           );
           if (
-            isValidRewriteCandidate(repairedRewrite, specialistAnalysisContext)
+            isValidRewriteCandidate(repairedRewrite, specialistAnalysisContext, cadence)
           ) {
             initialRewriteContent = repairedRewrite;
             normalizedOutput = replaceStructuredRewrite(
@@ -3235,7 +3264,7 @@ if (urlSourceImages.length > 0) {
 
       if (
         rewriteRequired &&
-        !isValidRewriteCandidate(initialRewriteContent, specialistAnalysisContext)
+        !isValidRewriteCandidate(initialRewriteContent, specialistAnalysisContext, cadence)
       ) {
         throw new Error("The rewrite could not be completed. Please try again.");
       }
@@ -3383,8 +3412,8 @@ if (urlSourceImages.length > 0) {
   }
 
   return (
-    <main className="gravitas-shell min-h-screen text-neutral-100">
-      <div className="relative z-10 mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+    <main className={classNames("gravitas-shell text-neutral-100", embedded ? "rounded-[2rem]" : "min-h-screen")}>
+      <div className={classNames("relative z-10 mx-auto w-full max-w-5xl px-4 sm:px-6", embedded ? "py-5 sm:py-6" : "py-8 sm:py-12")}>
         <header className="gravitas-header mb-6 flex flex-col gap-5 rounded-2xl px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div>
             <div
@@ -3400,6 +3429,11 @@ if (urlSourceImages.length > 0) {
                 ? funnel ? "Your reader-side diagnostic is unlocked for 20 minutes." : "Full Gravitas. 20 minutes."
                 : "See the narrative from the other side."}
             </div>
+            {isJumpIn && requireAuthBeforeAnalysis && !jumpInAuthenticated ? (
+              <div className="mt-2 text-xs text-neutral-400">
+                Enter your email when you&apos;re ready. Your time begins when you run your first analysis.
+              </div>
+            ) : null}
             {isJumpIn ? (
               <div
                 className={classNames(

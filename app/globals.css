@@ -61,6 +61,38 @@
   height: 47px;
 }
 
+.homepage-shell {
+  position: relative;
+  isolation: isolate;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(88, 166, 255, 0.14), transparent 25rem),
+    linear-gradient(180deg, #fbf8f1 0%, #f3eee4 42%, #fbf8f1 100%);
+}
+
+.homepage-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(23, 23, 23, 0.03) 1px, transparent 1px),
+    linear-gradient(rgba(23, 23, 23, 0.026) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(to bottom, black, transparent 72%);
+}
+
+.homepage-product-visual {
+  transform: rotate(0.35deg);
+}
+
+.homepage-jump-bridge .gravitas-shell {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 26px 80px rgba(0, 0, 0, 0.45);
+}
+
 .doorway-shell {
   position: relative;
   isolation: isolate;

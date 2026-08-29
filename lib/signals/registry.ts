@@ -15,6 +15,11 @@ export const SIGNAL_REGISTRY = {
   "discovery.session_expired": { category: "discovery", client: true, properties: { session_kind: { type: "enum", values: ["jump_in"] } } },
   "discovery.source_selected": { category: "discovery", client: true, properties: { source_mode: { type: "enum", values: ["text", "url", "images"] } } },
   "discovery.day_pass_clicked": { category: "discovery", client: true, properties: { reason: { type: "enum", values: ["session_expired", "manual"] } } },
+  "discovery.jump_in_auth_requested": { category: "discovery", client: true, properties: {
+    source_mode: { type: "enum", values: ["text", "url", "images"] },
+    graviton: { type: "identifier", maxLength: 80 },
+    cadence: { type: "enum", values: ["dynamic", "sustained"] },
+  } },
   "analysis.started": { category: "analysis", client: true, properties: {
     analysis_id: { type: "uuid" },
     source_mode: { type: "enum", values: ["text", "url", "images"] },

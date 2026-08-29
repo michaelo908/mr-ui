@@ -11,7 +11,7 @@ function getValidatedNextTarget() {
   const queryTarget = new URLSearchParams(window.location.search).get("next");
   if (isValidResumeTarget(queryTarget)) return queryTarget;
   const storedTarget = window.localStorage.getItem(GRAVITAS_RESUME_MARKER_KEY);
-  return isValidResumeTarget(storedTarget) ? storedTarget : "/";
+  return isValidResumeTarget(storedTarget) ? storedTarget : "/workbench";
 }
 
 export default function LoginPage() {

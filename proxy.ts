@@ -5,6 +5,7 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const publicRoutes = [
+    "/",
     "/check",
     "/jump-in",
     "/quick-tester",
@@ -15,7 +16,7 @@ export async function proxy(request: NextRequest) {
   ];
 
   const isPublicRoute = publicRoutes.some((route) =>
-    pathname === route || pathname.startsWith(`${route}/`)
+    route === "/" ? pathname === "/" : pathname === route || pathname.startsWith(`${route}/`)
   );
 
   if (isPublicRoute) {

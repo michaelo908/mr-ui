@@ -30,9 +30,8 @@ export default function BillingPage() {
         <p className="mt-3 text-sm text-neutral-400">
           {error ?? "Opening Stripe’s secure billing portal…"}
         </p>
-        {error ? <Link className="mt-6 inline-block text-blue-400 underline" href="/">Return to Gravitas</Link> : null}
+        {error ? <Link className="mt-6 inline-block text-blue-400 underline" href="/workbench">Return to Gravitas</Link> : null}
       </div>
     </main>
   );
 }
-

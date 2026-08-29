@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const type = requestUrl.searchParams.get("type");
   const origin = requestUrl.origin;
   const requestedNext = requestUrl.searchParams.get("next");
-  const nextTarget = isValidResumeTarget(requestedNext) ? requestedNext : "/";
+  const nextTarget = isValidResumeTarget(requestedNext) ? requestedNext : "/workbench";
 
   const cookieStore = await cookies();
   const response = NextResponse.redirect(new URL(nextTarget, origin));

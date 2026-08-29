@@ -1,5 +1,5 @@
-import GravitasApp from "@/components/GravitasApp";
+import GravitasHomepage from "@/components/GravitasHomepage";
 
 export default function HomePage() {
-  return <GravitasApp />;
+  return <GravitasHomepage />;
 }

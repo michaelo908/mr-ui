@@ -7,6 +7,7 @@ const path = require("node:path");
 const {
   extractRewriteOrRaw,
   gravitonRewriteInstruction,
+  hasSustainedCadenceViolation,
   isRewriteCapableGraviton,
   isValidRewriteCandidate,
   removeStructuredRewrite,
@@ -65,6 +66,27 @@ test("placeholder and credibility-analysis-shaped rewrite fields are rejected", 
   );
 });
 
+test("Sustained rewrites reject staccato Dynamic-shaped output", () => {
+  const dynamicShaped = `Trust breaks early.
+
+The proof arrives late.
+
+The page keeps asking for belief.
+
+The reader hesitates.
+
+The next click feels expensive.`;
+
+  const sustainedShaped =
+    "Trust needs to be earned before the reader is asked to move. Lead with the concrete proof that makes the promise feel safe, then connect that proof to the decision the visitor is already weighing. The page should make credibility feel accumulated rather than claimed.\n\nFrom there, carry the reader through a steadier sequence: what is being promised, why it can be believed, and what becomes easier once the promise is accepted. That rhythm gives the copy room to persuade without sounding as though it is rushing the visitor past their doubts.";
+
+  assert.equal(hasSustainedCadenceViolation(dynamicShaped), true);
+  assert.equal(isValidRewriteCandidate(dynamicShaped, "", "sustained"), false);
+  assert.equal(isValidRewriteCandidate(dynamicShaped, "", "dynamic"), true);
+  assert.equal(hasSustainedCadenceViolation(sustainedShaped), false);
+  assert.equal(isValidRewriteCandidate(sustainedShaped, "", "sustained"), true);
+});
+
 test("an invalid initial rewrite can be replaced without disturbing its specialist analysis", () => {
   const report = `Editor's Summary\nCredibility arrives too late.\n\nNarrative Performance\nThe visitor must infer proof.\n\nEditor's Notes in Depth\nProof appears after the principal claim.\n\nRewrite\nThe user did not request a rewrite.\n\nEditor's Debrief\n• **Proof moved:** Evidence now precedes the claim.`;
   const replacement =
@@ -95,7 +117,7 @@ test("rewrite-only requests reject analysis and require finished copy", () => {
 
   const route = read("app/api/mr/route.ts");
   assert.match(route, /initial-rewrite-repair/);
-  assert.match(route, /isValidRewriteCandidate\(extractRewriteOrRaw\(json\.output\)\)/);
+  assert.match(route, /isValidRewriteCandidate\(extractRewriteOrRaw\(json\.output\), "", cadence\)/);
 });
 
 test("client repairs invalid initial output and keeps the rewrite panel collapsed", () => {
@@ -123,7 +145,8 @@ test("fresh and restored analyses always initialise with closed rewrite panels",
   assert.match(app, /const \[showRewrite, setShowRewrite\] = useState\(false\)/);
   assert.match(app, /setShowRewrite\(false\)/);
   assert.match(app, /const analysisIdentity = useMemo/);
-  assert.match(app, /\[analysisIdentity, rewrite\]/);
+  assert.match(app, /\}, \[analysisIdentity\]\)/);
+  assert.doesNotMatch(app, /\[analysisIdentity, rewrite\]/);
   assert.match(app, /key=\{`\$\{m\.runId \?\? "message"\}-\$\{i\}-\$\{m\.completedAt \?\? "pending"\}`\}/);
   assert.doesNotMatch(
     app,

@@ -56,7 +56,8 @@ Return only finished rewritten source copy. Do not include analysis, diagnosis, 
 
 export function isValidRewriteCandidate(
   candidate: string | null | undefined,
-  analysisContext = ""
+  analysisContext = "",
+  cadence: "dynamic" | "sustained" = "dynamic"
 ) {
   const value = candidate?.trim() ?? "";
   if (!value || value.split(/\s+/).length < 8) return false;
@@ -83,8 +84,42 @@ export function isValidRewriteCandidate(
   ) {
     return false;
   }
+  if (cadence === "sustained" && hasSustainedCadenceViolation(value)) {
+    return false;
+  }
 
   return true;
+}
+
+export function hasSustainedCadenceViolation(candidate: string) {
+  const paragraphs = candidate
+    .trim()
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+  const proseParagraphs = paragraphs.filter(
+    (paragraph) => !/^\s*(?:[-*•]|\d+[.)])\s+/m.test(paragraph)
+  );
+  if (proseParagraphs.length < 4) return false;
+
+  const sentenceCounts = proseParagraphs.map((paragraph) =>
+    Math.max(
+      paragraph
+        .split(/[.!?]+(?:\s+|$)/)
+        .map((sentence) => sentence.trim())
+        .filter(Boolean).length,
+      1
+    )
+  );
+  const wordCounts = proseParagraphs.map((paragraph) =>
+    paragraph.split(/\s+/).filter(Boolean).length
+  );
+  const oneSentenceParagraphs = sentenceCounts.filter((count) => count <= 1).length;
+  const shortParagraphs = wordCounts.filter((count) => count < 18).length;
+  const staccatoRatio =
+    (oneSentenceParagraphs + shortParagraphs) / (proseParagraphs.length * 2);
+
+  return oneSentenceParagraphs >= 3 && staccatoRatio >= 0.6;
 }
 
 export function extractRewriteOrRaw(output: string) {
