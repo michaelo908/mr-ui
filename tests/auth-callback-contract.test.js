@@ -7,6 +7,21 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
+test("magic-link initiation writes the PKCE verifier through a same-origin response", () => {
+  const route = read("app/auth/magic-link/route.ts");
+  const login = read("app/login/page.tsx");
+
+  assert.match(route, /createServerClient/);
+  assert.match(route, /request\.cookies\.getAll\(\)/);
+  assert.match(route, /response\.cookies\.set\(name, value/);
+  assert.match(route, /sameSite: "lax"/);
+  assert.match(route, /secure: request\.nextUrl\.protocol === "https:"/);
+  assert.match(route, /new URL\("\/auth\/callback", request\.nextUrl\.origin\)/);
+  assert.match(route, /callbackUrl\.searchParams\.set\("next", nextTarget\)/);
+  assert.match(login, /fetch\("\/auth\/magic-link"/);
+  assert.doesNotMatch(login, /auth\.signInWithOtp/);
+});
+
 test("PKCE callback exchanges a code and writes session cookies onto the success redirect", () => {
   const callback = read("app/auth/callback/route.ts");
 

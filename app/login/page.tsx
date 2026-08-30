@@ -92,17 +92,19 @@ export default function LoginPage() {
     setSending(true);
     setMessage("");
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(
-          getValidatedNextTarget()
-        )}`,
-      },
+    const loginResponse = await fetch("/auth/magic-link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, next: getValidatedNextTarget() }),
     });
+    const result = await loginResponse.json().catch(() => null);
 
-    if (error) {
-      setMessage(error.message);
+    if (!loginResponse.ok) {
+      setMessage(
+        typeof result?.error === "string"
+          ? result.error
+          : "We could not send a login link. Please try again."
+      );
     } else {
       setMessage("Check your email for the login link.");
     }
