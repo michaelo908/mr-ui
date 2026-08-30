@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { isValidResumeTarget } from "@/lib/gravitas-workspace";
 
@@ -13,6 +14,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
   }
 
+  const cookieStore = await cookies();
+  let pkceVerifierWritten = false;
   let response: NextResponse = NextResponse.json({ ok: true });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,16 +23,19 @@ export async function POST(request: NextRequest) {
     {
       cookies: {
         getAll() {
-          return request.cookies.getAll();
+          return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, {
+            const cookieOptions = {
               ...options,
               path: "/",
               sameSite: "lax",
               secure: request.nextUrl.protocol === "https:",
-            });
+            } as const;
+            if (name.endsWith("-code-verifier")) pkceVerifierWritten = true;
+            cookieStore.set(name, value, cookieOptions);
+            response.cookies.set(name, value, cookieOptions);
           });
         },
       },
@@ -50,6 +56,11 @@ export async function POST(request: NextRequest) {
       { status: 502 }
     );
   }
+
+  console.info("auth_magic_link", {
+    outcome: error ? "request_failed" : "sent",
+    pkceVerifierWritten,
+  });
 
   return response;
 }
