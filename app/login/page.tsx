@@ -121,25 +121,30 @@ export default function LoginPage() {
     setSending(true);
     setMessage("");
 
-    const loginResponse = await fetch("/auth/magic-link", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, next: getValidatedNextTarget() }),
-    });
-    const result = await loginResponse.json().catch(() => null);
+    try {
+      const loginResponse = await fetch("/auth/magic-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, next: getValidatedNextTarget() }),
+      });
+      const result = await loginResponse.json().catch(() => null);
 
-    if (!loginResponse.ok) {
-      setMessage(
-        typeof result?.error === "string"
-          ? result.error
-          : "We could not send a login link. Please try again."
-      );
-    } else {
-      setCodeSent(otpEnabled);
-      setMessage(otpEnabled ? "Check your email for the six-digit sign-in code." : "Check your email for the login link.");
+      if (!loginResponse.ok) {
+        setMessage(
+          typeof result?.error === "string"
+            ? result.error
+            : "We could not send a login link. Please try again."
+        );
+      } else {
+        setCodeSent(otpEnabled);
+        setMessage(otpEnabled ? "Check your email for the six-digit sign-in code." : "Check your email for the login link.");
+      }
+
+    } catch {
+      setMessage("We could not send your sign-in email. Check your connection and try again.");
+    } finally {
+      setSending(false);
     }
-
-    setSending(false);
   }
 
   return (
