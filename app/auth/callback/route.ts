@@ -10,6 +10,19 @@ function redirectToLogin(origin: string, nextTarget: string) {
   return NextResponse.redirect(loginUrl);
 }
 
+type CallbackOutcome =
+  | "missing_callback_credential"
+  | "exchange_failed_without_verifier"
+  | "exchange_failed_with_verifier"
+  | "verification_failed"
+  | "authenticated";
+
+function logCallbackOutcome(outcome: CallbackOutcome) {
+  // Keep authentication diagnostics bounded: no codes, tokens, cookie values,
+  // account identifiers, or provider error text are ever emitted.
+  console.info("auth_callback", { outcome });
+}
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
@@ -20,6 +33,9 @@ export async function GET(request: Request) {
   const nextTarget = isValidResumeTarget(requestedNext) ? requestedNext : "/workbench";
 
   const cookieStore = await cookies();
+  const hasPkceVerifier = cookieStore
+    .getAll()
+    .some(({ name }) => name.endsWith("-code-verifier"));
   const response = NextResponse.redirect(new URL(nextTarget, origin));
 
   const supabase = createServerClient(
@@ -41,7 +57,16 @@ export async function GET(request: Request) {
 
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    return error ? redirectToLogin(origin, nextTarget) : response;
+    if (error) {
+      logCallbackOutcome(
+        hasPkceVerifier
+          ? "exchange_failed_with_verifier"
+          : "exchange_failed_without_verifier"
+      );
+      return redirectToLogin(origin, nextTarget);
+    }
+    logCallbackOutcome("authenticated");
+    return response;
   }
 
   if (token_hash && type) {
@@ -55,8 +80,14 @@ export async function GET(request: Request) {
         | "email_change"
         | "email",
     });
-    return error ? redirectToLogin(origin, nextTarget) : response;
+    if (error) {
+      logCallbackOutcome("verification_failed");
+      return redirectToLogin(origin, nextTarget);
+    }
+    logCallbackOutcome("authenticated");
+    return response;
   }
 
+  logCallbackOutcome("missing_callback_credential");
   return redirectToLogin(origin, nextTarget);
 }

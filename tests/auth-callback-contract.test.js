@@ -13,7 +13,8 @@ test("PKCE callback exchanges a code and writes session cookies onto the success
   assert.match(callback, /const response = NextResponse\.redirect\(new URL\(nextTarget, origin\)\)/);
   assert.match(callback, /response\.cookies\.set\(name, value, options\)/);
   assert.match(callback, /const \{ error \} = await supabase\.auth\.exchangeCodeForSession\(code\)/);
-  assert.match(callback, /return error \? redirectToLogin\(origin, nextTarget\) : response/);
+  assert.match(callback, /logCallbackOutcome\("authenticated"\);\s+return response/);
+  assert.match(callback, /return redirectToLogin\(origin, nextTarget\)/);
 });
 
 test("callback failures are bounded, preserve only safe relative destinations, and do not expose credentials", () => {
@@ -23,6 +24,11 @@ test("callback failures are bounded, preserve only safe relative destinations, a
   assert.match(callback, /isValidResumeTarget\(requestedNext\)/);
   assert.match(callback, /loginUrl\.searchParams\.set\("error", "auth_callback"\)/);
   assert.match(callback, /const \{ error \} = await supabase\.auth\.verifyOtp/);
+  assert.match(callback, /missing_callback_credential/);
+  assert.match(callback, /exchange_failed_without_verifier/);
+  assert.match(callback, /exchange_failed_with_verifier/);
+  assert.match(callback, /console\.info\("auth_callback", \{ outcome \}\)/);
   assert.doesNotMatch(callback, /error\.message|console\.(log|warn|error)/);
+  assert.doesNotMatch(callback, /console\.info\([^\n]*(code|token|cookie|email)/i);
   assert.match(login, /This login link could not be completed\. Request a new link and open it in the same browser\./);
 });
