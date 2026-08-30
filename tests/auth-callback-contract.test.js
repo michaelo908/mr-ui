@@ -20,6 +20,8 @@ test("magic-link initiation writes the PKCE verifier through a same-origin respo
   assert.match(route, /secure: request\.nextUrl\.protocol === "https:"/);
   assert.match(route, /new URL\("\/auth\/callback", request\.nextUrl\.origin\)/);
   assert.match(route, /callbackUrl\.searchParams\.set\("next", nextTarget\)/);
+  assert.match(route, /AUTH_RESUME_COOKIE/);
+  assert.match(route, /maxAge: 10 \* 60/);
   assert.match(login, /fetch\("\/auth\/magic-link"/);
   assert.doesNotMatch(login, /auth\.signInWithOtp/);
   assert.match(route, /pkceVerifierWritten/);
@@ -32,7 +34,10 @@ test("PKCE callback exchanges a code and writes session cookies onto the success
   assert.match(callback, /const response = NextResponse\.redirect\(new URL\(nextTarget, origin\)\)/);
   assert.match(callback, /response\.cookies\.set\(name, value, options\)/);
   assert.match(callback, /const \{ error \} = await supabase\.auth\.exchangeCodeForSession\(code\)/);
-  assert.match(callback, /logCallbackOutcome\("authenticated"\);\s+return response/);
+  assert.match(callback, /const resumeTarget = cookieStore\.get\(AUTH_RESUME_COOKIE\)\?\.value/);
+  assert.match(callback, /isValidResumeTarget\(resumeTarget\)/);
+  assert.match(callback, /clearResumeCookie\(response\)/);
+  assert.match(callback, /logCallbackOutcome\("authenticated"\);\s+return clearResumeCookie\(response\)/);
   assert.match(callback, /return redirectToLogin\(origin, nextTarget\)/);
 });
 
