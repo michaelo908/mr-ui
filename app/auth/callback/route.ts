@@ -2,12 +2,24 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { isValidResumeTarget } from "@/lib/gravitas-workspace";
+import { AUTH_RESUME_COOKIE } from "@/app/auth/magic-link/route";
+
+function clearResumeCookie(response: NextResponse) {
+  response.cookies.set(AUTH_RESUME_COOKIE, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+  });
+  return response;
+}
 
 function redirectToLogin(origin: string, nextTarget: string) {
   const loginUrl = new URL("/login", origin);
   loginUrl.searchParams.set("error", "auth_callback");
   if (nextTarget !== "/workbench") loginUrl.searchParams.set("next", nextTarget);
-  return NextResponse.redirect(loginUrl);
+  return clearResumeCookie(NextResponse.redirect(loginUrl));
 }
 
 type CallbackOutcome =
@@ -29,10 +41,14 @@ export async function GET(request: Request) {
   const token_hash = requestUrl.searchParams.get("token_hash");
   const type = requestUrl.searchParams.get("type");
   const origin = requestUrl.origin;
-  const requestedNext = requestUrl.searchParams.get("next");
-  const nextTarget = isValidResumeTarget(requestedNext) ? requestedNext : "/workbench";
-
   const cookieStore = await cookies();
+  const requestedNext = requestUrl.searchParams.get("next");
+  const resumeTarget = cookieStore.get(AUTH_RESUME_COOKIE)?.value;
+  const nextTarget = isValidResumeTarget(requestedNext)
+    ? requestedNext
+    : isValidResumeTarget(resumeTarget)
+      ? resumeTarget
+      : "/workbench";
   const hasPkceVerifier = cookieStore
     .getAll()
     .some(({ name }) => name.endsWith("-code-verifier"));
@@ -66,7 +82,7 @@ export async function GET(request: Request) {
       return redirectToLogin(origin, nextTarget);
     }
     logCallbackOutcome("authenticated");
-    return response;
+    return clearResumeCookie(response);
   }
 
   if (token_hash && type) {
@@ -85,7 +101,7 @@ export async function GET(request: Request) {
       return redirectToLogin(origin, nextTarget);
     }
     logCallbackOutcome("authenticated");
-    return response;
+    return clearResumeCookie(response);
   }
 
   logCallbackOutcome("missing_callback_credential");

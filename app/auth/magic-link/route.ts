@@ -4,6 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { isValidResumeTarget } from "@/lib/gravitas-workspace";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const AUTH_RESUME_COOKIE = "multirrupt_auth_resume";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -55,6 +56,16 @@ export async function POST(request: NextRequest) {
       { error: "We could not send a login link. Please try again." },
       { status: 502 }
     );
+  }
+
+  if (!error) {
+    response.cookies.set(AUTH_RESUME_COOKIE, nextTarget, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: request.nextUrl.protocol === "https:",
+      path: "/",
+      maxAge: 10 * 60,
+    });
   }
 
   console.info("auth_magic_link", {
