@@ -19,6 +19,35 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
+  const [token, setToken] = useState("");
+  const otpEnabled = process.env.NEXT_PUBLIC_SUPABASE_URL ===
+    "https://gglalhqmdnbdygcxasyd.supabase.co";
+
+  async function handleVerify(e: React.FormEvent) {
+    e.preventDefault();
+    if (sending || !otpEnabled) return;
+    if (!/^\d{6}$/.test(token)) {
+      setMessage("Enter the six-digit code from your email.");
+      return;
+    }
+    setSending(true);
+    setMessage("");
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email: email.trim(), token, type: "email",
+      });
+      if (error) {
+        setMessage("That code could not be verified. Check the code or request a new one.");
+      } else {
+        window.location.href = getValidatedNextTarget();
+      }
+    } catch {
+      setMessage("We could not verify the code. Please try again.");
+    } finally {
+      setSending(false);
+    }
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -106,7 +135,8 @@ export default function LoginPage() {
           : "We could not send a login link. Please try again."
       );
     } else {
-      setMessage("Check your email for the login link.");
+      setCodeSent(otpEnabled);
+      setMessage(otpEnabled ? "Check your email for the six-digit sign-in code." : "Check your email for the login link.");
     }
 
     setSending(false);
@@ -124,7 +154,7 @@ export default function LoginPage() {
         </div>
 
         <form
-          onSubmit={handleLogin}
+          onSubmit={codeSent ? handleVerify : handleLogin}
           className="gravitas-header flex w-full flex-col gap-4 rounded-2xl p-6 sm:p-7"
         >
           <div className="text-center">
@@ -148,10 +178,27 @@ export default function LoginPage() {
             placeholder="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            disabled={sending}
+            disabled={sending || codeSent}
             className="rounded-xl border border-neutral-700 bg-black/30 p-3 text-neutral-100 shadow-inner outline-none transition focus:border-sky-500/70 disabled:cursor-not-allowed disabled:opacity-60"
             required
           />
+
+          {codeSent && (
+            <input
+              type="text"
+              aria-label="Six-digit sign-in code"
+              placeholder="Six-digit code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              value={token}
+              onChange={(e) => setToken(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              disabled={sending}
+              className="rounded-xl border border-neutral-700 bg-black/30 p-3 text-neutral-100"
+              required
+            />
+          )}
 
           <button
             type="submit"
@@ -160,8 +207,16 @@ export default function LoginPage() {
               sending ? "animate-pulse bg-sky-200" : "bg-[#58a6ff]"
             }`}
           >
-            {sending ? "Sending..." : "Send login link"}
+            {sending ? (codeSent ? "Verifying..." : "Sending...") : (codeSent ? "Verify code" : otpEnabled ? "Send sign-in code" : "Send login link")}
           </button>
+
+          {codeSent && (
+            <button type="button" disabled={sending} onClick={() => {
+              setCodeSent(false);
+              setToken("");
+              setMessage("");
+            }}>Request another code or use a different email</button>
+          )}
 
           {message && <p className="text-sm text-neutral-400">{message}</p>}
         </form>
