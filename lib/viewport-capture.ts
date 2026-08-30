@@ -201,7 +201,7 @@ async function sliceFullPageCapture(
   }
 
   if (images.length === 0) {
-    throw new Error("Gravitas could not create analysis viewports.");
+    throw new Error("Multirrupt could not create analysis viewports.");
   }
 
   console.info("Gravitas viewport slicing completed", {

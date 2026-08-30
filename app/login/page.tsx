@@ -112,7 +112,7 @@ export default function LoginPage() {
         <div className="mb-9 flex justify-center">
           <div
             role="img"
-            aria-label="Gravitas Narrative Intelligence"
+            aria-label="Multirrupt Narrative Intelligence"
             className="gravitas-blue-logo gravitas-login-logo"
           />
         </div>
@@ -122,7 +122,7 @@ export default function LoginPage() {
           className="gravitas-header flex w-full flex-col gap-4 rounded-2xl p-6 sm:p-7"
         >
           <div className="text-center">
-            <h1 className="text-xl font-semibold">Sign in to Gravitas</h1>
+            <h1 className="text-xl font-semibold">Sign in to Multirrupt</h1>
 
             <p className="mt-2 text-sm text-neutral-400">
               Narrative analysis and rewrite engine
@@ -133,7 +133,7 @@ export default function LoginPage() {
             </p>
 
             <p className="mt-2 text-sm text-neutral-500">
-              Enter the email address linked to your Gravitas access.
+              Enter the email address linked to your Multirrupt access.
             </p>
           </div>
 

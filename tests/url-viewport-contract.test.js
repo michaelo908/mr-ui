@@ -145,7 +145,7 @@ test("DNS failures identify mistyped or unavailable websites", () => {
   assert.match(capture, /code !== "EBUSY" && code !== "EAI_AGAIN"/);
   assert.match(capture, /TRANSIENT_DNS_RETRY_DELAY_MS/);
   assert.match(route, /"ENOTFOUND"/);
-  assert.match(route, /Gravitas could not find that website/);
+  assert.match(route, /Multirrupt could not find that website/);
 });
 
 test("URL analysis consistently caps ordered captures at 16 viewports", () => {
@@ -176,7 +176,7 @@ test("server validates provider output and sanitises capture failures", () => {
   assert.match(route, /Gravitas URL rendering failed/);
   assert.match(
     route,
-    /Gravitas could not render this page\. Please try again\./
+    /Multirrupt could not render this page\. Please try again\./
   );
   assert.doesNotMatch(route, /error instanceof Error \? error\.message/);
 });

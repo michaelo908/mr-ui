@@ -60,7 +60,7 @@ export default async function FounderPage({
   return (
     <main className="min-h-screen bg-neutral-950 px-4 py-10 text-neutral-100">
       <div className="mx-auto max-w-6xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#C6A75A]">Gravitas Signals</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#C6A75A]">Multirrupt Signals</p>
         <h1 className="mt-2 text-3xl font-semibold">Founder Snapshot</h1>
         <div className="mt-5 flex flex-wrap gap-2">
           {([1, 7, 30] as const).map((value) => <Link key={value} href={`/founder?window=${value}${includeTest ? "&include_test=1" : ""}`} className={`rounded-lg border px-3 py-2 text-sm ${days === value ? "border-[#C6A75A] text-[#C6A75A]" : "border-neutral-800 text-neutral-400"}`}>{value === 1 ? "Today" : `${value} days`}</Link>)}

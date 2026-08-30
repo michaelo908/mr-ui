@@ -57,8 +57,8 @@ export async function handleUrlSourceRequest(
     return NextResponse.json(
       {
         error: isAddressFailure
-          ? "Gravitas could not find that website. Check the address and try again."
-          : "Gravitas could not render this page. Please try again.",
+          ? "Multirrupt could not find that website. Check the address and try again."
+          : "Multirrupt could not render this page. Please try again.",
       },
       { status: 422 }
     );
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
   const access = await authenticatedLifecycle().catch(() => null);
   if (!access) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   if (access.lifecycle.state === "jump_in") {
-    return NextResponse.json({ error: "Active Gravitas access required" }, { status: 403 });
+    return NextResponse.json({ error: "Active Multirrupt access required" }, { status: 403 });
   }
   return handleUrlSourceRequest(req);
 }

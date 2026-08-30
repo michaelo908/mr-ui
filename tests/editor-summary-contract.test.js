@@ -9,7 +9,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 test("the shared report contract defines Editor's Summary as findings, not reasoning", () => {
   const contract = read("lib/editor-summary.ts");
-  assert.match(contract, /What did Gravitas find\?/);
+  assert.match(contract, /What did Multirrupt find\?/);
   assert.match(contract, /15–20 seconds/);
   assert.match(contract, /one primary observation/);
   assert.match(contract, /diagnosis, not the reasoning/i);

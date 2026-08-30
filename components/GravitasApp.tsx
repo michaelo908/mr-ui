@@ -140,7 +140,7 @@ function JumpInWelcome({ funnel, firstName }: { funnel?: AcquisitionFunnel; firs
   return (
     <div
       className="flex min-h-[420px] items-center justify-center px-4 py-10 text-center sm:min-h-[500px] sm:px-10"
-      aria-label="How to begin your Gravitas session"
+      aria-label="How to begin your Multirrupt session"
     >
       <div className="w-full max-w-xl">
         <p className="jump-in-reveal jump-in-reveal-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#C6A75A]">
@@ -163,7 +163,7 @@ function JumpInWelcome({ funnel, firstName }: { funnel?: AcquisitionFunnel; firs
 
         <div className="jump-in-reveal jump-in-reveal-5 mx-auto mt-8 max-w-lg border-y border-neutral-800 py-7">
           <p className="text-base leading-7 text-neutral-400">
-            Gravitas won&apos;t tell you what you wrote.
+            Multirrupt won&apos;t tell you what you wrote.
           </p>
           <p className="mt-2 text-xl font-medium leading-8 text-neutral-100">
             It will show you what your reader experiences.
@@ -2926,7 +2926,7 @@ useEffect(() => {
 
         content:
 
-          `Full Gravitas access requires an active Day Pass or subscription.\n\nIf you only need another working session, you can get a new 48-hour Day Pass here:\n\n${JUMP_IN_DAY_PASS_URL}`,
+          `Full Multirrupt access requires an active Day Pass or subscription.\n\nIf you only need another working session, you can get a new 48-hour Day Pass here:\n\n${JUMP_IN_DAY_PASS_URL}`,
 
       },
 
@@ -3093,7 +3093,7 @@ if (urlSourceImages.length > 0) {
 }
     const effectiveText =
       text ||
-      `Analyse the attached image${imageData.length === 1 ? "" : "s"} using the selected Gravitas lens: ${selectedGraviton}.`;
+      `Analyse the attached image${imageData.length === 1 ? "" : "s"} using the selected Multirrupt lens: ${selectedGraviton}.`;
 
     setMessages((current) =>
       current.map((message, index) =>
@@ -3418,15 +3418,15 @@ if (urlSourceImages.length > 0) {
           <div>
             <div
               role="img"
-              aria-label="Gravitas Narrative Intelligence"
+              aria-label="Multirrupt Narrative Intelligence"
               className="gravitas-blue-logo"
             />
             <div className="mt-3 text-sm font-medium text-neutral-300">
-              {isJumpIn && funnel ? funnel.eyebrow : isJumpIn ? "Jump Into Gravitas" : "Narrative Intelligence Workstation"}
+              {isJumpIn && funnel ? funnel.eyebrow : isJumpIn ? "Jump Into Multirrupt" : "Multirrupt Narrative Intelligence"}
             </div>
             <div className="mt-1 text-sm text-neutral-500">
               {isJumpIn
-                ? funnel ? "Your reader-side diagnostic is unlocked for 20 minutes." : "Full Gravitas. 20 minutes."
+                ? funnel ? "Your reader-side diagnostic is unlocked for 20 minutes." : "Full Multirrupt. 20 minutes."
                 : "See the narrative from the other side."}
             </div>
             {isJumpIn && requireAuthBeforeAnalysis && !jumpInAuthenticated ? (
@@ -3452,7 +3452,7 @@ if (urlSourceImages.length > 0) {
             ) : null}
             {bookTrialDaysRemaining !== null && (
   <div className="mt-1 text-xs text-neutral-500">
-    Gravitas Day Pass active • {bookTrialDaysRemaining} day
+    Multirrupt Day Pass active • {bookTrialDaysRemaining} day
     {bookTrialDaysRemaining === 1 ? "" : "s"} remaining
   </div>
 )}
@@ -3549,7 +3549,7 @@ if (urlSourceImages.length > 0) {
             </h2>
             <p className="mt-2 text-sm leading-6 text-amber-100/80">
               Everything you created remains visible and copyable. For another
-              working session, continue with 48 hours of full Gravitas access.
+              working session, continue with 48 hours of full Multirrupt access.
             </p>
             <a
               href={JUMP_IN_DAY_PASS_URL}
@@ -3851,14 +3851,14 @@ if (urlSourceImages.length > 0) {
         </p>
       ) : null}
       <p className="mt-2 text-xs text-neutral-500">
-        Gravitas renders the page and analyses up to{" "}
+        Multirrupt renders the page and analyses up to{" "}
         {isJumpIn ? JUMP_IN_MAX_URL_VIEWPORTS : MAX_URL_VIEWPORTS} ordered
         viewports.
         Extracted text is used only to clarify wording that is difficult to read in the captures.
       </p>
       {importedUrl?.source.truncated ? (
         <p className="mt-2 text-xs text-neutral-500">
-          This is a long page. Gravitas will analyse the first complete working section in this pass.
+          This is a long page. Multirrupt will analyse the first complete working section in this pass.
         </p>
       ) : null}
       {urlError ? (

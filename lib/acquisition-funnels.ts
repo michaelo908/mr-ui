@@ -21,19 +21,19 @@ export type AcquisitionFunnel = {
 
 export const ACQUISITION_CONSENT_VERSION = "gravitas_doorway_consent_v1";
 export const ACQUISITION_CONSENT_DISCLOSURE =
-  "By starting your free check, you agree to receive occasional Gravitas emails. You can unsubscribe at any time.";
+  "By starting your free check, you agree to receive occasional Multirrupt emails. You can unsubscribe at any time.";
 
 export const ACQUISITION_FUNNELS: Record<FunnelSlug, AcquisitionFunnel> = {
   email: {
     slug: "email",
     mailchimpTag: "gravitas_email_check_lead",
-    eyebrow: "Gravitas Email Check",
+    eyebrow: "Multirrupt Email Check",
     heroImage: "/doorways/email-hero.png",
     heroPosition: "40% center",
     heroMobilePosition: "48% center",
     headline: "Before you send an important email, know how it will land.",
     supportingLine: "See the likely reader reaction before tone, clarity or an unintended signal costs you dearly.",
-    formHeading: "Give Gravitas 20 minutes with your email.",
+    formHeading: "Give Multirrupt 20 minutes with your email.",
     formExplanation: "See the reaction it is likely to create, uncover the signals working against you, and produce a stronger version before you send it.",
     cta: "Start my free 20-minute email check",
     jumpInTitle: "your free email check is ready.",
@@ -43,13 +43,13 @@ export const ACQUISITION_FUNNELS: Record<FunnelSlug, AcquisitionFunnel> = {
   proposal: {
     slug: "proposal",
     mailchimpTag: "gravitas_proposal_check_lead",
-    eyebrow: "Gravitas Proposal Check",
+    eyebrow: "Multirrupt Proposal Check",
     heroImage: "/doorways/proposal-hero.png",
     heroPosition: "40% center",
     heroMobilePosition: "50% center",
     headline: "Before you send the proposal, find the hesitation.",
     supportingLine: "See where confidence weakens, risk rises or the decision loses momentum before it reaches your buyer.",
-    formHeading: "Give Gravitas 20 minutes with your proposal.",
+    formHeading: "Give Multirrupt 20 minutes with your proposal.",
     formExplanation: "See the proposal from the buyer’s side, identify the points that may stall the decision, and strengthen them before you send it.",
     cta: "Start my free 20-minute proposal check",
     jumpInTitle: "your free proposal check is ready.",
@@ -59,13 +59,13 @@ export const ACQUISITION_FUNNELS: Record<FunnelSlug, AcquisitionFunnel> = {
   "landing-page": {
     slug: "landing-page",
     mailchimpTag: "gravitas_landing_page_check_lead",
-    eyebrow: "Gravitas Landing Page Check",
+    eyebrow: "Multirrupt Landing Page Check",
     heroImage: "/doorways/landing-page-hero.png",
     heroPosition: "40% center",
     heroMobilePosition: "50% center",
     headline: "Before you spend more on traffic, see what your visitors experience.",
     supportingLine: "See where attention weakens, trust drops or the next action becomes unclear as the page unfolds on screen.",
-    formHeading: "Give Gravitas 20 minutes with your landing page.",
+    formHeading: "Give Multirrupt 20 minutes with your landing page.",
     formExplanation: "Experience the page from your visitor’s side, locate where momentum breaks, and identify what to change before you spend more on traffic.",
     cta: "Start my free 20-minute landing page check",
     jumpInTitle: "your free landing page check is ready.",

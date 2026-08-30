@@ -52,7 +52,7 @@ function ProductResultVisual() {
         </div>
       </div>
       <figcaption className="sr-only">
-        A completed Gravitas result showing summary and change recommendations, with rewrite panels closed.
+        A completed Multirrupt result showing summary and change recommendations, with rewrite panels closed.
       </figcaption>
     </figure>
   );
@@ -88,7 +88,7 @@ function EmptyEditorVisual() {
         Paste your current work here.
       </p>
       <figcaption className="sr-only">
-        Empty Gravitas editor with an arrow pointing to the input field.
+        Empty Multirrupt editor with an arrow pointing to the input field.
       </figcaption>
     </figure>
   );
@@ -98,7 +98,7 @@ export default function GravitasHomepage() {
   return (
     <main className="homepage-shell min-h-screen bg-[#f6f2eb] text-neutral-950">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
-        <Link href="/" aria-label="Gravitas Narrative Intelligence home">
+        <Link href="/" aria-label="Multirrupt Narrative Intelligence home">
           <span className="gravitas-blue-logo block" aria-hidden="true" />
         </Link>
         <Link className="rounded-full px-4 py-2 text-sm font-semibold text-neutral-700 hover:text-neutral-950" href="/login">
@@ -123,7 +123,7 @@ export default function GravitasHomepage() {
             You did the work. The material is sound. Yet the person who receives it does not reach the conclusion you expected — or does not act at all.
           </p>
           <p className="mt-5 font-medium text-neutral-950">
-            Most commercial writing is created from the seller’s viewpoint. Gravitas shows you what your reader sees.
+            Most commercial writing is created from the seller’s viewpoint. Multirrupt shows you what your reader sees.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <JumpLink>Jump In — try it on your own work</JumpLink>
@@ -134,18 +134,18 @@ export default function GravitasHomepage() {
 
       <section className="mx-auto grid max-w-6xl gap-10 px-5 py-16 sm:px-8 lg:grid-cols-[.88fr_1.12fr] lg:items-center">
         <div className="max-w-xl text-lg leading-8 text-neutral-700">
-          <h2 className="text-4xl font-semibold leading-tight tracking-[-0.04em] text-neutral-950">What Gravitas gives you back</h2>
+          <h2 className="text-4xl font-semibold leading-tight tracking-[-0.04em] text-neutral-950">What Multirrupt gives you back</h2>
           <p className="mt-6">
             You bring the work that is nearly ready: an email, page, proposal, report, application or other piece that has to carry a decision.
           </p>
           <p className="mt-5">
-            Gravitas gives you a structured reader-side assessment. It shows you what is most likely to affect attention, trust, clarity, credibility or action. It explains what needs to change and why it matters.
+            Multirrupt gives you a structured reader-side assessment. It shows you what is most likely to affect attention, trust, clarity, credibility or action. It explains what needs to change and why it matters.
           </p>
           <p className="mt-5">
             Where a rewrite would help, it offers a practical response to a specific issue so you can see what would be different if that issue were resolved. The analysis comes first. The rewrite is there when you want it.
           </p>
           <p className="mt-5 font-medium text-neutral-950">
-            You remain the author. Gravitas gives you a clearer view of the person you are trying to reach.
+            You remain the author. Multirrupt gives you a clearer view of the person you are trying to reach.
           </p>
         </div>
         <ProductResultVisual />
@@ -179,7 +179,7 @@ export default function GravitasHomepage() {
             It is not badly written. It identifies a problem, promises a solution and asks for the next step. The trouble is that a reader has seen this category of language too many times for it to create traction on its own.
           </p>
           <p className="mt-5">
-            Gravitas may see that the reader understands the category, but not why this company deserves attention. “Advanced AI,” “optimise performance” and “transform your business” are claims they have encountered many times.
+            Multirrupt may see that the reader understands the category, but not why this company deserves attention. “Advanced AI,” “optimise performance” and “transform your business” are claims they have encountered many times.
           </p>
           <p className="mt-5 rounded-[1.5rem] bg-neutral-950 p-6 text-neutral-100">
             When your team is still chasing information across spreadsheets, inboxes and weekly meetings, decisions slow down and important exceptions get missed. [Product] brings the operational signals that matter into one place, so managers can see what needs attention first — before small delays become expensive problems.
@@ -193,10 +193,10 @@ export default function GravitasHomepage() {
       <section className="mx-auto max-w-3xl px-5 py-16 text-lg leading-8 text-neutral-700 sm:px-8">
         <h2 className="text-4xl font-semibold leading-tight tracking-[-0.04em] text-neutral-950">It does not tell you how to write.</h2>
         <p className="mt-6">
-          Gravitas does not arrive with a doctrine. It does not require a personal story, manufacture urgency or turn every serious message into a familiar sales sequence.
+          Multirrupt does not arrive with a doctrine. It does not require a personal story, manufacture urgency or turn every serious message into a familiar sales sequence.
         </p>
         <p className="mt-5">
-          Gravitas examines the actual material, the reader it needs to reach and the decision it is asking that reader to make. Then it shows what is likely happening as the reader moves through it.
+          Multirrupt examines the actual material, the reader it needs to reach and the decision it is asking that reader to make. Then it shows what is likely happening as the reader moves through it.
         </p>
         <div className="mt-8 grid gap-3 text-neutral-950 sm:grid-cols-2">
           {[
@@ -219,7 +219,7 @@ export default function GravitasHomepage() {
           The writer may be selling, advising, applying, reporting, teaching or asking for approval. The format changes. The pressure does not.
         </p>
         <p className="mt-5 font-medium text-neutral-950">
-          You know what the work means. The reader only has the work in front of them. Gravitas helps close that gap.
+          You know what the work means. The reader only has the work in front of them. Multirrupt helps close that gap.
         </p>
       </section>
 
@@ -227,7 +227,7 @@ export default function GravitasHomepage() {
         <div className="text-lg leading-8 text-neutral-700">
           <h2 className="text-4xl font-semibold leading-tight tracking-[-0.04em] text-neutral-950">It sits at the point where the work begins to matter.</h2>
           <p className="mt-6">
-            You already have tools for drafting, editing, research and design. Gravitas comes later — after the facts are in place and the message is taking shape, when the decision is close and the cost of a missed reader reaction becomes real.
+            You already have tools for drafting, editing, research and design. Multirrupt comes later — after the facts are in place and the message is taking shape, when the decision is close and the cost of a missed reader reaction becomes real.
           </p>
           <p className="mt-5">
             Before it leaves, you get a final reader-side check. Not because every piece needs to be remade. Because the small things an author cannot see are often the things a reader cannot get past.
@@ -253,14 +253,14 @@ export default function GravitasHomepage() {
       </section>
 
       <section className="mx-auto max-w-4xl px-5 py-16 text-lg leading-8 text-neutral-700 sm:px-8">
-        <h2 className="text-4xl font-semibold leading-tight tracking-[-0.04em] text-neutral-950">Founding Gravitas</h2>
+        <h2 className="text-4xl font-semibold leading-tight tracking-[-0.04em] text-neutral-950">Founding Multirrupt</h2>
         <p className="mt-6">
           We are opening a small group of Founder memberships for people who want this final reader-side check to become part of their serious work.
         </p>
         <div className="mt-8 rounded-[2rem] bg-white p-6 shadow-sm ring-1 ring-neutral-200 sm:p-8">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#1f5fa8]">Founding Member</p>
           <p className="mt-4 text-5xl font-semibold tracking-[-0.05em]">A$599 <span className="text-xl text-neutral-500">per year</span></p>
-          <p className="mt-4 text-neutral-700">Full Gravitas access. The regular annual equivalent is A$1,164. Founder saving: A$565 in the first year.</p>
+          <p className="mt-4 text-neutral-700">Full Multirrupt access. The regular annual equivalent is A$1,164. Founder saving: A$565 in the first year.</p>
           <p className="mt-4 font-medium text-neutral-950">30 Founder memberships available.</p>
           <p className="mt-4 text-sm leading-6 text-neutral-500">
             Your Founder rate remains available for as long as your membership stays continuously active. Founding Memberships cannot be paused, transferred, reactivated or revived after cancellation.

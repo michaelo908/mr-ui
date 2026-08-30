@@ -12,6 +12,6 @@ test("Jump In omits the obsolete no-signup claim", () => {
     "utf8"
   );
 
-  assert.match(app, /Full Gravitas\. 20 minutes\./);
+  assert.match(app, /Full Multirrupt\. 20 minutes\./);
   assert.doesNotMatch(app, new RegExp(["No", "signup", "required\\."].join(" ")));
 });

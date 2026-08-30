@@ -1,5 +1,5 @@
 export const EDITOR_SUMMARY_CONTRACT = `
-- Purpose: provide a rapid findings layer that answers only, "What did Gravitas find?"
+- Purpose: provide a rapid findings layer that answers only, "What did Multirrupt find?"
 - A user should be able to scan the complete section in approximately 15–20 seconds.
 - Include normally 4 bullets; use 3 when the material is simple and no more than 5 when distinct major findings genuinely require it.
 - Bullet format MUST be exactly: “• <one plain, direct finding sentence>”. Do not add a bold label, heading, colon-led category, or sub-point.
