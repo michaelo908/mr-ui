@@ -15,8 +15,13 @@ import {
   JUMP_IN_MAX_URL_VIEWPORTS,
   JUMP_IN_RESET_MS,
 } from "@/lib/jump-in";
+import { hasAuthenticatedJumpInUser } from "@/lib/jump-in-auth";
 
 export async function POST(req: Request) {
+  if (!(await hasAuthenticatedJumpInUser())) {
+    return NextResponse.json({ error: "Sign in to start your Jump In." }, { status: 401 });
+  }
+
   const cookieStore = await cookies();
   const now = Date.now();
   const existing = readJumpInToken(
