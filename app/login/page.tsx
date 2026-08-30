@@ -51,6 +51,10 @@ export default function LoginPage() {
     }
 
     async function checkSession() {
+      if (new URLSearchParams(window.location.search).get("error") === "auth_callback") {
+        setMessage("This login link could not be completed. Request a new link and open it in the same browser.");
+      }
+
       const handledHash = await hydrateFromHash();
       if (handledHash) return;
 

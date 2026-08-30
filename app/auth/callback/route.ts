@@ -3,6 +3,13 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { isValidResumeTarget } from "@/lib/gravitas-workspace";
 
+function redirectToLogin(origin: string, nextTarget: string) {
+  const loginUrl = new URL("/login", origin);
+  loginUrl.searchParams.set("error", "auth_callback");
+  if (nextTarget !== "/workbench") loginUrl.searchParams.set("next", nextTarget);
+  return NextResponse.redirect(loginUrl);
+}
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
@@ -33,12 +40,12 @@ export async function GET(request: Request) {
   );
 
   if (code) {
-    await supabase.auth.exchangeCodeForSession(code);
-    return response;
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    return error ? redirectToLogin(origin, nextTarget) : response;
   }
 
   if (token_hash && type) {
-    await supabase.auth.verifyOtp({
+    const { error } = await supabase.auth.verifyOtp({
       token_hash,
       type: type as
         | "signup"
@@ -48,8 +55,8 @@ export async function GET(request: Request) {
         | "email_change"
         | "email",
     });
-    return response;
+    return error ? redirectToLogin(origin, nextTarget) : response;
   }
 
-  return NextResponse.redirect(`${origin}/login`);
+  return redirectToLogin(origin, nextTarget);
 }
