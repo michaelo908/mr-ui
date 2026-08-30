@@ -131,7 +131,7 @@ const THINKING_TOKEN = "__MR_THINKING__";
 const MR_GOLD = "#C6A75A";
 const TELEMETRY_LAUNCH_DATE = "2026-03-15";
 const TELEMETRY_STORAGE_KEY = "gravitasTelemetrySeedV1";
-const HOMEPAGE_JUMP_IN_RESUME_TARGET = "/?resume=jump-in#jump-in";
+const HOMEPAGE_JUMP_IN_RESUME_TARGET = GRAVITAS_RESUME_TARGET;
 
 function JumpInWelcome({ funnel, firstName }: { funnel?: AcquisitionFunnel; firstName?: string }) {
   const personalizedTitle = funnel
