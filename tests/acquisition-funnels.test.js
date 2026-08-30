@@ -33,17 +33,17 @@ test("shared doorway renders one hero and no legacy explanatory sections", () =>
   assert.match(page, /funnel\.formHeading/);
   assert.match(page, /funnel\.formExplanation/);
   assert.doesNotMatch(page, /funnel\.eyebrow|funnel\.problemTitle|funnel\.missedTitle|funnel\.sees/);
-  assert.doesNotMatch(page, /What Gravitas sees/);
+  assert.doesNotMatch(page, /What Multirrupt sees/);
 });
 
 test("doorway renders mandatory disclosure beneath the CTA without an optional checkbox", () => {
   const page = read("components/AcquisitionLandingPage.tsx");
   const config = read("lib/acquisition-funnels.ts");
   const signup = read("app/api/acquisition/signup/route.ts");
-  assert.match(config, /By starting your free check, you agree to receive occasional Gravitas emails\. You can unsubscribe at any time\./);
+  assert.match(config, /By starting your free check, you agree to receive occasional Multirrupt emails\. You can unsubscribe at any time\./);
   assert.match(page, /<button[\s\S]*?funnel\.cta[\s\S]*?<\/button>\s*<p[^>]*>\{ACQUISITION_CONSENT_DISCLOSURE\}<\/p>/);
   assert.doesNotMatch(page, /type="checkbox"/);
-  assert.doesNotMatch(page, /Send me this check and a short series of useful Gravitas follow-ups/);
+  assert.doesNotMatch(page, /Send me this check and a short series of useful Multirrupt follow-ups/);
   assert.doesNotMatch(page, /No card required/);
   assert.match(page, /firstTouch: identity\.firstTouch/);
   assert.match(page, /lastTouch: identity\.lastTouch/);

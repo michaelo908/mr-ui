@@ -13,8 +13,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Multirrupt - GRAVITAS",
+  title: "Multirrupt Narrative Intelligence",
   description: "Multirrupt Narrative Intelligence",
+  openGraph: {
+    title: "Multirrupt Narrative Intelligence",
+    description: "Multirrupt Narrative Intelligence",
+  },
+  twitter: {
+    card: "summary",
+    title: "Multirrupt Narrative Intelligence",
+    description: "Multirrupt Narrative Intelligence",
+  },
 };
 
 export default function RootLayout({

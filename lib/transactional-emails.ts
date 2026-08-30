@@ -22,13 +22,13 @@ function accessEmail(input: {
   <div style="max-width:600px;margin:0 auto;padding:32px 22px">
     <h1 style="font-size:24px;margin:0 0 18px">${escapeHtml(input.heading)}</h1>
     <p style="line-height:1.6">${escapeHtml(input.introduction)}</p>
-    <p style="line-height:1.6">Use the same email address you used at checkout. Gravitas will send you a secure magic login link.</p>
-    <p style="margin:28px 0"><a href="${safeLoginUrl}" style="display:inline-block;background:#d4ae57;color:#111820;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:8px">Open Gravitas</a></p>
+    <p style="line-height:1.6">Use the same email address you used at checkout. Multirrupt will send you a secure magic login link.</p>
+    <p style="margin:28px 0"><a href="${safeLoginUrl}" style="display:inline-block;background:#d4ae57;color:#111820;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:8px">Open Multirrupt</a></p>
     <p style="line-height:1.6">If the button does not work, open:<br><a href="${safeLoginUrl}" style="color:#69aefc">${safeLoginUrl}</a></p>
     <p style="line-height:1.6">Need help? <a href="mailto:${SUPPORT_EMAIL}" style="color:#69aefc">${SUPPORT_EMAIL}</a></p>
   </div>
 </body></html>`;
-  const text = `${input.heading}\n\n${input.introduction}\n\nUse the same email address you used at checkout. Gravitas will send you a secure magic login link.\n\nOpen Gravitas: ${loginUrl}\n\nNeed help? ${SUPPORT_EMAIL}`;
+  const text = `${input.heading}\n\n${input.introduction}\n\nUse the same email address you used at checkout. Multirrupt will send you a secure magic login link.\n\nOpen Multirrupt: ${loginUrl}\n\nNeed help? ${SUPPORT_EMAIL}`;
   return { html, text, loginUrl };
 }
 
@@ -43,10 +43,10 @@ function formatDate(value: string | Date) {
 export function dayPassAccessEmail(appUrl: string, expiresAt?: string | Date | null) {
   const expiry = expiresAt ? ` It now runs until ${formatDate(expiresAt)} UTC.` : "";
   return {
-    subject: "Your Gravitas Day Pass is ready",
+    subject: "Your Multirrupt Day Pass is ready",
     ...accessEmail({
-      heading: "Your Gravitas Day Pass is active",
-      introduction: `Your Gravitas Day Pass is active.${expiry}`,
+      heading: "Your Multirrupt Day Pass is active",
+      introduction: `Your Multirrupt Day Pass is active.${expiry}`,
       appUrl,
     }),
   };
@@ -54,10 +54,10 @@ export function dayPassAccessEmail(appUrl: string, expiresAt?: string | Date | n
 
 export function subscriptionActivationEmail(appUrl: string) {
   return {
-    subject: "Your Gravitas subscription is active",
+    subject: "Your Multirrupt subscription is active",
     ...accessEmail({
-      heading: "Your Gravitas subscription is active",
-      introduction: "Your Gravitas subscription access is now active.",
+      heading: "Your Multirrupt subscription is active",
+      introduction: "Your Multirrupt subscription access is now active.",
       appUrl,
     }),
   };
@@ -88,17 +88,17 @@ function billingEmail(input: {
 export function paymentFailedEmail(appUrl: string, graceEndsAt: string | Date) {
   return billingEmail({
     appUrl,
-    subject: "Action required for your Gravitas subscription",
+    subject: "Action required for your Multirrupt subscription",
     heading: "Your subscription payment needs attention",
-    introduction: `Your Gravitas access remains available until ${formatDate(graceEndsAt)} UTC while you update your billing details.`,
+    introduction: `Your Multirrupt access remains available until ${formatDate(graceEndsAt)} UTC while you update your billing details.`,
   });
 }
 
 export function cancellationScheduledEmail(appUrl: string, paidThrough: string | Date) {
   return billingEmail({
     appUrl,
-    subject: "Your Gravitas subscription is scheduled to end",
+    subject: "Your Multirrupt subscription is scheduled to end",
     heading: "Your subscription cancellation is scheduled",
-    introduction: `Your Gravitas subscription remains active until ${formatDate(paidThrough)} UTC. You can manage or resume it before then.`,
+    introduction: `Your Multirrupt subscription remains active until ${formatDate(paidThrough)} UTC. You can manage or resume it before then.`,
   });
 }

@@ -7,10 +7,13 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
-test("login uses Multirrupt branding without the legacy white logo panel", () => {
+test("login uses Multirrupt Narrative Intelligence branding without the legacy white logo panel", () => {
   const page = read("app/login/page.tsx");
-  assert.match(page, /multirrupt-login-logo/);
+  const css = read("app/globals.css");
+  assert.match(page, /gravitas-blue-logo gravitas-login-logo/);
   assert.match(page, /aria-label="Multirrupt Narrative Intelligence"/);
+  assert.match(css, /multirrupt-narrative-intelligence-logo\.png/);
+  assert.doesNotMatch(css, /gravitas-logo-white\.png/);
   assert.match(page, /gravitas-shell/);
   assert.match(page, /gravitas-header/);
   assert.doesNotMatch(page, /MR_Logo1\.png|bg-white\/90/);

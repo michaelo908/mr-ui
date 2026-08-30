@@ -49,10 +49,10 @@ export default function AcquisitionLandingPage({ funnel }: { funnel: Acquisition
   return (
     <main className="doorway-shell min-h-screen text-neutral-100">
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-7">
-        <Link href="/" aria-label="Gravitas Narrative Intelligence home">
+        <Link href="/" aria-label="Multirrupt Narrative Intelligence home">
           <span className="gravitas-blue-logo block" aria-hidden="true" />
         </Link>
-        <Link href="/login" className="rounded-lg px-3 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#58a6ff]">Login to Gravitas</Link>
+        <Link href="/login" className="rounded-lg px-3 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#58a6ff]">Login to Multirrupt</Link>
       </nav>
 
       <section className="doorway-hero mx-auto grid max-w-7xl overflow-hidden sm:mx-7 lg:mx-auto lg:grid-cols-[minmax(0,1.18fr)_minmax(21rem,.82fr)]">

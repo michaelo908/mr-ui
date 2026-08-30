@@ -157,7 +157,7 @@ export default function LoginPage() {
           <div
             role="img"
             aria-label="Multirrupt Narrative Intelligence"
-            className="multirrupt-login-logo"
+            className="gravitas-blue-logo gravitas-login-logo"
           />
         </div>
 
@@ -167,6 +167,10 @@ export default function LoginPage() {
         >
           <div className="text-center">
             <h1 className="text-xl font-semibold">Sign in to Multirrupt</h1>
+
+            <p className="mt-2 text-sm text-neutral-400">
+              Narrative analysis and rewrite engine
+            </p>
 
             <p className="mt-2 text-sm text-neutral-400">
               See how your message will land before you send it.

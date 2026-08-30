@@ -80,11 +80,11 @@ test("transactional email contracts are concise and environment-specific", () =>
   vm.runInNewContext(compiled, { module: mod, exports: mod.exports, require, URL });
   const dayPass = mod.exports.dayPassAccessEmail("https://gravitas-staging.multirrupt.ai");
   const subscription = mod.exports.subscriptionActivationEmail("https://gravitas-staging.multirrupt.ai");
-  assert.equal(dayPass.subject, "Your Gravitas Day Pass is ready");
-  assert.equal(subscription.subject, "Your Gravitas subscription is active");
+  assert.equal(dayPass.subject, "Your Multirrupt Day Pass is ready");
+  assert.equal(subscription.subject, "Your Multirrupt subscription is active");
   for (const email of [dayPass, subscription]) {
     assert.equal(email.loginUrl, "https://gravitas-staging.multirrupt.ai/login");
-    assert.match(email.html, /Open Gravitas/);
+    assert.match(email.html, /Open Multirrupt/);
     assert.match(email.text, /https:\/\/gravitas-staging\.multirrupt\.ai\/login/);
     assert.match(email.text, /support@multirrupt\.ai/);
     assert.doesNotMatch(email.html + email.text, /Hidden Campaign|three rewrites|cross-device/i);
