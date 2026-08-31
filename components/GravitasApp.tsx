@@ -140,7 +140,7 @@ function JumpInWelcome({ funnel, firstName }: { funnel?: AcquisitionFunnel; firs
   return (
     <div
       className="flex min-h-[420px] items-center justify-center px-4 py-10 text-center sm:min-h-[500px] sm:px-10"
-      aria-label="How to begin your Gravitas session"
+      aria-label="How to begin your Multirrupt session"
     >
       <div className="w-full max-w-xl">
         <p className="jump-in-reveal jump-in-reveal-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#C6A75A]">
@@ -163,7 +163,7 @@ function JumpInWelcome({ funnel, firstName }: { funnel?: AcquisitionFunnel; firs
 
         <div className="jump-in-reveal jump-in-reveal-5 mx-auto mt-8 max-w-lg border-y border-neutral-800 py-7">
           <p className="text-base leading-7 text-neutral-400">
-            Gravitas won&apos;t tell you what you wrote.
+            Multirrupt won&apos;t tell you what you wrote.
           </p>
           <p className="mt-2 text-xl font-medium leading-8 text-neutral-100">
             It will show you what your reader experiences.
@@ -3418,15 +3418,15 @@ if (urlSourceImages.length > 0) {
           <div>
             <div
               role="img"
-              aria-label="Gravitas Narrative Intelligence"
-              className="gravitas-blue-logo"
+              aria-label={isJumpIn ? "Multirrupt Narrative Intelligence" : "Gravitas Narrative Intelligence"}
+              className={isJumpIn ? "multirrupt-jump-in-logo" : "gravitas-blue-logo"}
             />
             <div className="mt-3 text-sm font-medium text-neutral-300">
-              {isJumpIn && funnel ? funnel.eyebrow : isJumpIn ? "Jump Into Gravitas" : "Narrative Intelligence Workstation"}
+              {isJumpIn && funnel ? funnel.eyebrow : isJumpIn ? "Jump Into Multirrupt" : "Narrative Intelligence Workstation"}
             </div>
             <div className="mt-1 text-sm text-neutral-500">
               {isJumpIn
-                ? funnel ? "Your reader-side diagnostic is unlocked for 20 minutes." : "Full Gravitas. 20 minutes."
+                ? funnel ? "Your reader-side diagnostic is unlocked for 20 minutes." : "Try Multirrupt. 20 minutes."
                 : "See the narrative from the other side."}
             </div>
             {isJumpIn && requireAuthBeforeAnalysis && !jumpInAuthenticated ? (
