@@ -231,9 +231,9 @@ export default function LoginPage() {
           {message && <p className="text-sm text-neutral-400">{message}</p>}
         </form>
         <p className="mt-6 text-center text-sm text-neutral-400">
-          New to Multirrupt?{" "}
+          New to Multirrupt? — just{" "}
           <a href="/" className="text-sky-300 underline underline-offset-4 hover:text-sky-200">
-            Open the editor
+            Jump In here
           </a>
         </p>
       </div>
