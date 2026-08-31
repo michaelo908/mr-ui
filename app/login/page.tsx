@@ -152,12 +152,12 @@ export default function LoginPage() {
 
   return (
     <main className="gravitas-shell flex min-h-screen items-center justify-center px-4 py-10 text-neutral-100">
-      <div className="relative z-10 w-full max-w-sm">
+      <div className="relative z-10 w-full max-w-md">
         <div className="mb-9 flex justify-center">
           <div
             role="img"
-            aria-label="Gravitas Narrative Intelligence"
-            className="gravitas-blue-logo gravitas-login-logo"
+            aria-label="Multirrupt Narrative Intelligence"
+            className="multirrupt-login-logo"
           />
         </div>
 
@@ -166,23 +166,25 @@ export default function LoginPage() {
           className="gravitas-header flex w-full flex-col gap-4 rounded-2xl p-6 sm:p-7"
         >
           <div className="text-center">
-            <h1 className="text-xl font-semibold">Sign in to Gravitas</h1>
-
-            <p className="mt-2 text-sm text-neutral-400">
-              Narrative analysis and rewrite engine
-            </p>
+            <h1 className="text-xl font-semibold">Sign in to Multirrupt</h1>
 
             <p className="mt-2 text-sm text-neutral-400">
               See how your message will land before you send it.
             </p>
 
+            <p className="mt-2 text-sm text-neutral-400">
+              Enter the email address you use for Multirrupt.
+            </p>
+
             <p className="mt-2 text-sm text-neutral-500">
-              Enter the email address linked to your Gravitas access.
+              {otpEnabled ? "We’ll email you a six-digit sign-in code. No password needed." : "We’ll email you a sign-in link. No password needed."}
             </p>
           </div>
 
           <input
             type="email"
+            aria-label="Email address"
+            autoComplete="email"
             placeholder="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -228,6 +230,12 @@ export default function LoginPage() {
 
           {message && <p className="text-sm text-neutral-400">{message}</p>}
         </form>
+        <p className="mt-6 text-center text-sm text-neutral-400">
+          New to Multirrupt?{" "}
+          <a href="/" className="text-sky-300 underline underline-offset-4 hover:text-sky-200">
+            Open the editor
+          </a>
+        </p>
       </div>
     </main>
   );

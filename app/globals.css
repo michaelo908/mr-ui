@@ -61,6 +61,15 @@
   height: 47px;
 }
 
+.multirrupt-login-logo {
+  width: min(320px, 80vw);
+  height: 80px;
+  background: #58a6ff;
+  -webkit-mask: url("/MR_Logo1.png") center / 100% auto no-repeat;
+  mask: url("/MR_Logo1.png") center / 100% auto no-repeat;
+  filter: drop-shadow(0 0 20px rgba(70, 153, 248, 0.24));
+}
+
 .homepage-shell {
   position: relative;
   isolation: isolate;
