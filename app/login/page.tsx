@@ -21,8 +21,11 @@ export default function LoginPage() {
   const [sending, setSending] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
   const [token, setToken] = useState("");
-  const otpEnabled = process.env.NEXT_PUBLIC_SUPABASE_URL ===
-    "https://gglalhqmdnbdygcxasyd.supabase.co";
+  // Enable only for the verified staging and production Auth projects.
+  const otpEnabled = [
+    "https://gglalhqmdnbdygcxasyd.supabase.co",
+    "https://ixhbcjippdxzdhlerndj.supabase.co",
+  ].includes(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
 
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
