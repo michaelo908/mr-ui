@@ -1,5 +1,5 @@
-import GravitasHomepage from "@/components/GravitasHomepage";
+import EditorEntry from "@/components/EditorEntry";
 
 export default function HomePage() {
-  return <GravitasHomepage />;
+  return <EditorEntry />;
 }
