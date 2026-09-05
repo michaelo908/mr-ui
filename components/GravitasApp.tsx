@@ -3419,7 +3419,7 @@ if (urlSourceImages.length > 0) {
             <div
               role="img"
               aria-label="Multirrupt Narrative Intelligence"
-              className="gravitas-blue-logo"
+              className="gravitas-blue-logo multirrupt-editor-logo"
             />
             <div className="mt-3 text-sm font-medium text-neutral-300">
               {isJumpIn && funnel ? funnel.eyebrow : isJumpIn ? "Jump Into Multirrupt" : "Multirrupt Narrative Intelligence"}
