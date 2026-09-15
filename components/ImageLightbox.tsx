@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import {
-  getViewportImageByNumber,
+  getVisualEvidenceImageByNumber,
   type NarrativePerformanceLightboxContext,
 } from "@/lib/narrative-performance";
 import type { SourceImage } from "@/lib/sources";
@@ -96,8 +96,8 @@ export default function ImageLightbox({
       : `${activeIndex + 1} of ${images.length}`;
   const viewportLabel = isViewport
     ? `VIEWPORT ${activeIndex + 1}`
-    : activeImage.title;
-  const title = context && isViewport
+    : context ? `IMAGE ${activeIndex + 1}` : activeImage.title;
+  const title = context
     ? `${context.emoji} ${context.action.toUpperCase()} — ${viewportLabel}`
     : viewportLabel;
   const dialogLabel = isViewport
@@ -123,7 +123,7 @@ export default function ImageLightbox({
                 <h2
                   className="text-sm font-bold tracking-wide text-white sm:text-base"
                   style={
-                    context && isViewport ? { color: context.color } : undefined
+                    context ? { color: context.color } : undefined
                   }
                 >
                   {title}
@@ -133,7 +133,7 @@ export default function ImageLightbox({
                 </span>
               </div>
 
-              {context && isViewport ? (
+              {context ? (
                 <>
                   <p className="mt-2 max-w-4xl text-xs leading-5 text-neutral-300 sm:text-sm">
                     {context.recommendation}
@@ -141,11 +141,11 @@ export default function ImageLightbox({
                   {context.viewportNumbers.length > 0 ? (
                     <nav
                       className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-neutral-400"
-                      aria-label="Recommendation evidence viewports"
+                      aria-label={isViewport ? "Recommendation evidence viewports" : "Recommendation evidence images"}
                     >
                       <span className="mr-1 font-semibold">Evidence:</span>
                       {context.viewportNumbers.map((viewportNumber, index) => {
-                        const evidenceImage = getViewportImageByNumber(
+                        const evidenceImage = getVisualEvidenceImageByNumber(
                           images,
                           viewportNumber
                         );
@@ -169,7 +169,7 @@ export default function ImageLightbox({
                               type="button"
                               disabled={evidenceIndex < 0}
                               onClick={() => onChange(evidenceIndex)}
-                              aria-label={`Show evidence viewport ${viewportNumber}`}
+                              aria-label={`Show evidence ${isViewport ? "viewport" : "image"} ${viewportNumber}`}
                               aria-current={isCurrent ? "true" : undefined}
                               className={
                                 isCurrent

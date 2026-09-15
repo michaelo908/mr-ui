@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { isValidResumeTarget } from "@/lib/gravitas-workspace";
+import { AUTH_RESUME_COOKIE } from "@/lib/auth-resume";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-export const AUTH_RESUME_COOKIE = "multirrupt_auth_resume";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);

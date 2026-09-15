@@ -157,7 +157,8 @@ function expandViewportReference(value: string) {
 }
 
 export function parseViewportReferenceTokens(
-  value: string
+  value: string,
+  sourceKind: "viewport" | "image" = "viewport"
 ): ViewportReferenceToken[] {
   const tokens: ViewportReferenceToken[] = [];
   const referenceItem =
@@ -166,7 +167,7 @@ export function parseViewportReferenceTokens(
     String.raw`[(*_` + "`" + String.raw`]*\s*${referenceItem}[)*_` + "`" + String.raw`]*`;
   const phrasePattern =
     new RegExp(
-      String.raw`\bViewports?\s+${decoratedReferenceItem}(?:(?:\s*,\s*(?:and\s+)?|\s+(?:and|&)\s+)${decoratedReferenceItem})*`,
+      String.raw`\b${sourceKind === "image" ? "(?:Images?|Viewports?)" : "Viewports?"}\s+${decoratedReferenceItem}(?:(?:\s*,\s*(?:and\s+)?|\s+(?:and|&)\s+)${decoratedReferenceItem})*`,
       "gi"
     );
   let cursor = 0;
@@ -178,10 +179,13 @@ export function parseViewportReferenceTokens(
     }
 
     const phrase = phraseMatch[0];
-    const prefixMatch = phrase.match(/^Viewports?\s+/i);
+    const prefixMatch = phrase.match(/^(?:Viewports?|Images?)\s+/i);
     const prefixLength = prefixMatch?.[0].length ?? 0;
     if (prefixLength > 0) {
-      tokens.push({ type: "text", text: phrase.slice(0, prefixLength) });
+      const prefix = phrase.slice(0, prefixLength);
+      tokens.push({ type: "text", text: sourceKind === "image"
+        ? prefix.replace(/Viewports?/i, (word) => /s$/i.test(word) ? "Images" : "Image")
+        : prefix });
     }
 
     const expression = phrase.slice(prefixLength);
@@ -250,6 +254,26 @@ export function getViewportImageByNumber<
   return orderedViewports[viewportNumber - 1] ?? null;
 }
 
+// Keep uploaded images out of URL evidence numbering, including mixed collections.
+export function visualEvidenceKind(images: { role?: string }[]): "viewport" | "image" {
+  return images.some((image) => image.role === "viewport") ? "viewport" : "image";
+}
+
+export function getVisualEvidenceImages<T extends { role?: string; order: number }>(images: T[]): T[] {
+  const kind = visualEvidenceKind(images);
+  return images.filter((image) => kind === "viewport"
+    ? image.role === "viewport"
+    : image.role === "uploaded-image" || image.role === undefined)
+    .sort((left, right) => left.order - right.order);
+}
+
+export function getVisualEvidenceImageByNumber<T extends { role?: string; order: number }>(
+  images: T[], number: number
+): T | null {
+  if (!Number.isSafeInteger(number) || number < 1) return null;
+  return getVisualEvidenceImages(images)[number - 1] ?? null;
+}
+
 export function buildRecommendationLightboxContext<
   T extends { role?: string; order: number },
 >(
@@ -261,9 +285,11 @@ export function buildRecommendationLightboxContext<
     color: actionColor(recommendation.action),
     emoji: actionEmoji(recommendation.action),
     recommendation: recommendation.body,
-    viewportNumbers: extractViewportNumbers(recommendation.body).filter(
+    viewportNumbers: extractViewportNumbersFromTokens(parseViewportReferenceTokens(
+      recommendation.body, visualEvidenceKind(images)
+    )).filter(
       (viewportNumber) =>
-        getViewportImageByNumber(images, viewportNumber) !== null
+        getVisualEvidenceImageByNumber(images, viewportNumber) !== null
     ),
   };
 }
@@ -278,7 +304,7 @@ export function buildRecommendationViewportLaunch<
   const context = buildRecommendationLightboxContext(recommendation, images);
   if (
     !context.viewportNumbers.includes(startingViewport) ||
-    getViewportImageByNumber(images, startingViewport) === null
+    getVisualEvidenceImageByNumber(images, startingViewport) === null
   ) {
     return null;
   }

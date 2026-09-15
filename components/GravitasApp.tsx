@@ -41,7 +41,8 @@ import {
 } from "@/lib/analysis-personality";
 import { createAnalysisRunCoordinator } from "@/lib/analysis-run-coordinator";
 import {
-  getViewportImageByNumber,
+  getVisualEvidenceImageByNumber,
+  getVisualEvidenceImages,
   parseNarrativePerformance,
   type NarrativePerformanceLightboxContext,
   type NarrativePerformanceViewportLaunch,
@@ -915,15 +916,7 @@ function StructuredAssistantMessage({
           })),
     [sourceImageData, sourceImages]
   );
-  const orderedViewportImages = useMemo(
-    () =>
-      displayImages
-        .filter((image) => image.role === "viewport")
-        .sort((left, right) => left.order - right.order),
-    [displayImages]
-  );
-  const lightboxImages =
-    orderedViewportImages.length > 0 ? orderedViewportImages : displayImages;
+  const lightboxImages = useMemo(() => getVisualEvidenceImages(displayImages), [displayImages]);
   const analysisIdentity = useMemo(
     () => [sourceIdentity?.id ?? "", graviton, cadence, content].join("\u001f"),
     [content, graviton, cadence, sourceIdentity?.id]
@@ -942,12 +935,12 @@ function StructuredAssistantMessage({
   );
   const openViewport = useCallback(
     (viewportNumber: number) => {
-      const image = getViewportImageByNumber(
-        orderedViewportImages,
+      const image = getVisualEvidenceImageByNumber(
+        lightboxImages,
         viewportNumber
       );
       if (!image) return;
-      const index = orderedViewportImages.findIndex(
+      const index = lightboxImages.findIndex(
         (candidate) => candidate.id === image.id
       );
       if (index >= 0) {
@@ -955,28 +948,28 @@ function StructuredAssistantMessage({
         setActiveLightboxIndex(index);
       }
     },
-    [orderedViewportImages]
+    [lightboxImages]
   );
   const openRecommendationViewport = useCallback(
     (launch: NarrativePerformanceViewportLaunch) => {
-      const image = getViewportImageByNumber(
-        orderedViewportImages,
+      const image = getVisualEvidenceImageByNumber(
+        lightboxImages,
         launch.startingViewport
       );
       if (!image) return;
-      const index = orderedViewportImages.findIndex(
+      const index = lightboxImages.findIndex(
         (candidate) => candidate.id === image.id
       );
       if (index >= 0) {
         onInteractionSignal?.("engagement.evidence_inspected", {
-          evidence_type: "viewport",
+          evidence_type: image.role === "viewport" ? "viewport" : "image",
           evidence_number: launch.startingViewport,
         });
         setLightboxContext(launch.context);
         setActiveLightboxIndex(index);
       }
     },
-    [onInteractionSignal, orderedViewportImages]
+    [onInteractionSignal, lightboxImages]
   );
   const closeLightbox = useCallback(() => {
     setActiveLightboxIndex(null);
@@ -1261,7 +1254,7 @@ ${cadenceInstruction(cadence)}`;
       {performance ? (
         <NarrativePerformancePanel
           performance={performance}
-          images={orderedViewportImages}
+          images={lightboxImages}
           onOpenViewport={openViewport}
           onOpenRecommendation={openRecommendationViewport}
           textEvidenceBlocks={

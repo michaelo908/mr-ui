@@ -49,7 +49,7 @@ test("viewport thumbnails and references share the image lightbox", () => {
   const lightbox = read("components/ImageLightbox.tsx");
 
   assert.match(app, /onOpenImage=\{openImage\}/);
-  assert.match(panel, /Open viewport \$\{startingViewport\}/);
+  assert.match(panel, /Open \$\{kind\} \$\{startingViewport\}/);
   assert.match(lightbox, /event\.key === "Escape"/);
   assert.match(lightbox, /event\.key === "ArrowLeft"/);
   assert.match(lightbox, /event\.key === "ArrowRight"/);
@@ -70,7 +70,7 @@ test("recommendation viewport launches preserve contextual action and evidence",
   assert.match(lightbox, /context\.color/);
   assert.match(lightbox, /context\.recommendation/);
   assert.match(lightbox, /Recommendation evidence viewports/);
-  assert.match(lightbox, /Show evidence viewport \$\{viewportNumber\}/);
+  assert.match(lightbox, /Show evidence \$\{isViewport \? "viewport" : "image"\} \$\{viewportNumber\}/);
 });
 
 test("recommendation callbacks cannot degrade to an index-only launch", () => {
@@ -103,7 +103,7 @@ test("inline rendering consumes the canonical viewport reference tokens", () => 
   const panel = read("components/NarrativePerformancePanel.tsx");
   const parser = read("lib/narrative-performance.ts");
 
-  assert.match(panel, /const tokens = parseViewportReferenceTokens\(value\)/);
+  assert.match(panel, /const tokens = parseViewportReferenceTokens\(value, kind\)/);
   assert.match(panel, /extractViewportNumbersFromTokens\(tokens\)/);
   assert.match(panel, /return tokens\.map/);
   assert.equal(panel.includes("const pattern = /\\b(Viewports?)"), false);
@@ -116,6 +116,6 @@ test("thumbnail launches use neutral inspection mode", () => {
   const lightbox = read("components/ImageLightbox.tsx");
 
   assert.match(app, /setLightboxContext\(null\);\s*setActiveLightboxIndex\(index\)/);
-  assert.match(lightbox, /context && isViewport/);
+  assert.match(lightbox, /const title = context/);
   assert.match(lightbox, /: viewportLabel/);
 });

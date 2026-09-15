@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { isValidResumeTarget } from "@/lib/gravitas-workspace";
-import { AUTH_RESUME_COOKIE } from "@/app/auth/magic-link/route";
+import { AUTH_RESUME_COOKIE } from "@/lib/auth-resume";
 
 function clearResumeCookie(response: NextResponse) {
   response.cookies.set(AUTH_RESUME_COOKIE, "", {

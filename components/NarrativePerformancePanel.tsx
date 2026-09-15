@@ -5,7 +5,8 @@ import {
   buildRecommendationLightboxContext,
   buildRecommendationViewportLaunch,
   extractViewportNumbersFromTokens,
-  getViewportImageByNumber,
+  getVisualEvidenceImageByNumber,
+  visualEvidenceKind,
   parseViewportReferenceTokens,
   type NarrativePerformance,
   type NarrativePerformanceRecommendation,
@@ -29,7 +30,8 @@ function renderViewportReferences(
     launch: NarrativePerformanceViewportLaunch
   ) => void
 ) {
-  const tokens = parseViewportReferenceTokens(value);
+  const kind = visualEvidenceKind(images);
+  const tokens = parseViewportReferenceTokens(value, kind);
   const canonicalViewportNumbers = extractViewportNumbersFromTokens(tokens);
 
   return tokens.map((token, index) => {
@@ -40,7 +42,7 @@ function renderViewportReferences(
     const validViewportNumbers = token.viewportNumbers.filter(
       (viewportNumber) =>
         canonicalViewportNumbers.includes(viewportNumber) &&
-        getViewportImageByNumber(images, viewportNumber) !== null
+        getVisualEvidenceImageByNumber(images, viewportNumber) !== null
     );
     const startingViewport = validViewportNumbers[0];
     const launch =
@@ -70,8 +72,8 @@ function renderViewportReferences(
         className="font-semibold text-[#C6A75A] underline decoration-[#C6A75A]/60 underline-offset-4 hover:text-amber-200"
         aria-label={
           validViewportNumbers.length === 1
-            ? `Open viewport ${startingViewport}`
-            : `Open viewports ${validViewportNumbers.join(", ")} starting at viewport ${startingViewport}`
+            ? `Open ${kind} ${startingViewport}`
+            : `Open ${kind}s ${validViewportNumbers.join(", ")} starting at ${kind} ${startingViewport}`
         }
       >
         {token.text}
