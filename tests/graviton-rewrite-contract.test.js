@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const {
+  alternateRewriteAnalysisContext,
   extractRewriteOrRaw,
   gravitonRewriteInstruction,
   hasSustainedCadenceViolation,
@@ -22,6 +23,38 @@ const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const credibility = "What builds credibility?";
 const visualFit = "Which images best fit the narrative and emotional context?";
+
+test("alternate rewrites receive all three analysis sections, not rewrite or debrief", () => {
+  const context = alternateRewriteAnalysisContext({
+    summary: "Bring coaching relevance forward.",
+    performance: "Remove the unsupported calculation.",
+    depth: "Connect the closing reflection before the invitation.",
+    rewrite: "EXCLUDE_PRIOR_COPY",
+    debrief: "EXCLUDE_DEBRIEF",
+  });
+  assert.match(context, /Bring coaching relevance forward/);
+  assert.match(context, /Remove the unsupported calculation/);
+  assert.match(context, /Connect the closing reflection before the invitation/);
+  assert.match(context, /source as the factual boundary/);
+  assert.match(context, /Do not force novelty/);
+  assert.doesNotMatch(context, /EXCLUDE_/);
+});
+
+test("partial reports preserve available analysis without inventing missing sections", () => {
+  assert.equal(alternateRewriteAnalysisContext({}), "");
+  const context = alternateRewriteAnalysisContext({ depth: "  Keep the pilot scope.  " });
+  assert.match(context, /Editor's Notes in Depth\nKeep the pilot scope\.$/);
+  assert.doesNotMatch(context, /Editor's Summary|undefined/);
+});
+
+test("additional rewrite request wires current report analysis into outgoing context", () => {
+  const app = read("components/GravitasApp.tsx");
+  const handler = app.slice(app.indexOf("async function handleRewriteAgain()"), app.indexOf("onInteractionSignal?.(\"workflow.rewrite_created\")"));
+  assert.match(handler, /parsed.mode === "mr_heresy"\s*\? ""\s*:\s*`\\n\\n\$\{alternateRewriteAnalysisContext\(sections\)\}`/);
+  assert.match(handler, /context: alternateInstruction/);
+  assert.match(handler, /input: sourceText/);
+  assert.match(handler, /body: JSON.stringify\(payload\)/);
+});
 
 test("URL credibility analysis with Dynamic requests a specialist-led first rewrite", () => {
   const renderedUrl = buildRenderedUrlAnalysisInput(

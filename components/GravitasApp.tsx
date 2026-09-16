@@ -88,6 +88,7 @@ import {
 } from "@/lib/gravitas-active-workspace-store";
 import { createRevisionedPersistenceCoordinator } from "@/lib/gravitas-persistence-coordinator";
 import {
+  alternateRewriteAnalysisContext,
   extractRewriteOrRaw,
   isRewriteCapableGraviton,
   isValidRewriteCandidate,
@@ -1109,7 +1110,11 @@ function StructuredAssistantMessage({
 
     const alternateInstruction = `Provide only a fresh alternate rewrite of this same original text. Do not include summary, diagnosis, notes, headings, labels, or debrief. Return only the rewritten copy.
 
-${cadenceInstruction(cadence)}`;
+${cadenceInstruction(cadence)}${
+      parsed.mode === "mr_heresy"
+        ? ""
+        : `\n\n${alternateRewriteAnalysisContext(sections)}`
+    }`;
     const sourceText =
       parsed.content.trim() ||
       `Create a fresh alternate rewrite based on the attached image${
