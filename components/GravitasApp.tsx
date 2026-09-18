@@ -76,6 +76,11 @@ import {
   saveWorkspaceSnapshotSafely,
 } from "@/lib/gravitas-workspace-store";
 import {
+  JUMP_IN_HANDOFF_VERSION,
+  type JumpInHandoffImage,
+  type JumpInHandoffPayload,
+} from "@/lib/jump-in-handoff";
+import {
   activeWorkspaceFromPending,
   GRAVITAS_ACTIVE_WORKSPACE_VERSION,
   type GravitasActiveWorkspace,
@@ -1684,12 +1689,14 @@ export default function GravitasApp({
   firstName,
   embedded = false,
   requireAuthBeforeAnalysis = false,
+  handoffToken,
 }: {
   experience?: "paid" | "jump-in";
   funnel?: AcquisitionFunnel;
   firstName?: string;
   embedded?: boolean;
   requireAuthBeforeAnalysis?: boolean;
+  handoffToken?: string;
 }) {
   const isJumpIn = experience === "jump-in";
 
@@ -1839,6 +1846,7 @@ const gravitonGroups = [
   const [restoredSessionId, setRestoredSessionId] = useState<string | null>(null);
   const [workspaceHydration, setWorkspaceHydration] =
     useState<WorkspaceHydrationState>(isJumpIn ? "pending" : "ready");
+  const [handoffHydrating, setHandoffHydrating] = useState(Boolean(handoffToken));
   const [paidWorkspaceHydration, setPaidWorkspaceHydration] =
     useState<WorkspaceHydrationState>(isJumpIn ? "ready" : "pending");
 
@@ -2256,7 +2264,79 @@ useEffect(() => {
   }, []);
 
   useEffect(() => {
-    if (!isJumpIn) return;
+    if (!isJumpIn || !handoffToken) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/jump-in/handoff?token=${encodeURIComponent(handoffToken)}`, {
+          cache: "no-store",
+        });
+        const body = await response.json().catch(() => null);
+        const payload = body?.payload as JumpInHandoffPayload | undefined;
+        if (!response.ok || !payload || payload.version !== JUMP_IN_HANDOFF_VERSION) {
+          throw new Error("handoff_unavailable");
+        }
+
+        const files = await Promise.all(payload.images.map(async (image: JumpInHandoffImage) => {
+          const fileResponse = await fetch(image.dataUrl);
+          const blob = await fileResponse.blob();
+          return new File([blob], image.name, {
+            type: image.type,
+            lastModified: image.lastModified,
+          });
+        }));
+        if (cancelled) return;
+
+        const session: JumpInSessionState = {
+          sessionId: payload.sessionId,
+          startedAt: null,
+          sessionStartedEventSent: true,
+          expiredEventSent: false,
+        };
+        const snapshot = createWorkspaceSnapshot({
+          sessionId: session.sessionId,
+          inputMode: payload.inputMode,
+          draft: payload.draft,
+          urlDraft: payload.urlDraft,
+          importedUrl: null,
+          uploadedFiles: files.map((file) => ({
+            name: file.name,
+            type: file.type,
+            lastModified: file.lastModified,
+            blob: file,
+          })),
+          selectedGraviton: payload.selectedGraviton,
+          cadence: payload.cadence,
+          messages: [],
+        });
+        const stored = await saveWorkspaceSnapshotSafely(snapshot);
+        if (cancelled) return;
+
+        lastSavedWorkspaceRef.current = stored;
+        window.localStorage.setItem(JUMP_IN_STORAGE_KEY, JSON.stringify(session));
+        window.history.replaceState({}, "", "/jump-in");
+        setJumpInSession(session);
+        setWorkspaceHydration("pending");
+        setWorkspaceStorageWarning(null);
+      } catch {
+        if (!cancelled) {
+          setWorkspaceStorageWarning(
+            "We could not carry your work into the full editor. Please copy it, then open Jump In again."
+          );
+        }
+      } finally {
+        if (!cancelled) setHandoffHydrating(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [handoffToken, isJumpIn]);
+
+  useEffect(() => {
+    if (!isJumpIn || handoffHydrating) return;
 
     let session: JumpInSessionState | null = null;
     const saved = window.localStorage.getItem(JUMP_IN_STORAGE_KEY);
@@ -2297,7 +2377,7 @@ useEffect(() => {
     window.localStorage.setItem(JUMP_IN_STORAGE_KEY, JSON.stringify(session));
     setJumpInSession(session);
     setJumpInNow(Date.now());
-  }, [isJumpIn]);
+  }, [handoffHydrating, isJumpIn]);
 
   useEffect(() => {
     if (!isJumpIn || !jumpInSessionId) return;
@@ -2914,7 +2994,7 @@ useEffect(() => {
   }
 
   async function onSend() {
-    if (sendLockRef.current || isRepeatedGraviton) return;
+    if (sendLockRef.current || isRepeatedGraviton || handoffHydrating) return;
     workspacePersistencePausedRef.current = false;
 
     if (isJumpIn && requireAuthBeforeAnalysis && !jumpInAuthenticated) {
@@ -2925,6 +3005,55 @@ useEffect(() => {
       if (session?.user) {
         setJumpInAuthenticated(true);
       } else {
+        // The marketing page embeds this editor from a different site. Never
+        // attempt to authenticate in that third-party frame: browser privacy
+        // controls can withhold the resulting session. Carry the pending work
+        // to the first-party editor instead.
+        if (window.top !== window) {
+          try {
+            const images = await Promise.all(imageFiles.map(async (file) => ({
+              name: file.name,
+              type: file.type,
+              lastModified: file.lastModified,
+              dataUrl: await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onerror = () => reject(reader.error ?? new Error("image_read_failed"));
+                reader.onload = () => typeof reader.result === "string"
+                  ? resolve(reader.result)
+                  : reject(new Error("image_read_failed"));
+                reader.readAsDataURL(file);
+              }),
+            })));
+            const payload: JumpInHandoffPayload = {
+              version: JUMP_IN_HANDOFF_VERSION,
+              sessionId: jumpInSession?.sessionId ?? crypto.randomUUID(),
+              inputMode,
+              draft,
+              urlDraft,
+              selectedGraviton,
+              cadence,
+              images,
+            };
+            const handoffResponse = await fetch("/api/jump-in/handoff", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            const handoff = await handoffResponse.json().catch(() => null);
+            if (!handoffResponse.ok || typeof handoff?.token !== "string") {
+              throw new Error("handoff_unavailable");
+            }
+            const destination = new URL("/jump-in", window.location.origin);
+            destination.searchParams.set("handoff", handoff.token);
+            window.open(destination.toString(), "_top");
+            return;
+          } catch {
+            setWorkspaceStorageWarning(
+              "We could not safely carry this work into the full editor. Please copy it, then use Jump In from the top of the page."
+            );
+            return;
+          }
+        }
         const workspaceReady = await persistJumpInWorkspace();
         if (!workspaceReady) return;
         window.localStorage.setItem(
