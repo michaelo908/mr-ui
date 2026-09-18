@@ -1,7 +1,7 @@
 export const JUMP_IN_DURATION_MS = 20 * 60 * 1000;
 export const JUMP_IN_RESET_MS = 7 * 24 * 60 * 60 * 1000;
 export const JUMP_IN_MAX_URL_VIEWPORTS = 10;
-export const JUMP_IN_MAX_PASTED_WORDS = 800;
+export const JUMP_IN_MAX_PASTED_WORDS = 3000;
 export const JUMP_IN_STORAGE_KEY = "gravitasJumpInSessionV1";
 export const JUMP_IN_DAY_PASS_URL =
   process.env.NEXT_PUBLIC_DAY_PASS_URL || "https://multirrupt.com/day-pass/";

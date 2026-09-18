@@ -35,7 +35,7 @@ test("Jump-In URL capture and analysis both enforce ten viewports", () => {
   );
 });
 
-test("Jump-In preserves 800 pasted words and a signed seven-day cooldown", () => {
+test("Jump-In preserves 3,000 pasted words and a signed seven-day cooldown", () => {
   const analysisRoute = read("app/api/jump-in/mr/route.ts");
   const server = read("lib/jump-in-server.ts");
   const app = read("components/GravitasApp.tsx");

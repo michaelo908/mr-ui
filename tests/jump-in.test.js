@@ -47,7 +47,7 @@ test("remaining time is formatted for the persistent countdown", () => {
 
 test("embedded limits retain the requested product boundaries", () => {
   assert.equal(JUMP_IN_MAX_URL_VIEWPORTS, 10);
-  assert.equal(JUMP_IN_MAX_PASTED_WORDS, 800);
+  assert.equal(JUMP_IN_MAX_PASTED_WORDS, 3000);
 });
 
 test("a free session becomes eligible again at exactly seven days", () => {

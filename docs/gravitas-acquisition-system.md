@@ -12,7 +12,7 @@ All three acquisition pages render from `lib/acquisition-funnels.ts`. Adding a l
 ## Verified baseline before this release
 
 - The public app route rendered the authenticated `GravitasApp`; the free product experience existed at `/jump-in`.
-- Jump-In grants 20 minutes from the first analysis, resets after seven days, accepts pasted text up to 800 words, and captures up to 10 webpage viewports.
+- Jump-In grants 20 minutes from the first analysis, resets after seven days, accepts pasted text up to 3,000 words, and captures up to 10 webpage viewports.
 - Existing signals covered session start/expiry, source selection, analysis start/completion/failure, report depth and evidence use, rewrites, checkout, Day Pass and subscription lifecycle.
 - First/last-touch attribution already captured UTM values, Meta campaign/ad-set/ad IDs, referrer host and landing path without storing submitted source content.
 - Stripe purchase events and Supabase profile/subscription state are authoritative; Mailchimp is a communication layer only.
