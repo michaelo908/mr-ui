@@ -1817,7 +1817,10 @@ const gravitonGroups = [
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const messageContentRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const router = useRouter();
-  const supabase = createClient();
+  // The access check must settle after a Jump In sign-in. Recreating the
+  // browser client on every render restarts that check and can send a newly
+  // authenticated visitor back to login.
+  const supabase = useMemo(() => createClient(), []);
   const sendLockRef = useRef(false);
   const runCoordinatorRef = useRef(createAnalysisRunCoordinator());
   const workspacePersistenceCoordinatorRef = useRef(

@@ -14,6 +14,7 @@ test("unauthenticated Jump In work is preserved, but analysis and URL capture ar
   const source = read("app/api/jump-in/sources/url/route.ts");
 
   assert.match(page, /requireAuthBeforeAnalysis/);
+  assert.match(app, /const supabase = useMemo\(\(\) => createClient\(\), \[\]\)/);
   assert.match(app, /isJumpIn && requireAuthBeforeAnalysis && !jumpInAuthenticated/);
   assert.match(app, /persistJumpInWorkspace\(\)/);
   assert.match(app, /const HOMEPAGE_JUMP_IN_RESUME_TARGET = GRAVITAS_RESUME_TARGET/);
