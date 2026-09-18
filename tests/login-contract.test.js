@@ -22,9 +22,11 @@ test("login uses Multirrupt Narrative Intelligence branding without the legacy w
 test("login keeps validated relative resume handling", () => {
   const page = read("app/login/page.tsx");
   const callback = read("app/auth/callback/route.ts");
+  const verifyCode = read("app/auth/verify-code/route.ts");
   assert.match(page, /isValidResumeTarget\(queryTarget\)/);
   assert.match(page, /isValidResumeTarget\(storedTarget\)/);
-  assert.match(page, /const \{ data, error \} = await supabase\.auth\.verifyOtp/);
-  assert.match(page, /await supabase\.auth\.setSession\(/);
+  assert.match(page, /fetch\("\/auth\/verify-code"/);
+  assert.match(verifyCode, /supabase\.auth\.verifyOtp/);
+  assert.match(verifyCode, /response\.cookies\.set/);
   assert.match(callback, /isValidResumeTarget\(requestedNext\)/);
 });
