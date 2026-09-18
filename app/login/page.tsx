@@ -37,12 +37,26 @@ export default function LoginPage() {
     setSending(true);
     setMessage("");
     try {
-      const { error } = await supabase.auth.verifyOtp({
+      const { data, error } = await supabase.auth.verifyOtp({
         email: email.trim(), token, type: "email",
       });
       if (error) {
         setMessage("That code could not be verified. Check the code or request a new one.");
       } else {
+        // Verify the browser has a durable session before returning to Jump In.
+        // Some browsers complete OTP verification but defer writing the auth
+        // storage until a later event; that would make the editor immediately
+        // ask the visitor to sign in again.
+        if (data.session) {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+          });
+          if (sessionError) {
+            setMessage("Your sign-in was verified, but this browser could not save the session. Please try again.");
+            return;
+          }
+        }
         window.location.href = getValidatedNextTarget();
       }
     } catch {

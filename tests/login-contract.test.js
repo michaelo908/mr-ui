@@ -24,5 +24,7 @@ test("login keeps validated relative resume handling", () => {
   const callback = read("app/auth/callback/route.ts");
   assert.match(page, /isValidResumeTarget\(queryTarget\)/);
   assert.match(page, /isValidResumeTarget\(storedTarget\)/);
+  assert.match(page, /const \{ data, error \} = await supabase\.auth\.verifyOtp/);
+  assert.match(page, /await supabase\.auth\.setSession\(/);
   assert.match(callback, /isValidResumeTarget\(requestedNext\)/);
 });
