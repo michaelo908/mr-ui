@@ -28,5 +28,7 @@ test("login keeps validated relative resume handling", () => {
   assert.match(page, /fetch\("\/auth\/verify-code"/);
   assert.match(verifyCode, /supabase\.auth\.verifyOtp/);
   assert.match(verifyCode, /response\.cookies\.set/);
+  assert.match(verifyCode, /await Promise\.race/);
+  assert.match(verifyCode, /cookieWriteCount === 0/);
   assert.match(callback, /isValidResumeTarget\(requestedNext\)/);
 });

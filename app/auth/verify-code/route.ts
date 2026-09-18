@@ -15,6 +15,11 @@ export async function POST(request: NextRequest) {
 
   const cookieStore = await cookies();
   const response = NextResponse.json({ ok: true });
+  let cookieWriteCount = 0;
+  let resolveCookieWrite: (() => void) | null = null;
+  const cookieWrite = new Promise<void>((resolve) => {
+    resolveCookieWrite = resolve;
+  });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -24,6 +29,7 @@ export async function POST(request: NextRequest) {
           return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
+          cookieWriteCount += cookiesToSet.length;
           cookiesToSet.forEach(({ name, value, options }) => {
             const cookieOptions = {
               ...options,
@@ -34,6 +40,7 @@ export async function POST(request: NextRequest) {
             cookieStore.set(name, value, cookieOptions);
             response.cookies.set(name, value, cookieOptions);
           });
+          resolveCookieWrite?.();
         },
       },
     }
@@ -49,6 +56,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "verification_failed" }, { status: 401 });
   }
 
-  console.info("auth_verify_code", { outcome: "authenticated" });
+  // Supabase fires its storage callback immediately after verification, but
+  // does not wait for it before resolving verifyOtp. Do not return the HTTP
+  // response until that callback has added the session cookie.
+  await Promise.race([
+    cookieWrite,
+    new Promise<void>((resolve) => setTimeout(resolve, 250)),
+  ]);
+
+  if (cookieWriteCount === 0) {
+    console.info("auth_verify_code", { outcome: "session_cookie_missing" });
+    return NextResponse.json({ error: "session_cookie_missing" }, { status: 500 });
+  }
+
+  console.info("auth_verify_code", { outcome: "authenticated", cookieWriteCount });
   return response;
 }
