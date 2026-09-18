@@ -87,6 +87,7 @@ import {
   saveActiveWorkspaceSafely,
 } from "@/lib/gravitas-active-workspace-store";
 import { createRevisionedPersistenceCoordinator } from "@/lib/gravitas-persistence-coordinator";
+import { MULTIRRUPT_BUILD, MULTIRRUPT_RELEASE } from "@/lib/multirrupt-version";
 import {
   alternateRewriteAnalysisContext,
   extractRewriteOrRaw,
@@ -3429,6 +3430,9 @@ if (urlSourceImages.length > 0) {
               {isJumpIn
                 ? funnel ? "Your reader-side diagnostic is unlocked for 20 minutes." : "Full Multirrupt. 20 minutes."
                 : "See the narrative from the other side."}
+            </div>
+            <div className="mt-2 text-[10px] font-medium uppercase tracking-[0.16em] text-neutral-600">
+              Multirrupt {MULTIRRUPT_RELEASE} · build {MULTIRRUPT_BUILD}
             </div>
             {isJumpIn ? (
               <a
