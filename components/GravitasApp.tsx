@@ -2515,9 +2515,9 @@ useEffect(() => {
       if (isJumpIn) {
         if (requireAuthBeforeAnalysis) {
           const {
-            data: { user },
-          } = await supabase.auth.getUser();
-          setJumpInAuthenticated(Boolean(user));
+            data: { session },
+          } = await supabase.auth.getSession();
+          setJumpInAuthenticated(Boolean(session?.user));
         } else {
           setJumpInAuthenticated(false);
         }
@@ -2572,6 +2572,21 @@ useEffect(() => {
     }
 
     checkSubscription();
+  }, [isJumpIn, requireAuthBeforeAnalysis, supabase]);
+
+  useEffect(() => {
+    if (!isJumpIn || !requireAuthBeforeAnalysis) return;
+
+    // A fresh browser session can finish hydrating just after the first access
+    // check above. Keep Jump In aligned with that session rather than treating
+    // the initial empty snapshot as final.
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setJumpInAuthenticated(Boolean(session?.user));
+    });
+
+    return () => subscription.unsubscribe();
   }, [isJumpIn, requireAuthBeforeAnalysis, supabase]);
 
   useEffect(() => {
@@ -2903,19 +2918,27 @@ useEffect(() => {
     workspacePersistencePausedRef.current = false;
 
     if (isJumpIn && requireAuthBeforeAnalysis && !jumpInAuthenticated) {
-      const workspaceReady = await persistJumpInWorkspace();
-      if (!workspaceReady) return;
-      window.localStorage.setItem(
-        GRAVITAS_RESUME_MARKER_KEY,
-        HOMEPAGE_JUMP_IN_RESUME_TARGET
-      );
-      emitSignal("discovery.jump_in_auth_requested", signalSurface, {
-        source_mode: inputMode,
-        graviton: toSignalIdentifier(selectedGraviton),
-        cadence,
-      });
-      router.push(`/login?next=${encodeURIComponent(HOMEPAGE_JUMP_IN_RESUME_TARGET)}`);
-      return;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        setJumpInAuthenticated(true);
+      } else {
+        const workspaceReady = await persistJumpInWorkspace();
+        if (!workspaceReady) return;
+        window.localStorage.setItem(
+          GRAVITAS_RESUME_MARKER_KEY,
+          HOMEPAGE_JUMP_IN_RESUME_TARGET
+        );
+        emitSignal("discovery.jump_in_auth_requested", signalSurface, {
+          source_mode: inputMode,
+          graviton: toSignalIdentifier(selectedGraviton),
+          cadence,
+        });
+        router.push(`/login?next=${encodeURIComponent(HOMEPAGE_JUMP_IN_RESUME_TARGET)}`);
+        return;
+      }
     }
 
      if (!isJumpIn && !isSubscribed && !isBookTrial) {

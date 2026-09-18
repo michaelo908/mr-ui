@@ -16,6 +16,9 @@ test("unauthenticated Jump In work is preserved, but analysis and URL capture ar
   assert.match(page, /requireAuthBeforeAnalysis/);
   assert.match(app, /const supabase = useMemo\(\(\) => createClient\(\), \[\]\)/);
   assert.match(app, /isJumpIn && requireAuthBeforeAnalysis && !jumpInAuthenticated/);
+  assert.match(app, /supabase\.auth\.onAuthStateChange/);
+  assert.match(app, /data: \{ session \}/);
+  assert.match(app, /await supabase\.auth\.getSession\(\)/);
   assert.match(app, /persistJumpInWorkspace\(\)/);
   assert.match(app, /const HOMEPAGE_JUMP_IN_RESUME_TARGET = GRAVITAS_RESUME_TARGET/);
   assert.doesNotMatch(app, /HOMEPAGE_JUMP_IN_RESUME_TARGET = "\/?\?resume=jump-in#jump-in"/);
