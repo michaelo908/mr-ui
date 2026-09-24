@@ -25,6 +25,7 @@ export type GravitasMessageSnapshot = {
   imageData?: string[];
   sourceImages?: SourceImage[];
   sourceIdentity?: SourceIdentity;
+  sourceDocumentName?: string;
   graviton?: string;
   cadence?: CadenceMode;
   completedAt?: number;

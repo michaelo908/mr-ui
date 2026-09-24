@@ -116,6 +116,7 @@ type Msg = {
   imageData?: string[];
   sourceImages?: SourceImage[];
   sourceIdentity?: SourceIdentity;
+  sourceDocumentName?: string;
   graviton?: string;
   cadence?: CadenceMode;
   completedAt?: number;
@@ -139,6 +140,23 @@ type ContentNode =
   | { type: "list"; items: string[]; key: string }
   | { type: "para"; text: string; key: string }
   | { type: "spacer"; key: string };
+
+type BrowserSaveFileHandle = {
+  createWritable: () => Promise<{
+    write: (data: Blob) => Promise<void>;
+    close: () => Promise<void>;
+  }>;
+};
+
+type BrowserSaveWindow = Window & {
+  showSaveFilePicker?: (options: {
+    suggestedName: string;
+    types: Array<{
+      description: string;
+      accept: Record<string, string[]>;
+    }>;
+  }) => Promise<BrowserSaveFileHandle>;
+};
 
 const THINKING_TOKEN = "__MR_THINKING__";
 const MR_GOLD = "#C6A75A";
@@ -497,6 +515,114 @@ async function copyTextForFormat(text: string, format: CopyFormat) {
   await copyPlainText(text);
 }
 
+async function downloadRewriteDocument(
+  content: string,
+  sourceDocumentName?: string,
+  rewriteLabel = "Version A"
+) {
+  const { Document: DocxDocument, HeadingLevel, Packer, Paragraph, TextRun } =
+    await import("docx");
+  const paragraphForNode = (node: ContentNode) => {
+    if (node.type === "heading") {
+      const heading = [
+        HeadingLevel.HEADING_1,
+        HeadingLevel.HEADING_2,
+        HeadingLevel.HEADING_3,
+        HeadingLevel.HEADING_4,
+        HeadingLevel.HEADING_5,
+        HeadingLevel.HEADING_6,
+      ][Math.min(Math.max(node.level, 1), 6) - 1];
+      return [new Paragraph({ text: formatForEmail(node.text), heading })];
+    }
+
+    if (node.type === "list") {
+      return node.items.map(
+        (item) =>
+          new Paragraph({
+            text: formatForEmail(item),
+            bullet: { level: 0 },
+          })
+      );
+    }
+
+    if (node.type === "quote") {
+      return node.lines.map(
+        (line) =>
+          new Paragraph({
+            children: [new TextRun({ text: formatForEmail(line), italics: true })],
+            indent: { left: 720 },
+          })
+      );
+    }
+
+    if (node.type === "para") {
+      const lines = node.text.split("\n").map(formatForEmail);
+      return [
+        new Paragraph({
+          children: lines.map(
+            (line, index) => new TextRun({ text: line, break: index || undefined })
+          ),
+        }),
+      ];
+    }
+
+    return [new Paragraph({ text: "" })];
+  };
+
+  const wordDocument = new DocxDocument({
+    sections: [
+      {
+        properties: {},
+        children: parseContentNodes(content).flatMap(paragraphForNode),
+      },
+    ],
+  });
+  const blob = await Packer.toBlob(wordDocument);
+  const sourceStem = (sourceDocumentName ?? "multirrupt")
+    .replace(/\.[^.\\/]+$/, "")
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .trim();
+  const rewriteVersion = rewriteLabel
+    .replace(/^version\s*/i, "")
+    .replace(/[^a-z0-9]+/gi, "") || "A";
+  const filename = `${sourceStem || "multirrupt"}_rewrite_${rewriteVersion}.docx`;
+  const saveWindow = window as BrowserSaveWindow;
+
+  if (saveWindow.showSaveFilePicker) {
+    try {
+      const handle = await saveWindow.showSaveFilePicker({
+        suggestedName: filename,
+        types: [
+          {
+            description: "Word document",
+            accept: {
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
+                ".docx",
+              ],
+            },
+          },
+        ],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return true;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return false;
+      }
+    }
+  }
+
+  const downloadUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = downloadUrl;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
+  return true;
+}
+
 function stripMarkdownWrapper(text: string) {
   return text
     .trim()
@@ -852,6 +978,7 @@ function StructuredAssistantMessage({
   sourceImageData,
   sourceImages,
   sourceIdentity,
+  sourceDocumentName,
   graviton,
   cadence,
   apiEndpoint,
@@ -868,6 +995,7 @@ function StructuredAssistantMessage({
   sourceImageData: string[];
   sourceImages: SourceImage[];
   sourceIdentity?: SourceIdentity;
+  sourceDocumentName?: string;
   graviton: string;
   cadence: CadenceMode;
   apiEndpoint: string;
@@ -886,6 +1014,8 @@ function StructuredAssistantMessage({
   const [showRewriteButton, setShowRewriteButton] = useState(false);
   const [rewriteState, setRewriteState] = useState<"idle" | "working">("idle");
   const [copiedRewriteKey, setCopiedRewriteKey] = useState<string | null>(null);
+  const [downloadingRewriteKey, setDownloadingRewriteKey] = useState<string | null>(null);
+  const [downloadedRewriteKey, setDownloadedRewriteKey] = useState<string | null>(null);
   const [isGeneratingAlternate, setIsGeneratingAlternate] = useState(false);
   const [activeLightboxIndex, setActiveLightboxIndex] = useState<number | null>(
     null
@@ -1049,6 +1179,8 @@ function StructuredAssistantMessage({
     setShowRewriteButton(false);
     setRewriteState("idle");
     setCopiedRewriteKey(null);
+    setDownloadingRewriteKey(null);
+    setDownloadedRewriteKey(null);
     setIsGeneratingAlternate(false);
     setActiveLightboxIndex(null);
     setLightboxContext(null);
@@ -1109,6 +1241,27 @@ function StructuredAssistantMessage({
     setTimeout(() => {
       setCopiedRewriteKey((current) => (current === copyKey ? null : current));
     }, 2000);
+  }
+
+  async function handleDownloadRewrite(variant: RewriteVariant) {
+    if (downloadingRewriteKey) return;
+    setDownloadingRewriteKey(variant.id);
+
+    try {
+      const saved = await downloadRewriteDocument(
+        variant.content,
+        sourceDocumentName,
+        variant.label
+      );
+      if (!saved) return;
+      onInteractionSignal?.("workflow.rewrite_downloaded");
+      setDownloadedRewriteKey(variant.id);
+      setTimeout(() => {
+        setDownloadedRewriteKey((current) => (current === variant.id ? null : current));
+      }, 2000);
+    } finally {
+      setDownloadingRewriteKey(null);
+    }
   }
 
   async function handleRewriteAgain() {
@@ -1440,6 +1593,20 @@ ${cadenceInstruction(cadence)}${
                     {copiedRewriteKey === `${variant.id}:${variant.copyFormat}`
                       ? `✓ Copied (${formatLabel(variant.copyFormat)})`
                       : "Copy Rewrite"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadRewrite(variant)}
+                    disabled={Boolean(downloadingRewriteKey)}
+                    className="rounded-xl border border-neutral-700 px-4 py-2 text-sm font-semibold text-neutral-100 transition hover:border-neutral-500 hover:bg-neutral-900 disabled:cursor-wait disabled:opacity-70"
+                    title="Save this rewrite as an editable Word document"
+                  >
+                    {downloadingRewriteKey === variant.id
+                      ? "Preparing…"
+                      : downloadedRewriteKey === variant.id
+                        ? "✓ Downloaded"
+                        : "Download .docx"}
                   </button>
 
                   <label className="sr-only" htmlFor={`mr-copy-format-${variant.id}`}>
@@ -3288,6 +3455,8 @@ useEffect(() => {
             ? `${sourceIdentity.title}\n${sourceIdentity.originalLocation ?? ""}`
             : raw.trim(),
         sourceIdentity,
+        sourceDocumentName:
+          inputMode === "document" ? uploadedDocument?.name : undefined,
       },
       { role: "assistant", content: THINKING_TOKEN, runId },
     ]);
@@ -3870,6 +4039,10 @@ if (urlSourceImages.length > 0) {
                   m.role === "assistant" && i > 0 && messages[i - 1]?.role === "user"
                     ? messages[i - 1].sourceIdentity
                     : undefined;
+                const sourceDocumentName =
+                  m.role === "assistant" && i > 0 && messages[i - 1]?.role === "user"
+                    ? messages[i - 1].sourceDocumentName
+                    : undefined;
                 const sourceImages =
                   m.role === "assistant" && i > 0 && messages[i - 1]?.role === "user"
                     ? messages[i - 1].sourceImages ?? []
@@ -3938,6 +4111,7 @@ if (urlSourceImages.length > 0) {
                             sourceImageData={sourceImageData}
                             sourceImages={sourceImages}
                             sourceIdentity={sourceIdentity}
+                            sourceDocumentName={sourceDocumentName}
                             graviton={m.graviton ?? selectedGraviton}
                             cadence={m.cadence ?? cadence}
                             apiEndpoint={apiEndpoint}

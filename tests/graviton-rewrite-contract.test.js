@@ -56,6 +56,18 @@ test("additional rewrite request wires current report analysis into outgoing con
   assert.match(handler, /body: JSON.stringify\(payload\)/);
 });
 
+test("rewrites can be downloaded as editable Word documents named after their source", () => {
+  const app = read("components/GravitasApp.tsx");
+  const registry = read("lib/signals/registry.ts");
+  assert.match(app, /async function downloadRewriteDocument/);
+  assert.match(app, /await import\("docx"\)/);
+  assert.match(app, /sourceDocumentName/);
+  assert.match(app, /_rewrite_\$\{rewriteVersion\}\.docx/);
+  assert.match(app, /Download \.docx/);
+  assert.match(app, /showSaveFilePicker/);
+  assert.match(registry, /workflow\.rewrite_downloaded/);
+});
+
 test("URL credibility analysis with Dynamic requests a specialist-led first rewrite", () => {
   const renderedUrl = buildRenderedUrlAnalysisInput(
     "Trusted by teams. Contact us today.",

@@ -40,6 +40,7 @@ export const SIGNAL_REGISTRY = {
   "workflow.rewrite_revealed": { category: "workflow", client: true, properties: {} },
   "workflow.rewrite_created": { category: "workflow", client: true, properties: {} },
   "workflow.rewrite_copied": { category: "workflow", client: true, properties: { format: { type: "enum", values: ["email", "word"] } } },
+  "workflow.rewrite_downloaded": { category: "workflow", client: true, properties: {} },
   "purchase.checkout_started": { category: "purchase", client: false, properties: {} },
   "purchase.checkout_completed": { category: "purchase", client: false, properties: {} },
   "purchase.checkout_failed": { category: "purchase", client: false, properties: {} },
