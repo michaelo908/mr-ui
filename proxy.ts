@@ -6,6 +6,7 @@ export async function proxy(request: NextRequest) {
 
   const publicRoutes = [
     "/",
+    "/founder",
     "/check",
     "/jump-in",
     "/quick-tester",

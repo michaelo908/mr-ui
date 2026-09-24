@@ -106,3 +106,9 @@ test("Signals dashboard exposes windows, funnel, highlights and anonymous storie
   assert.match(page, /Anonymous user stories/);
   assert.match(page, /FOUNDER_EMAILS/);
 });
+
+test("public Founder invitation is exempt from the editor access gate", () => {
+  const proxy = read("proxy.ts");
+  assert.match(proxy, /"\/founder"/);
+  assert.doesNotMatch(proxy, /"\/signals"/);
+});
