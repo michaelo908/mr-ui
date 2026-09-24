@@ -6,6 +6,7 @@ import {
   type GravitasWorkspaceSnapshot,
 } from "@/lib/gravitas-workspace";
 import type { CadenceMode } from "@/lib/cadence";
+import { isUploadedDocument, type UploadedDocument } from "@/lib/document-upload";
 import type { UrlSource } from "@/lib/sources";
 
 export const GRAVITAS_ACTIVE_WORKSPACE_VERSION = 2 as const;
@@ -18,11 +19,12 @@ export type GravitasActiveWorkspace = {
   workspaceId: string;
   ownerUserId: string;
   originatingJumpInSessionId: string | null;
-  inputMode: "text" | "url" | "images";
+  inputMode: "text" | "url" | "images" | "document";
   draft: string;
   urlDraft: string;
   importedUrl: { requestedUrl: string; source: UrlSource } | null;
   uploadedFiles: GravitasUploadedFileSnapshot[];
+  uploadedDocument: UploadedDocument | null;
   selectedGraviton: string;
   cadence: CadenceMode;
   messages: GravitasMessageSnapshot[];
@@ -58,10 +60,11 @@ export function isValidActiveWorkspace(
       typeof record.ownerUserId === "string" &&
       (!expectedUserId || record.ownerUserId === expectedUserId) &&
       (record.originatingJumpInSessionId === null || typeof record.originatingJumpInSessionId === "string") &&
-      ["text", "url", "images"].includes(record.inputMode ?? "") &&
+      ["text", "url", "images", "document"].includes(record.inputMode ?? "") &&
       typeof record.draft === "string" &&
       typeof record.urlDraft === "string" &&
       Array.isArray(record.uploadedFiles) &&
+      (record.uploadedDocument === null || record.uploadedDocument === undefined || isUploadedDocument(record.uploadedDocument)) &&
       typeof record.selectedGraviton === "string" &&
       (record.cadence === "dynamic" || record.cadence === "sustained") &&
       Array.isArray(record.messages) &&
@@ -105,6 +108,7 @@ export function activeWorkspaceFromPending(
     urlDraft: snapshot.urlDraft,
     importedUrl: snapshot.importedUrl,
     uploadedFiles: snapshot.uploadedFiles,
+    uploadedDocument: snapshot.uploadedDocument ?? null,
     selectedGraviton: snapshot.selectedGraviton,
     cadence: snapshot.cadence,
     messages: snapshot.messages,

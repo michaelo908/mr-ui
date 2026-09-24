@@ -81,6 +81,11 @@ import {
   type JumpInHandoffPayload,
 } from "@/lib/jump-in-handoff";
 import {
+  DOCUMENT_MAX_CHARACTERS,
+  documentKindForFile,
+  type UploadedDocument,
+} from "@/lib/document-upload";
+import {
   activeWorkspaceFromPending,
   GRAVITAS_ACTIVE_WORKSPACE_VERSION,
   type GravitasActiveWorkspace,
@@ -1710,7 +1715,7 @@ export default function GravitasApp({
     rawSetMessages(next);
   }, []);
   const [draft, setDraft] = useState("");
-  const [inputMode, setInputMode] = useState<"text" | "url" | "images">(funnel?.preferredSource ?? "text");
+  const [inputMode, setInputMode] = useState<"text" | "url" | "images" | "document">(funnel?.preferredSource ?? "text");
   const [urlDraft, setUrlDraft] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
   const [importedUrl, setImportedUrl] = useState<{
@@ -1719,6 +1724,9 @@ export default function GravitasApp({
   } | null>(null);
   const [cadence, setCadence] = useState<CadenceMode>("dynamic");
   const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [uploadedDocument, setUploadedDocument] = useState<UploadedDocument | null>(null);
+  const [documentError, setDocumentError] = useState<string | null>(null);
+  const [isExtractingDocument, setIsExtractingDocument] = useState(false);
   const [selectedGraviton, setSelectedGraviton] =
   useState("Full Analysis");
   const [completedAnalysisRuns, setCompletedAnalysisRuns] = useState<Set<string>>(
@@ -1813,6 +1821,7 @@ const gravitonGroups = [
   const [analysisProgress, setAnalysisProgress] = useState<string | null>(null);
   const [copiedAllKey, setCopiedAllKey] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
   const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
   const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
   const [subscriptionQualifier, setSubscriptionQualifier] = useState<string | null>(null);
@@ -1903,6 +1912,7 @@ const gravitonGroups = [
         lastModified: file.lastModified,
         blob: file,
       })),
+      uploadedDocument,
       selectedGraviton,
       cadence,
       messages: completedMessages,
@@ -1932,6 +1942,7 @@ const gravitonGroups = [
     cadence,
     draft,
     imageFiles,
+    uploadedDocument,
     importedUrl,
     inputMode,
     isJumpIn,
@@ -1988,6 +1999,7 @@ const gravitonGroups = [
               lastModified: file.lastModified,
               blob: file,
             })),
+            uploadedDocument,
             selectedGraviton,
             cadence,
             messages: completedMessages,
@@ -2022,6 +2034,7 @@ const gravitonGroups = [
     cadence,
     draft,
     imageFiles,
+    uploadedDocument,
     importedUrl,
     inputMode,
     isJumpIn,
@@ -2089,7 +2102,7 @@ const gravitonGroups = [
     selectedGraviton
   );
   const hasValidActiveSource = hasReadySource(
-    inputMode === "text"
+    inputMode === "text" || inputMode === "document"
       ? { type: "text", text: draft }
       : inputMode === "url"
         ? { type: "url", url: urlDraft }
@@ -2313,6 +2326,7 @@ useEffect(() => {
             lastModified: file.lastModified,
             blob: file,
           })),
+          uploadedDocument: payload.document ?? null,
           selectedGraviton: payload.selectedGraviton,
           cadence: payload.cadence,
           messages: [],
@@ -2438,6 +2452,7 @@ useEffect(() => {
           setUrlDraft(snapshot.urlDraft);
           setImportedUrl(snapshot.importedUrl);
           setImageFiles(restoredFiles);
+          setUploadedDocument(snapshot.uploadedDocument ?? null);
           setSelectedGraviton(snapshot.selectedGraviton);
           setCadence(snapshot.cadence);
           setMessages(restoredMessages);
@@ -2729,6 +2744,7 @@ useEffect(() => {
       setUrlDraft(record.urlDraft);
       setImportedUrl(record.importedUrl);
       setImageFiles(restoredFiles);
+      setUploadedDocument(record.uploadedDocument ?? null);
       setSelectedGraviton(record.selectedGraviton);
       setCadence(record.cadence);
       setMessages(restoredMessages);
@@ -2987,6 +3003,8 @@ useEffect(() => {
     setUrlError(null);
     setImportedUrl(null);
     setImageFiles([]);
+    setUploadedDocument(null);
+    setDocumentError(null);
     setCompletedAnalysisRuns(new Set());
     setCopiedAllKey(null);
     setCopiedMessageKey(null);
@@ -3040,6 +3058,7 @@ useEffect(() => {
               selectedGraviton,
               cadence,
               images,
+              document: uploadedDocument,
             };
             const handoffResponse = await fetch("/api/jump-in/handoff", {
               method: "POST",
@@ -3183,18 +3202,19 @@ useEffect(() => {
     )
       return;
 
-    if (raw.length > 30000) {
-      alert("That’s a large input. For best results, keep it under 30,000 characters.");
+    const maxCharacters = inputMode === "document" ? DOCUMENT_MAX_CHARACTERS : 30000;
+    if (raw.length > maxCharacters) {
+      alert(`That’s a large input. For best results, keep it under ${maxCharacters.toLocaleString()} characters.`);
       return;
     }
 
     if (
       isJumpIn &&
-      inputMode === "text" &&
+      (inputMode === "text" || inputMode === "document") &&
       raw.trim().split(/\s+/).filter(Boolean).length > JUMP_IN_MAX_PASTED_WORDS
     ) {
       alert(
-        `The free embedded session supports pasted text up to ${JUMP_IN_MAX_PASTED_WORDS} words.`
+        `The free embedded session supports text up to ${JUMP_IN_MAX_PASTED_WORDS} words.`
       );
       return;
     }
@@ -3291,7 +3311,7 @@ if (urlSourceImages.length > 0) {
           selectedGraviton,
           sourceMode: sourceIdentity?.type === "url" ? "rendered-url" : undefined,
           entitlementSourceText:
-            isJumpIn && inputMode === "text" ? raw : undefined,
+            isJumpIn && (inputMode === "text" || inputMode === "document") ? raw : undefined,
         }
       : {
           mode: "general",
@@ -3303,7 +3323,7 @@ if (urlSourceImages.length > 0) {
           selectedGraviton,
           sourceMode: sourceIdentity?.type === "url" ? "rendered-url" : undefined,
           entitlementSourceText:
-            isJumpIn && inputMode === "text" ? raw : undefined,
+            isJumpIn && (inputMode === "text" || inputMode === "document") ? raw : undefined,
         };
 
     try {
@@ -3946,6 +3966,7 @@ if (urlSourceImages.length > 0) {
     {([
       ["text", "Text"],
       ["url", "URL"],
+      ["document", "Document"],
       ["images", "Images"],
     ] as const).map(([value, label]) => (
       <button
@@ -3960,7 +3981,12 @@ if (urlSourceImages.length > 0) {
           setUrlError(null);
           setImportedUrl(null);
           if (value !== "images") setImageFiles([]);
-          if (value !== "text") setDraft("");
+          if (value !== "document") setUploadedDocument(null);
+          if (value !== "text" && value !== "document") setDraft("");
+          if (value === "document" && inputMode !== "document") {
+            setDraft("");
+            setDocumentError(null);
+          }
         }}
         disabled={isDemoLocked}
         className={classNames(
@@ -4052,6 +4078,31 @@ if (urlSourceImages.length > 0) {
     >
       Select up to 10 images
     </button>
+  ) : inputMode === "document" ? (
+    <div>
+      <button
+        type="button"
+        onClick={() => documentInputRef.current?.click()}
+        disabled={isDemoLocked || isExtractingDocument}
+        className="h-[56px] w-full rounded-xl border border-neutral-800 px-5 text-sm font-semibold text-neutral-200 hover:bg-neutral-900 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {isExtractingDocument
+          ? "Reading document…"
+          : uploadedDocument
+            ? "Choose a different document"
+            : "Select a Word document or PDF"}
+      </button>
+      {uploadedDocument ? (
+        <p className="mt-2 text-xs text-neutral-400">
+          {uploadedDocument.name} · {uploadedDocument.wordCount.toLocaleString()} words extracted
+        </p>
+      ) : (
+        <p className="mt-2 text-xs text-neutral-500">
+          Word (.docx) and text-based PDFs. Scanned PDFs are not supported yet.
+        </p>
+      )}
+      {documentError ? <p className="mt-2 text-sm text-amber-300">{documentError}</p> : null}
+    </div>
   ) : (
   <textarea
     value={draft}
@@ -4158,6 +4209,47 @@ if (urlSourceImages.length > 0) {
       setDraft("");
     }}
     disabled={isDemoLocked}
+    className="hidden"
+  />
+
+  <input
+    ref={documentInputRef}
+    type="file"
+    accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    onChange={async (event) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+
+      const kind = documentKindForFile(file);
+      if (!kind) {
+        setDocumentError("Choose a Word document (.docx) or PDF.");
+        return;
+      }
+      workspacePersistencePausedRef.current = false;
+      setDocumentError(null);
+      setIsExtractingDocument(true);
+      try {
+        const formData = new FormData();
+        formData.set("document", file);
+        const response = await fetch("/api/documents/extract", { method: "POST", body: formData });
+        const body = await response.json().catch(() => null);
+        if (!response.ok || typeof body?.text !== "string" || !body?.document) {
+          throw new Error(typeof body?.error === "string" ? body.error : "Multirrupt could not read that document.");
+        }
+        setDraft(body.text);
+        setUploadedDocument(body.document as UploadedDocument);
+        setImageFiles([]);
+        setInputMode("document");
+      } catch (error) {
+        setDocumentError(error instanceof Error ? error.message : "Multirrupt could not read that document.");
+        setDraft("");
+        setUploadedDocument(null);
+      } finally {
+        setIsExtractingDocument(false);
+      }
+    }}
+    disabled={isDemoLocked || isExtractingDocument}
     className="hidden"
   />
 

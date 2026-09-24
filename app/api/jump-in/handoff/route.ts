@@ -12,6 +12,7 @@ import {
   handoffRateBucket,
   readJumpInHandoff,
 } from "@/lib/jump-in-handoff-server";
+import { isUploadedDocument } from "@/lib/document-upload";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DATA_URL = /^data:image\/(?:avif|gif|jpe?g|png|webp);base64,[A-Za-z0-9+/=\s]+$/i;
@@ -42,12 +43,13 @@ function parsePayload(value: unknown): JumpInHandoffPayload | null {
   const candidate = value as Partial<JumpInHandoffPayload>;
   if (
     !UUID.test(String(candidate.sessionId)) ||
-    !["text", "url", "images"].includes(String(candidate.inputMode)) ||
+    !["text", "url", "images", "document"].includes(String(candidate.inputMode)) ||
     typeof candidate.draft !== "string" || candidate.draft.length > 120_000 ||
     typeof candidate.urlDraft !== "string" || candidate.urlDraft.length > 8_192 ||
     typeof candidate.selectedGraviton !== "string" || candidate.selectedGraviton.length > 160 ||
     (candidate.cadence !== "dynamic" && candidate.cadence !== "sustained") ||
-    !validImages(candidate.images)
+    !validImages(candidate.images) ||
+    (candidate.document !== null && candidate.document !== undefined && !isUploadedDocument(candidate.document))
   ) return null;
 
   const payload: JumpInHandoffPayload = {
@@ -59,6 +61,7 @@ function parsePayload(value: unknown): JumpInHandoffPayload | null {
     selectedGraviton: candidate.selectedGraviton as string,
     cadence: candidate.cadence as JumpInHandoffPayload["cadence"],
     images: candidate.images as JumpInHandoffImage[],
+    document: candidate.document ?? null,
   };
   return encodedHandoffBytes(payload) <= JUMP_IN_HANDOFF_MAX_BYTES ? payload : null;
 }

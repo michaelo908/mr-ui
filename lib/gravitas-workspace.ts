@@ -1,4 +1,5 @@
 import type { CadenceMode } from "@/lib/cadence";
+import { isUploadedDocument, type UploadedDocument } from "@/lib/document-upload";
 import type { SourceIdentity, SourceImage, UrlSource } from "@/lib/sources";
 
 export const GRAVITAS_WORKSPACE_VERSION = 2 as const;
@@ -47,11 +48,12 @@ export type GravitasWorkspaceSnapshot = {
   updatedAt: number;
   expiresAt: number;
   consumedAt?: number;
-  inputMode: "text" | "url" | "images";
+  inputMode: "text" | "url" | "images" | "document";
   draft: string;
   urlDraft: string;
   importedUrl: { requestedUrl: string; source: UrlSource } | null;
   uploadedFiles: GravitasUploadedFileSnapshot[];
+  uploadedDocument: UploadedDocument | null;
   selectedGraviton: string;
   cadence: CadenceMode;
   messages: GravitasMessageSnapshot[];
@@ -85,13 +87,14 @@ export function isValidWorkspaceSnapshot(
     typeof snapshot.updatedAt !== "number" ||
     typeof snapshot.expiresAt !== "number" ||
     snapshot.expiresAt <= now ||
-    !["text", "url", "images"].includes(snapshot.inputMode ?? "") ||
+    !["text", "url", "images", "document"].includes(snapshot.inputMode ?? "") ||
     typeof snapshot.draft !== "string" ||
     typeof snapshot.urlDraft !== "string" ||
     typeof snapshot.selectedGraviton !== "string" ||
     !isCadenceMode(snapshot.cadence) ||
     !Array.isArray(snapshot.messages) ||
     !Array.isArray(snapshot.uploadedFiles) ||
+    (snapshot.uploadedDocument !== null && snapshot.uploadedDocument !== undefined && !isUploadedDocument(snapshot.uploadedDocument)) ||
     snapshot.provenance?.kind !== "jump-in" ||
     (snapshot.provenance.schemaMigratedFrom !== null &&
       typeof snapshot.provenance.schemaMigratedFrom !== "number")

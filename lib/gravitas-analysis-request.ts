@@ -1,4 +1,4 @@
-export type AnalysisInputMode = "text" | "url" | "images";
+export type AnalysisInputMode = "text" | "url" | "images" | "document";
 
 export function buildAnalysisInput({
   inputMode,

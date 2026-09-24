@@ -1,4 +1,5 @@
 import type { CadenceMode } from "@/lib/cadence";
+import type { UploadedDocument } from "@/lib/document-upload";
 
 /**
  * The small, deliberately short-lived parcel used when a visitor begins in
@@ -21,12 +22,13 @@ export type JumpInHandoffImage = {
 export type JumpInHandoffPayload = {
   version: typeof JUMP_IN_HANDOFF_VERSION;
   sessionId: string;
-  inputMode: "text" | "url" | "images";
+  inputMode: "text" | "url" | "images" | "document";
   draft: string;
   urlDraft: string;
   selectedGraviton: string;
   cadence: CadenceMode;
   images: JumpInHandoffImage[];
+  document: UploadedDocument | null;
 };
 
 export function isJumpInHandoffToken(value: unknown): value is string {
