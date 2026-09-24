@@ -39,6 +39,9 @@ test("customer copy and transactional templates use Multirrupt while Gravitate a
   }
   assert.match(app, /isLoading \? "Working…" : "Gravitate"/);
   assert.match(app, /aria-label="Gravitons"/);
+  assert.match(app, /label: "Proposal"/);
+  assert.match(app, /What will the decision-maker conclude\?/);
+  assert.match(app, /Where does the case lose confidence\?/);
   assert.match(emails, /Your Multirrupt Day Pass is ready/);
   assert.match(metadata, /title: "Multirrupt Narrative Intelligence"/);
 });

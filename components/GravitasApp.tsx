@@ -1765,6 +1765,13 @@ const gravitonGroups = [
     ],
   },
   {
+    label: "Proposal",
+    options: [
+      "What will the decision-maker conclude?",
+      "Where does the case lose confidence?",
+    ],
+  },
+  {
     label: "Email",
     options: [
       "Should this be a multi-email campaign?",
