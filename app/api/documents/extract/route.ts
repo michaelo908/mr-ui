@@ -68,8 +68,9 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Document extraction failed", error);
+    const diagnostic = error instanceof Error ? error.message.replace(/\s+/g, " ").slice(0, 180) : "Unknown PDF reader error";
     return NextResponse.json({
-      error: "Multirrupt could not read that document. Try exporting it again as Word or PDF.",
+      error: `Multirrupt could not read that document. ${diagnostic || "Try exporting it again as Word or PDF."}`,
     }, { status: 422 });
   }
 }
