@@ -97,9 +97,9 @@ test("analysis completion and purchase outcomes come from authoritative server p
   assert.match(checkout, /attributionMetadata\("lt"/);
 });
 
-test("Founder Dashboard exposes windows, funnel, highlights and anonymous stories", () => {
-  const page = read("app/founder/page.tsx");
-  assert.match(page, /Founder Snapshot/);
+test("Signals dashboard exposes windows, funnel, highlights and anonymous stories", () => {
+  const page = read("app/signals/page.tsx");
+  assert.match(page, /Growth snapshot/);
   assert.match(page, /\[1, 7, 30\]/);
   assert.match(page, /Funnel/);
   assert.match(page, /Highlights/);

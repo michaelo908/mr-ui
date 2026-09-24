@@ -8,7 +8,7 @@
 4. Optionally set `GRAVITAS_SIGNALS_TEST_MODE=true` in demo environments. Stripe test-mode events and localhost events are tagged automatically.
 5. Set `SIGNALS_RATE_LIMIT_SECRET` to at least 32 random characters. The ingestion route HMACs the request address with a rotating daily bucket and never persists the raw address. The Supabase rate-limit function permits 120 signals per minute per bucket and discards expired buckets opportunistically.
 
-The dashboard is available at `/founder`. Production reporting excludes test/demo signals unless explicitly included in the dashboard.
+The private dashboard is available at `/signals`. Production reporting excludes test/demo signals unless explicitly included in the dashboard.
 
 “Today” begins at midnight in `Australia/Melbourne`. Seven- and thirty-day views are exact rolling windows ending at request time. Dashboard rows and anonymous timelines are fetched in stable 1,000-row pages without a total-row ceiling.
 
