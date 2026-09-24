@@ -29,8 +29,8 @@ export default function FounderPage() {
 
           <aside className="gravitas-input-panel rounded-2xl p-6 sm:p-7">
             <p className="text-sm font-semibold text-[#6fb2ff]">Founder Member</p>
-            <p className="mt-3 text-4xl font-semibold text-white">US$63 <span className="text-base font-medium text-slate-400">/ month</span></p>
-            <p className="mt-2 text-sm leading-6 text-slate-400">Normally US$97/month. Your Founder rate is protected for as long as you remain a member.</p>
+            <p className="mt-3 text-4xl font-semibold text-white">$63 <span className="text-base font-medium text-slate-400">/ month</span></p>
+            <p className="mt-2 text-sm leading-6 text-slate-400">Normally $97/month. Your Founder rate is protected for as long as you remain a member.</p>
             <div className="my-6 h-px bg-slate-700/70" />
             <ul className="space-y-3 text-sm leading-6 text-slate-300">
               <li><span className="mr-2 text-[#6fb2ff]">✓</span>Full Multirrupt access</li>
