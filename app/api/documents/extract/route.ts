@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import mammoth from "mammoth";
-import { PDFParse } from "pdf-parse";
 import {
   countDocumentWords,
   DOCUMENT_MAX_BYTES,
@@ -10,6 +9,43 @@ import {
 } from "@/lib/document-upload";
 
 export const runtime = "nodejs";
+
+class PdfTextDOMMatrix {
+  a = 1;
+  b = 0;
+  c = 0;
+  d = 1;
+  e = 0;
+  f = 0;
+
+  constructor(values?: number[] | Partial<PdfTextDOMMatrix>) {
+    if (Array.isArray(values)) {
+      [this.a, this.b, this.c, this.d, this.e, this.f] = values;
+    } else if (values) {
+      Object.assign(this, values);
+    }
+  }
+}
+
+async function extractPdfText(buffer: Buffer) {
+  // pdf.js creates a DOMMatrix while its Node module loads, even for text-only
+  // extraction. Vercel does not supply one; this compact affine matrix is enough
+  // for the non-rendering path and avoids a native canvas dependency.
+  if (!("DOMMatrix" in globalThis)) {
+    Object.assign(globalThis, { DOMMatrix: PdfTextDOMMatrix });
+  }
+  const { PDFParse } = await import("pdf-parse");
+  const parser = new PDFParse({ data: buffer });
+  try {
+    return (await parser.getText()).text;
+  } finally {
+    // Extraction is the user-facing operation. A parser cleanup issue must not
+    // discard text that was already read successfully.
+    await parser.destroy().catch((cleanupError) => {
+      console.warn("PDF parser cleanup did not complete", cleanupError);
+    });
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -33,16 +69,7 @@ export async function POST(request: Request) {
       const result = await mammoth.extractRawText({ buffer });
       extracted = result.value;
     } else {
-      const parser = new PDFParse({ data: buffer });
-      try {
-        extracted = (await parser.getText()).text;
-      } finally {
-        // Extraction is the user-facing operation. A parser cleanup issue must not
-        // discard text that was already read successfully.
-        await parser.destroy().catch((cleanupError) => {
-          console.warn("PDF parser cleanup did not complete", cleanupError);
-        });
-      }
+      extracted = await extractPdfText(buffer);
     }
 
     const text = normaliseDocumentText(extracted);
