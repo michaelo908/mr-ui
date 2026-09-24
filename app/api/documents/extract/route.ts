@@ -34,8 +34,10 @@ async function extractPdfText(buffer: Buffer) {
   if (!("DOMMatrix" in globalThis)) {
     Object.assign(globalThis, { DOMMatrix: PdfTextDOMMatrix });
   }
+  const { CanvasFactory, getData } = await import("pdf-parse/worker");
   const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ data: buffer });
+  PDFParse.setWorker(getData());
+  const parser = new PDFParse({ data: buffer, CanvasFactory });
   try {
     return (await parser.getText()).text;
   } finally {
