@@ -138,6 +138,79 @@ export function buildHighlights(rows: DashboardSignal[]) {
   return highlights.slice(0, 4);
 }
 
+type Attribution = Record<string, unknown>;
+
+function attributionFor(row: DashboardSignal) {
+  return (row.first_touch ?? row.last_touch ?? {}) as Attribution;
+}
+
+function readableSource(value: string) {
+  return value
+    .replace(/^www\./, "")
+    .replace(/[._-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function readableReferrer(value: string) {
+  const host = value.toLowerCase().replace(/^www\./, "");
+  const familiar: Record<string, string> = {
+    "facebook.com": "Facebook",
+    "google.com": "Google",
+    "linkedin.com": "LinkedIn",
+    "reddit.com": "Reddit",
+    "x.com": "X",
+  };
+  return familiar[host] ?? readableSource(host);
+}
+
+function sourceFor(row: DashboardSignal) {
+  const attribution = attributionFor(row);
+  const utmSource = attribution.utmSource;
+  if (typeof utmSource === "string" && utmSource) return readableSource(utmSource);
+  const referrerHost = attribution.referrerHost;
+  if (typeof referrerHost === "string" && referrerHost) return readableReferrer(referrerHost);
+  return "Direct / untagged";
+}
+
+/**
+ * A privacy-safe, campaign-friendly view of acquisition. Attribution is
+ * carried with anonymous session events; raw URLs and submitted material are
+ * never exposed on the dashboard.
+ */
+export function buildSourceBreakdown(rows: DashboardSignal[]) {
+  const sources = new Map<string, {
+    source: string;
+    sessions: Set<string>;
+    starts: Set<string>;
+    completed: Set<string>;
+  }>();
+
+  for (const row of rows) {
+    const key = row.session_id ?? row.visitor_id;
+    if (!key) continue;
+    const source = sourceFor(row);
+    const current = sources.get(source) ?? {
+      source,
+      sessions: new Set<string>(),
+      starts: new Set<string>(),
+      completed: new Set<string>(),
+    };
+    current.sessions.add(key);
+    if (row.signal_name === "analysis.started") current.starts.add(key);
+    if (row.signal_name === "analysis.completed" && row.verified) current.completed.add(key);
+    sources.set(source, current);
+  }
+
+  return [...sources.values()]
+    .map(({ source, sessions, starts, completed }) => ({
+      source,
+      sessions: sessions.size,
+      starts: starts.size,
+      completed: completed.size,
+    }))
+    .sort((a, b) => b.completed - a.completed || b.starts - a.starts || b.sessions - a.sessions || a.source.localeCompare(b.source));
+}
+
 export function buildAnonymousStories(rows: DashboardSignal[], limit = 12) {
   const grouped = new Map<string, DashboardSignal[]>();
   for (const row of rows) {

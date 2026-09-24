@@ -6,6 +6,7 @@ const {
   buildFounderSnapshot,
   buildFunnel,
   buildHighlights,
+  buildSourceBreakdown,
   getDashboardWindowStart,
   paginateDashboardSignals,
 } = require("../lib/signals/dashboard.ts");
@@ -62,6 +63,19 @@ test("highlights are concise and derived only from the selected rows", () => {
   assert.ok(highlights.length <= 4);
   assert.match(highlights.join(" "), /1 verified analyses completed from 2 starts/);
   assert.match(highlights.join(" "), /url was the most-completed/);
+});
+
+test("source breakdown ties tagged activity to anonymous sessions and verified completions", () => {
+  const attributed = [
+    row("8", "discovery.session_started", "session-c", "visitor-c", { first_touch: { utmSource: "facebook" } }),
+    row("9", "analysis.started", "session-c", "visitor-c", { first_touch: { utmSource: "facebook" } }),
+    row("10", "analysis.completed", "session-c", "visitor-c", { verified: true, first_touch: { utmSource: "facebook" } }),
+    row("11", "discovery.session_started", "session-d", "visitor-d", { first_touch: { referrerHost: "www.google.com" } }),
+  ];
+  assert.deepEqual(buildSourceBreakdown(attributed), [
+    { source: "Facebook", sessions: 1, starts: 1, completed: 1 },
+    { source: "Google", sessions: 1, starts: 0, completed: 0 },
+  ]);
 });
 
 test("anonymous stories preserve ordered event journeys without source content", () => {

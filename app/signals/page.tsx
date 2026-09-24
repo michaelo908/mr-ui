@@ -7,6 +7,7 @@ import {
   buildFounderSnapshot,
   buildFunnel,
   buildHighlights,
+  buildSourceBreakdown,
   getDashboardWindowStart,
   paginateDashboardSignals,
   type DashboardSignal,
@@ -55,6 +56,7 @@ export default async function SignalsPage({
   const snapshot = buildFounderSnapshot(rows);
   const funnel = buildFunnel(rows);
   const highlights = buildHighlights(rows);
+  const sources = buildSourceBreakdown(rows);
   const stories = buildAnonymousStories(rows);
 
   return (
@@ -78,6 +80,8 @@ export default async function SignalsPage({
           <section className="rounded-2xl border border-neutral-800 p-5"><h2 className="text-xl font-semibold">Funnel</h2><div className="mt-5 space-y-4">{funnel.map((stage, index) => { const width = funnel[0]?.value ? Math.max(4, stage.value / funnel[0].value * 100) : 0; return <div key={stage.label}><div className="flex justify-between text-sm"><span>{stage.label}</span><span>{stage.value}</span></div><div className="mt-1 h-2 overflow-hidden rounded bg-neutral-800"><div className="h-full rounded bg-[#C6A75A]" style={{ width: `${width}%` }} /></div>{index > 0 && funnel[index - 1].value ? <div className="mt-1 text-xs text-neutral-500">{Math.round(stage.value / funnel[index - 1].value * 100)}% from prior stage</div> : null}</div>; })}</div></section>
           <section className="rounded-2xl border border-neutral-800 p-5"><h2 className="text-xl font-semibold">Highlights</h2><ul className="mt-5 space-y-3 text-neutral-300">{highlights.map((highlight) => <li key={highlight} className="rounded-lg bg-neutral-900/60 p-3">{highlight}</li>)}</ul></section>
         </div>
+
+        <section className="mt-8 rounded-2xl border border-neutral-800 p-5"><h2 className="text-xl font-semibold">Activity by source</h2><p className="mt-1 text-sm text-neutral-500">Tagged links show whether a post, comment or ad led to genuine use. Untagged visits remain visible as direct traffic.</p><div className="mt-5 overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="border-b border-neutral-800 text-neutral-400"><tr><th className="pb-3 pr-5 font-medium">Source</th><th className="pb-3 pr-5 text-right font-medium">Sessions</th><th className="pb-3 pr-5 text-right font-medium">Starts</th><th className="pb-3 text-right font-medium">Completed</th></tr></thead><tbody>{sources.length ? sources.map((source) => <tr key={source.source} className="border-b border-neutral-900"><td className="py-3 pr-5 text-neutral-200">{source.source}</td><td className="py-3 pr-5 text-right text-neutral-300">{source.sessions}</td><td className="py-3 pr-5 text-right text-neutral-300">{source.starts}</td><td className="py-3 text-right font-medium text-[#C6A75A]">{source.completed}</td></tr>) : <tr><td colSpan={4} className="py-5 text-neutral-500">No attributed activity in this period yet.</td></tr>}</tbody></table></div></section>
 
         <section className="mt-8 rounded-2xl border border-neutral-800 p-5"><h2 className="text-xl font-semibold">Anonymous user stories</h2><p className="mt-1 text-sm text-neutral-500">Privacy-safe event journeys; no submitted content, email address, or full URL is stored.</p><div className="mt-5 space-y-4">{stories.map((story) => <article key={story.visitorId} className="rounded-xl bg-neutral-900/50 p-4"><div className="text-sm font-semibold text-[#C6A75A]">Visitor {shortId(story.visitorId)}</div><div className="mt-3 flex flex-wrap gap-2">{story.events.map((event) => <span key={event.id} title={new Date(event.occurred_at).toLocaleString()} className="rounded-full border border-neutral-700 px-2.5 py-1 text-xs text-neutral-300">{event.signal_name.replace(/^[^.]+\./, "").replaceAll("_", " ")}</span>)}</div></article>)}</div></section>
       </div>
