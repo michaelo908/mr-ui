@@ -4061,10 +4061,13 @@ if (urlSourceImages.length > 0) {
     <div>
       <input
         type="url"
-        value={urlDraft}
+        value={urlDraft || "https://"}
         onChange={(event) => {
           workspacePersistencePausedRef.current = false;
-          setUrlDraft(event.target.value);
+          const nextUrl = event.target.value;
+          // Keep the helpful scheme visible while preserving an empty draft
+          // until the visitor has entered an actual address.
+          setUrlDraft(nextUrl === "https://" ? "" : nextUrl);
           setUrlError(null);
           setImportedUrl(null);
         }}
@@ -4075,7 +4078,7 @@ if (urlSourceImages.length > 0) {
           }
         }}
         disabled={isDemoLocked}
-        placeholder="Paste a webpage URL"
+        aria-label="Webpage URL"
         className={classNames(
           "h-[56px] w-full rounded-xl border border-neutral-800 bg-neutral-950 px-4 text-[17px] text-neutral-100 outline-none focus:border-neutral-600",
           isDemoLocked && "cursor-not-allowed opacity-60"
