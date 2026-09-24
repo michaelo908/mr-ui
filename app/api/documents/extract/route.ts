@@ -37,7 +37,11 @@ export async function POST(request: Request) {
       try {
         extracted = (await parser.getText()).text;
       } finally {
-        await parser.destroy();
+        // Extraction is the user-facing operation. A parser cleanup issue must not
+        // discard text that was already read successfully.
+        await parser.destroy().catch((cleanupError) => {
+          console.warn("PDF parser cleanup did not complete", cleanupError);
+        });
       }
     }
 
@@ -62,7 +66,8 @@ export async function POST(request: Request) {
         wordCount: countDocumentWords(text),
       },
     });
-  } catch {
+  } catch (error) {
+    console.error("Document extraction failed", error);
     return NextResponse.json({
       error: "Multirrupt could not read that document. Try exporting it again as Word or PDF.",
     }, { status: 422 });
