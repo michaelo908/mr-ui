@@ -344,9 +344,20 @@ async function processSubscriptionCreated(
   subscription: Stripe.Subscription,
   suppliedUserId?: string,
 ) {
-  const userId = suppliedUserId || subscription.metadata.user_id;
+  let userId = suppliedUserId || subscription.metadata.user_id;
+  if (!userId) {
+    // A Stripe Payment Link is intentionally usable before a visitor has a
+    // Multirrupt session. Resolve that paid purchaser by their Stripe email,
+    // then persist the link on the subscription so all later lifecycle events
+    // retain the same owner.
+    const email = await subscriptionEmail(subscription);
+    if (!email) throw new WebhookFailure("subscription_email_missing", false);
+    userId = await findOrCreateUser(email);
+    await stripe.subscriptions.update(subscription.id, {
+      metadata: { ...subscription.metadata, user_id: userId },
+    });
+  }
   const customerId = typeof subscription.customer === "string" ? subscription.customer : null;
-  if (!userId) throw new WebhookFailure("subscription_user_missing", false);
   const updated = await upsertSubscription({
     userId,
     customerId,

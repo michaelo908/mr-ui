@@ -1,13 +1,9 @@
 import Link from "next/link";
 
-const checkoutUrl = process.env.FOUNDER_CHECKOUT_URL;
+const checkoutUrl = process.env.FOUNDER_CHECKOUT_URL || "https://buy.stripe.com/28E28t9XK7BB0uUfcW3AY0n";
 
 function FounderAction({ className }: { className?: string }) {
-  if (checkoutUrl) {
-    return <a className={className} href={checkoutUrl}>Become a Founder Member</a>;
-  }
-
-  return <a className={className} href="mailto:hello@multirrupt.ai?subject=Multirrupt%20Founder%20Membership">Ask about Founder membership</a>;
+  return <a className={className} href={checkoutUrl}>Become a Founder Member</a>;
 }
 
 export default function FounderPage() {

@@ -29,6 +29,15 @@ test("webhook supports the bounded Stripe event set and ignores unsupported even
   assert.match(route, /status: "past_due"/);
 });
 
+test("public Stripe Payment Link subscriptions resolve safely to the purchaser account", () => {
+  const webhook = read("app/api/stripe/webhook/route.ts");
+  assert.match(webhook, /A Stripe Payment Link is intentionally usable before a visitor has a/);
+  assert.match(webhook, /const email = await subscriptionEmail\(subscription\)/);
+  assert.match(webhook, /userId = await findOrCreateUser\(email\)/);
+  assert.match(webhook, /stripe\.subscriptions\.update\(subscription\.id/);
+  assert.match(webhook, /metadata: \{ \.\.\.subscription\.metadata, user_id: userId \}/);
+});
+
 test("entitlement writes precede communication and every authoritative write is checked", () => {
   const route = read("app/api/stripe/webhook/route.ts");
   const fulfilment = route.slice(route.indexOf("async function fulfilDayPass"), route.indexOf("async function sendSubscriptionActivation"));
