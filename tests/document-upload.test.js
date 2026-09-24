@@ -10,6 +10,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("document upload accepts Word and text PDFs without pretending to support scans", () => {
   const app = read("components/GravitasApp.tsx");
   const route = read("app/api/documents/extract/route.ts");
+  const proxy = read("proxy.ts");
   const contract = read("lib/document-upload.ts");
 
   assert.match(app, /\["document", "Document"\]/);
@@ -19,6 +20,7 @@ test("document upload accepts Word and text PDFs without pretending to support s
   assert.match(route, /mammoth\.extractRawText/);
   assert.match(route, /PDFParse/);
   assert.match(route, /No readable text was found/);
+  assert.match(proxy, /"\/api\/documents"/);
   assert.match(contract, /DOCUMENT_MAX_BYTES = 10 \* 1024 \* 1024/);
   assert.match(contract, /DOCUMENT_MAX_CHARACTERS = 60_000/);
 });
