@@ -37,6 +37,8 @@ test("documents follow existing analysis, session, and telemetry boundaries", ()
 
   assert.match(app, /inputMode === "text" \|\| inputMode === "document"/);
   assert.match(app, /inputMode === "document" \? DOCUMENT_MAX_CHARACTERS : 30000/);
+  assert.match(app, /Document accepted\. Taking you to sign in/);
+  assert.match(app, /Document accepted\. Preparing your analysis/);
   assert.match(app, /JUMP_IN_MAX_PASTED_WORDS/);
   assert.match(signals, /"document"/);
   assert.match(workspace, /uploadedDocument: UploadedDocument \| null/);

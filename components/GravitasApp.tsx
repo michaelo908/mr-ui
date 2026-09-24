@@ -3021,6 +3021,16 @@ useEffect(() => {
   async function onSend() {
     if (sendLockRef.current || isRepeatedGraviton || handoffHydrating) return;
     workspacePersistencePausedRef.current = false;
+    sendLockRef.current = true;
+    setIsLoading(true);
+    setAnalysisProgress(
+      inputMode === "document"
+        ? "Document accepted. Preparing your analysis…"
+        : "Content accepted. Preparing your analysis…"
+    );
+    // Let the immediate acknowledgement render before a possible sign-in
+    // navigation. This also makes the click feel deliberate rather than lost.
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
 
     if (isJumpIn && requireAuthBeforeAnalysis && !jumpInAuthenticated) {
       const {
@@ -3030,6 +3040,11 @@ useEffect(() => {
       if (session?.user) {
         setJumpInAuthenticated(true);
       } else {
+        setAnalysisProgress(
+          inputMode === "document"
+            ? "Document accepted. Taking you to sign in…"
+            : "Content accepted. Taking you to sign in…"
+        );
         // The marketing page embeds this editor from a different site. Never
         // attempt to authenticate in that third-party frame: browser privacy
         // controls can withhold the resulting session. Carry the pending work
@@ -3074,6 +3089,9 @@ useEffect(() => {
             window.open(destination.toString(), "_top");
             return;
           } catch {
+            sendLockRef.current = false;
+            setIsLoading(false);
+            setAnalysisProgress(null);
             setWorkspaceStorageWarning(
               "We could not safely carry this work into the full editor. Please copy it, then use Jump In from the top of the page."
             );
@@ -3081,7 +3099,12 @@ useEffect(() => {
           }
         }
         const workspaceReady = await persistJumpInWorkspace();
-        if (!workspaceReady) return;
+        if (!workspaceReady) {
+          sendLockRef.current = false;
+          setIsLoading(false);
+          setAnalysisProgress(null);
+          return;
+        }
         window.localStorage.setItem(
           GRAVITAS_RESUME_MARKER_KEY,
           HOMEPAGE_JUMP_IN_RESUME_TARGET
@@ -3097,6 +3120,10 @@ useEffect(() => {
     }
 
      if (!isJumpIn && !isSubscribed && !isBookTrial) {
+
+    sendLockRef.current = false;
+    setIsLoading(false);
+    setAnalysisProgress(null);
 
     setMessages([
 
@@ -3117,7 +3144,12 @@ useEffect(() => {
   }
 
     const runId = crypto.randomUUID();
-    if (!runCoordinatorRef.current.tryStart(runId)) return;
+    if (!runCoordinatorRef.current.tryStart(runId)) {
+      sendLockRef.current = false;
+      setIsLoading(false);
+      setAnalysisProgress(null);
+      return;
+    }
     sendLockRef.current = true;
     emitSignal("analysis.started", signalSurface, {
       analysis_id: runId,
