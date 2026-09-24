@@ -3582,14 +3582,20 @@ if (urlSourceImages.length > 0) {
               aria-label="Multirrupt Narrative Intelligence"
               className="gravitas-blue-logo multirrupt-editor-logo"
             />
-            <div className="mt-3 text-sm font-medium text-neutral-300">
-              {isJumpIn && funnel ? funnel.eyebrow : isJumpIn ? "Jump Into Multirrupt" : "Multirrupt Narrative Intelligence"}
-            </div>
-            <div className="mt-1 text-sm text-neutral-500">
-              {isJumpIn
-                ? funnel ? "Your reader-side diagnostic is unlocked for 20 minutes." : "Full Multirrupt. 20 minutes."
-                : "See the narrative from the other side."}
-            </div>
+            {isJumpIn ? (
+              <>
+                <div className="mt-3 text-sm font-medium text-neutral-300">
+                  {funnel ? funnel.eyebrow : "Jump Into Multirrupt"}
+                </div>
+                <div className="mt-1 text-sm text-neutral-500">
+                  {funnel ? "Your reader-side diagnostic is unlocked for 20 minutes." : "Full Multirrupt. 20 minutes."}
+                </div>
+              </>
+            ) : (
+              <div className="mt-3 text-base font-semibold tracking-[0.01em] text-neutral-300">
+                See the narrative from the other side.
+              </div>
+            )}
             <div className="mt-2 text-[10px] font-medium uppercase tracking-[0.16em] text-neutral-600">
               Multirrupt {MULTIRRUPT_RELEASE} · build {MULTIRRUPT_BUILD}
             </div>
