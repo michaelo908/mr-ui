@@ -6,6 +6,14 @@ import { AUTH_RESUME_COOKIE } from "@/lib/auth-resume";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function authFailureCategory(error: { code?: string; message?: string } | null) {
+  const detail = `${error?.code ?? ""} ${error?.message ?? ""}`.toLowerCase();
+  if (detail.includes("rate limit") || detail.includes("too many")) return "rate_limited";
+  if (detail.includes("redirect") || detail.includes("url")) return "redirect_configuration";
+  if (detail.includes("api key") || detail.includes("invalid key")) return "configuration";
+  return error ? "provider_rejected" : null;
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const email = typeof body?.email === "string" ? body.email.trim() : "";
@@ -70,6 +78,7 @@ export async function POST(request: NextRequest) {
 
   console.info("auth_magic_link", {
     outcome: error ? "request_failed" : "sent",
+    failureCategory: authFailureCategory(error),
     pkceVerifierWritten,
   });
 
