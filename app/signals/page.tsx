@@ -67,7 +67,7 @@ export default async function SignalsPage({
         <h1 className="mt-2 text-3xl font-semibold">Growth snapshot</h1>
         <div className="mt-5 flex flex-wrap gap-2">
           {([1, 7, 30] as const).map((value) => <Link key={value} href={`/signals?window=${value}${includeTest ? "&include_test=1" : ""}`} className={`rounded-lg border px-3 py-2 text-sm ${days === value ? "border-[#C6A75A] text-[#C6A75A]" : "border-neutral-800 text-neutral-400"}`}>{value === 1 ? "Today" : `${value} days`}</Link>)}
-          <Link href={`/signals?window=${days}${includeTest ? "" : "&include_test=1"}`} className="rounded-lg border border-neutral-800 px-3 py-2 text-sm text-neutral-400">{includeTest ? "Hide test/demo" : "Include test/demo"}</Link>
+          <Link href={`/signals?window=${days}${includeTest ? "" : "&include_test=1"}`} className={`rounded-lg border px-3 py-2 text-sm transition ${includeTest ? "border-[#C6A75A] bg-[#C6A75A]/15 text-[#E7CD8D] hover:border-[#E7CD8D]" : "border-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-neutral-200"}`}>{includeTest ? "✓ Test/demo included" : "Include test/demo"}</Link>
           <SignalsBrowserExclusion />
         </div>
         <p className="mt-3 text-xs text-neutral-500">Today begins at midnight in Australia/Melbourne. Seven- and thirty-day views are rolling windows ending now.</p>

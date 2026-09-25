@@ -18,4 +18,6 @@ test("a browser can mark its own Signals activity as test/demo", () => {
   assert.match(api, /x-gravitas-test/);
   assert.match(server, /x-gravitas-test/);
   assert.match(dashboard, /SignalsBrowserExclusion/);
+  assert.match(dashboard, /✓ Test\/demo included/);
+  assert.match(read("components\/SignalsBrowserExclusion.tsx"), /✓ This browser is excluded/);
 });

@@ -25,11 +25,11 @@ export default function SignalsBrowserExclusion() {
       onClick={toggle}
       className={`rounded-lg border px-3 py-2 text-sm transition ${
         excluded
-          ? "border-amber-500/70 text-amber-200 hover:border-amber-300"
+          ? "border-[#C6A75A] bg-[#C6A75A]/15 text-[#E7CD8D] hover:border-[#E7CD8D]"
           : "border-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-neutral-200"
       }`}
     >
-      {excluded ? "This browser is excluded" : "Exclude this browser"}
+      {excluded ? "✓ This browser is excluded" : "Exclude this browser"}
     </button>
   );
 }
