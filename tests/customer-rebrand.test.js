@@ -22,6 +22,7 @@ test("customer-facing Multirrupt branding uses the shared approved logo", () => 
   assert.match(login, /Multirrupt Narrative Intelligence/);
   assert.match(app, /Full Multirrupt\. 20 minutes\./);
   assert.match(app, /Already have a subscription or Day Pass\? Log in/);
+  assert.match(app, /Signed in with a different account\? Log out/);
   assert.match(app, /gravitas-blue-logo multirrupt-editor-logo/);
   assert.match(css, /\.multirrupt-editor-logo\s*\{[\s\S]*width: 222px;[\s\S]*height: 47px;/);
   assert.match(app, /See the narrative from the other side\./);

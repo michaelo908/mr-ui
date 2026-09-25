@@ -2787,10 +2787,11 @@ useEffect(() => {
             data: { session },
           } = await supabase.auth.getSession();
           setJumpInAuthenticated(Boolean(session?.user));
+          setAuthenticatedUserId(session?.user?.id ?? null);
         } else {
           setJumpInAuthenticated(false);
+          setAuthenticatedUserId(null);
         }
-        setAuthenticatedUserId(null);
         setIsSubscribed(false);
         setAccessResolved(true);
         return;
@@ -2853,6 +2854,7 @@ useEffect(() => {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setJumpInAuthenticated(Boolean(session?.user));
+      setAuthenticatedUserId(session?.user?.id ?? null);
     });
 
     return () => subscription.unsubscribe();
@@ -3822,11 +3824,20 @@ if (urlSourceImages.length > 0) {
             </div>
             {isJumpIn ? (
               <a
-                href="/login"
+                href="/workbench"
                 className="mt-3 inline-flex text-sm font-semibold text-sky-300 underline decoration-sky-400/60 underline-offset-4 transition hover:text-sky-200"
               >
                 Already have a subscription or Day Pass? Log in
               </a>
+            ) : null}
+            {isJumpIn && jumpInAuthenticated ? (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="mt-2 block text-xs font-medium text-neutral-400 underline decoration-neutral-600 underline-offset-4 transition hover:text-neutral-200"
+              >
+                Signed in with a different account? Log out
+              </button>
             ) : null}
             {isJumpIn && requireAuthBeforeAnalysis && !jumpInAuthenticated ? (
               <div className="mt-2 text-xs text-neutral-400">

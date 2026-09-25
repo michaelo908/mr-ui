@@ -14,6 +14,7 @@ test("Jump In omits the obsolete no-signup claim", () => {
 
   assert.match(app, /Full Multirrupt\. 20 minutes\./);
   assert.match(app, /Already have a subscription or Day Pass\? Log in/);
-  assert.match(app, /href="\/login"/);
+  assert.match(app, /href="\/workbench"/);
+  assert.match(app, /Signed in with a different account\? Log out/);
   assert.doesNotMatch(app, new RegExp(["No", "signup", "required\\."].join(" ")));
 });
