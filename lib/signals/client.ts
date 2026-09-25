@@ -7,6 +7,25 @@ const VISITOR_KEY = "gravitasVisitorIdV1";
 const SESSION_KEY = "gravitasSessionIdV1";
 const FIRST_TOUCH_KEY = "gravitasFirstTouchV1";
 const LAST_TOUCH_KEY = "gravitasLastTouchV1";
+export const SIGNALS_BROWSER_EXCLUSION_KEY = "multirruptSignalsBrowserExcludedV1";
+
+export function isSignalsBrowserExcluded() {
+  try {
+    return localStorage.getItem(SIGNALS_BROWSER_EXCLUSION_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setSignalsBrowserExcluded(excluded: boolean) {
+  try {
+    if (excluded) {
+      localStorage.setItem(SIGNALS_BROWSER_EXCLUSION_KEY, "1");
+    } else {
+      localStorage.removeItem(SIGNALS_BROWSER_EXCLUSION_KEY);
+    }
+  } catch {}
+}
 
 function safeStorage(storage: Storage, key: string, fallback: string) {
   try {
@@ -57,11 +76,12 @@ export function initializeSignalIdentity() {
 
 export function signalHeaders(surface: "jump-in" | "paid" | "acquisition") {
   const identity = initializeSignalIdentity();
+  const isTest = location.hostname === "localhost" || isSignalsBrowserExcluded();
   return {
     "X-Gravitas-Visitor-Id": identity.visitorId,
     "X-Gravitas-Session-Id": identity.sessionId,
     "X-Gravitas-Surface": surface,
-    ...(location.hostname === "localhost" ? { "X-Gravitas-Test": "1" } : {}),
+    ...(isTest ? { "X-Gravitas-Test": "1" } : {}),
   };
 }
 
@@ -72,6 +92,7 @@ export function emitSignal(
 ) {
   try {
     const identity = initializeSignalIdentity();
+    const isTest = location.hostname === "localhost" || isSignalsBrowserExcluded();
     void fetch("/api/signals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -82,7 +103,7 @@ export function emitSignal(
         ...identity,
         surface,
         properties,
-        isTest: location.hostname === "localhost",
+        isTest,
       }),
     }).catch(() => undefined);
   } catch {}

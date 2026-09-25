@@ -27,7 +27,11 @@ export async function POST(req: Request) {
       firstTouch: body.firstTouch,
       lastTouch: body.lastTouch,
       properties: sanitizeClientSignalProperties(body.name, body.properties),
-      isTest: process.env.GRAVITAS_SIGNALS_TEST_MODE === "true" || hostname === "localhost" || hostname === "127.0.0.1",
+      isTest:
+        process.env.GRAVITAS_SIGNALS_TEST_MODE === "true" ||
+        req.headers.get("x-gravitas-test") === "1" ||
+        hostname === "localhost" ||
+        hostname === "127.0.0.1",
       verified: false,
     }));
     return new NextResponse(null, { status: 202 });
