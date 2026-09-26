@@ -8,7 +8,10 @@ const deployedCommit =
   // that point and remains a safe, unique build identifier.
   process.env.VERCEL_URL ??
   process.env.VERCEL_DEPLOYMENT_ID ??
-  "local";
+  // The project does not expose Vercel's system variables during manually
+  // triggered production builds. Keep a deliberate release marker here so
+  // the editor always identifies the exact production build being tested.
+  "2026.09.26.3";
 
 const nextConfig: NextConfig = {
   // Keep pdf-parse and its worker intact in the Vercel function bundle.
