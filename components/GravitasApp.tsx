@@ -47,6 +47,11 @@ import {
   type NarrativePerformanceLightboxContext,
   type NarrativePerformanceViewportLaunch,
 } from "@/lib/narrative-performance";
+import {
+  parseReaderHold,
+  READER_HOLD_LEVELS,
+  type ReaderHoldLevel,
+} from "@/lib/reader-hold";
 import ImageLightbox from "@/components/ImageLightbox";
 import NarrativePerformancePanel from "@/components/NarrativePerformancePanel";
 import { calculateEditorSummaryScrollTop } from "@/lib/report-scroll";
@@ -663,6 +668,11 @@ function normalizeAssistantCopyText(content: string) {
 
   const parts: string[] = [];
 
+  if (parsed.sections.readerHold?.trim()) {
+    parts.push("Reader Hold");
+    parts.push(parsed.sections.readerHold.trim());
+  }
+
   if (parsed.sections.summary?.trim()) {
     parts.push("Editor’s Summary");
     parts.push(parsed.sections.summary.trim());
@@ -693,8 +703,10 @@ function normalizeAssistantCopyText(content: string) {
 
 function getSectionKind(
   line: string
-): "summary" | "performance" | "depth" | "rewrite" | "debrief" | null {
+): "readerHold" | "summary" | "performance" | "depth" | "rewrite" | "debrief" | null {
   const t = normalizeSectionLabel(line);
+
+  if (t === "reader hold") return "readerHold";
 
   if (
     t === "executive summary" ||
@@ -736,7 +748,7 @@ function getSectionKind(
 function parseStructuredMR(content: string) {
   const lines = content.split(/\r?\n/);
 
-  type Kind = "summary" | "performance" | "depth" | "rewrite" | "debrief";
+  type Kind = "readerHold" | "summary" | "performance" | "depth" | "rewrite" | "debrief";
   const sections: Partial<Record<Kind, string>> = {};
   const order: Kind[] = [];
 
@@ -766,6 +778,7 @@ function parseStructuredMR(content: string) {
   flush();
 
   const hasStructured =
+    Boolean(sections.readerHold) ||
     Boolean(sections.summary) ||
     Boolean(sections.performance) ||
     Boolean(sections.depth) ||
@@ -972,6 +985,79 @@ function ThinkingStatus() {
   return <span className="italic text-emerald-200/80">{steps[idx]}</span>;
 }
 
+const READER_HOLD_COLORS: Record<ReaderHoldLevel, string> = {
+  "Strong hold": "#4ADE80",
+  Holding: "#2DD4BF",
+  Uneven: "#FACC15",
+  Vulnerable: "#FB923C",
+  "At risk": "#F87171",
+};
+
+function ReaderHoldPanel({
+  level,
+  verdict,
+}: {
+  level: ReaderHoldLevel;
+  verdict: string;
+}) {
+  const activeIndex = READER_HOLD_LEVELS.indexOf(level);
+  const activeColor = READER_HOLD_COLORS[level];
+
+  return (
+    <section
+      aria-label={`Reader Hold: ${level}`}
+      data-editor-summary-anchor="true"
+      className="rounded-2xl border border-neutral-700 bg-neutral-950/70 px-4 py-5 sm:px-5"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 className="text-[20px] font-semibold tracking-tight text-neutral-100">
+          Reader Hold
+        </h2>
+        <span className="text-sm font-semibold" style={{ color: activeColor }}>
+          {level}
+        </span>
+      </div>
+      <div
+        className="mt-4 grid gap-1.5"
+        style={{ gridTemplateColumns: `repeat(${READER_HOLD_LEVELS.length}, minmax(0, 1fr))` }}
+        aria-hidden="true"
+      >
+        {READER_HOLD_LEVELS.map((candidate, index) => {
+          const isActive = candidate === level;
+          return (
+            <div
+              key={candidate}
+              className="h-2 rounded-full transition-colors"
+              style={{
+                backgroundColor:
+                  index <= activeIndex
+                    ? READER_HOLD_COLORS[candidate]
+                    : "#262626",
+                boxShadow: isActive ? `0 0 0 2px ${activeColor}` : undefined,
+              }}
+            />
+          );
+        })}
+      </div>
+      <div className="mt-2 grid grid-cols-5 gap-1.5 text-center text-[10px] font-medium leading-3 text-neutral-500 sm:text-[11px]">
+        {READER_HOLD_LEVELS.map((candidate) => (
+          <span
+            key={candidate}
+            className={candidate === level ? "font-semibold" : undefined}
+            style={{ color: candidate === level ? activeColor : undefined }}
+          >
+            {candidate}
+          </span>
+        ))}
+      </div>
+      <p className="mt-5 text-[16px] leading-7 text-neutral-200">{verdict}</p>
+      <p className="mt-2 text-xs leading-5 text-neutral-500">
+        A qualitative editorial judgement, grounded in the analysis below.
+      </p>
+    </section>
+  );
+}
+
 function StructuredAssistantMessage({
   content,
   sourceRaw,
@@ -1032,6 +1118,10 @@ function StructuredAssistantMessage({
     useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const summary = sections.summary?.trim();
+  const readerHold = useMemo(
+    () => (sections.readerHold ? parseReaderHold(sections.readerHold) : null),
+    [sections.readerHold]
+  );
   const performance = useMemo(
     () =>
       sections.performance
@@ -1354,6 +1444,9 @@ ${cadenceInstruction(cadence)}${
 
   return (
     <div className="space-y-5">
+      {readerHold ? (
+        <ReaderHoldPanel level={readerHold.level} verdict={readerHold.verdict} />
+      ) : null}
       {summary ? (
         <section>
           {sourceIdentity?.type === "url" ? (

@@ -38,6 +38,7 @@ test("in-depth reasoning and every surrounding report layer remain intact", () =
   const cadence = read("lib/cadence.ts");
 
   for (const heading of [
+    "## Reader Hold",
     "## Editor's Summary",
     "## Narrative Performance",
     "## Diagnosis in Depth",
@@ -47,6 +48,7 @@ test("in-depth reasoning and every surrounding report layer remain intact", () =
     assert.match(route, new RegExp(heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   assert.match(route, /comprehensive, multi-point, high-signal/);
+  assert.match(route, /Strong hold; Holding; Uneven; Vulnerable; At risk/);
   assert.match(route, /sole primary evidence/);
   assert.match(route, /VISUAL INPUT PRESENT/);
   assert.match(route, /MUST produce MATERIAL CHANGE/);
