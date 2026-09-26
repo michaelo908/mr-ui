@@ -48,9 +48,12 @@ import {
   type NarrativePerformanceViewportLaunch,
 } from "@/lib/narrative-performance";
 import {
-  parseReaderHold,
-  READER_HOLD_LEVELS,
-  type ReaderHoldLevel,
+  parseLegacyReaderHold,
+  parseReaderResponse,
+  READER_RESPONSE_DIMENSIONS,
+  type ReaderResponse,
+  type ReaderResponseDimension,
+  type ReaderResponseIntensity,
 } from "@/lib/reader-hold";
 import ImageLightbox from "@/components/ImageLightbox";
 import NarrativePerformancePanel from "@/components/NarrativePerformancePanel";
@@ -706,7 +709,7 @@ function getSectionKind(
 ): "readerHold" | "summary" | "performance" | "depth" | "rewrite" | "debrief" | null {
   const t = normalizeSectionLabel(line);
 
-  if (t === "reader hold") return "readerHold";
+  if (t === "reader hold" || t === "reader response") return "readerHold";
 
   if (
     t === "executive summary" ||
@@ -985,74 +988,69 @@ function ThinkingStatus() {
   return <span className="italic text-emerald-200/80">{steps[idx]}</span>;
 }
 
-const READER_HOLD_COLORS: Record<ReaderHoldLevel, string> = {
-  "Strong hold": "#4ADE80",
-  Holding: "#2DD4BF",
+const READER_RESPONSE_COLORS: Record<ReaderResponseDimension, string> = {
+  Strong: "#4ADE80",
+  Engaged: "#2DD4BF",
   Uneven: "#FACC15",
   Vulnerable: "#FB923C",
   "At risk": "#F87171",
 };
 
-function ReaderHoldPanel({
-  level,
-  verdict,
-}: {
-  level: ReaderHoldLevel;
-  verdict: string;
-}) {
-  const activeIndex = READER_HOLD_LEVELS.indexOf(level);
-  const activeColor = READER_HOLD_COLORS[level];
+const READER_RESPONSE_WIDTHS: Record<ReaderResponseIntensity, string> = {
+  none: "0%",
+  trace: "18%",
+  present: "43%",
+  pronounced: "70%",
+  dominant: "100%",
+};
 
+function ReaderResponsePanel({
+  response,
+}: {
+  response: ReaderResponse;
+}) {
+  const { signals, verdict } = response;
   return (
     <section
-      aria-label={`Reader Hold: ${level}`}
+      aria-label="Reader Response"
       data-editor-summary-anchor="true"
       className="rounded-2xl border border-neutral-700 bg-neutral-950/70 px-4 py-5 sm:px-5"
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="text-[20px] font-semibold tracking-tight text-neutral-100">
-          Reader Hold
-        </h2>
-        <span className="text-sm font-semibold" style={{ color: activeColor }}>
-          {level}
-        </span>
-      </div>
-      <div
-        className="mt-4 grid gap-1.5"
-        style={{ gridTemplateColumns: `repeat(${READER_HOLD_LEVELS.length}, minmax(0, 1fr))` }}
-        aria-hidden="true"
-      >
-        {READER_HOLD_LEVELS.map((candidate, index) => {
-          const isActive = candidate === level;
+      <h2 className="text-[20px] font-semibold tracking-tight text-neutral-100">
+        Reader Response
+      </h2>
+      <div className="mt-4 grid gap-3 sm:grid-cols-5">
+        {READER_RESPONSE_DIMENSIONS.map((dimension) => {
+          const intensity = signals[dimension];
+          const color = READER_RESPONSE_COLORS[dimension];
           return (
-            <div
-              key={candidate}
-              className="h-2 rounded-full transition-colors"
-              style={{
-                backgroundColor:
-                  index <= activeIndex
-                    ? READER_HOLD_COLORS[candidate]
-                    : "#262626",
-                boxShadow: isActive ? `0 0 0 2px ${activeColor}` : undefined,
-              }}
-            />
+            <div key={dimension} className="min-w-0">
+              <div
+                className="h-2 overflow-hidden rounded-full bg-neutral-800"
+                aria-label={`${dimension}: ${intensity}`}
+                role="img"
+              >
+                <div
+                  className="h-full rounded-full transition-[width] duration-500"
+                  style={{
+                    width: READER_RESPONSE_WIDTHS[intensity],
+                    backgroundColor: color,
+                  }}
+                />
+              </div>
+              <div
+                className="mt-2 text-center text-[10px] font-medium leading-3 text-neutral-500 sm:text-[11px]"
+                style={{ color: intensity === "none" ? undefined : color }}
+              >
+                {dimension}
+              </div>
+            </div>
           );
         })}
       </div>
-      <div className="mt-2 grid grid-cols-5 gap-1.5 text-center text-[10px] font-medium leading-3 text-neutral-500 sm:text-[11px]">
-        {READER_HOLD_LEVELS.map((candidate) => (
-          <span
-            key={candidate}
-            className={candidate === level ? "font-semibold" : undefined}
-            style={{ color: candidate === level ? activeColor : undefined }}
-          >
-            {candidate}
-          </span>
-        ))}
-      </div>
       <p className="mt-5 text-[16px] leading-7 text-neutral-200">{verdict}</p>
       <p className="mt-2 text-xs leading-5 text-neutral-500">
-        A qualitative editorial judgement, grounded in the analysis below.
+        Strengths and risks are separate signals; one does not cancel another.
       </p>
     </section>
   );
@@ -1118,8 +1116,12 @@ function StructuredAssistantMessage({
     useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const summary = sections.summary?.trim();
-  const readerHold = useMemo(
-    () => (sections.readerHold ? parseReaderHold(sections.readerHold) : null),
+  const readerResponse = useMemo(
+    () =>
+      sections.readerHold
+        ? parseReaderResponse(sections.readerHold) ??
+          parseLegacyReaderHold(sections.readerHold)
+        : null,
     [sections.readerHold]
   );
   const performance = useMemo(
@@ -1444,8 +1446,8 @@ ${cadenceInstruction(cadence)}${
 
   return (
     <div className="space-y-5">
-      {readerHold ? (
-        <ReaderHoldPanel level={readerHold.level} verdict={readerHold.verdict} />
+      {readerResponse ? (
+        <ReaderResponsePanel response={readerResponse} />
       ) : null}
       {summary ? (
         <section>

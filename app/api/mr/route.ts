@@ -49,7 +49,7 @@ OUTPUT CONTRACT (MANDATORY WHEN SOURCE MATERIAL IS PROVIDED):
 Follow the request's REWRITE CAPABILITY instruction.
 When it is REQUIRED, output EXACTLY these six sections, in this exact order, using Markdown headings exactly as shown:
 
-## Reader Hold
+## Reader Response
 ## Editor's Summary
 ## Narrative Performance
 ## Diagnosis in Depth
@@ -60,14 +60,20 @@ When REWRITE CAPABILITY is OMIT, output only the first four analytical sections 
 
 SECTION RULES:
 
-## Reader Hold
-- This is a qualitative editorial judgement, not a numerical score, behavioural forecast, or conversion claim.
-- Choose exactly one status from this fixed scale: Strong hold; Holding; Uneven; Vulnerable; At risk.
-- Calibrate honestly. Strong source material must be allowed to receive Strong hold or Holding. Do not default to At risk merely because improvements are possible.
-- Output exactly these two lines and nothing else in this section:
-  **Status:** <one exact status from the scale>
+## Reader Response
+- This is a qualitative evidence profile, not a numerical score, percentage, behavioural forecast, or conversion claim.
+- Evaluate all five signals independently. A strength is never an offset against reader risk. A message may be strong and engaging while also being uneven or containing a specific at-risk point.
+- Use this fixed scale for each signal only: none; trace; present; pronounced; dominant. These are internal qualitative weights and must not appear as numbers or percentages.
+- Output exactly these six lines and nothing else in this section, in this exact order:
+  **Strong:** <one exact weight from the scale>
+  **Engaged:** <one exact weight from the scale>
+  **Uneven:** <one exact weight from the scale>
+  **Vulnerable:** <one exact weight from the scale>
+  **At risk:** <one exact weight from the scale>
   **Verdict:** <one plain, source-specific sentence, normally 16–30 words, explaining the central reader experience and its principal consequence>
-- The verdict must be supported by the detailed diagnosis. It must not use a percentage, invented metric, probability, or unsupported promise.
+- Give positive signals only for demonstrated reader strengths. Do not give green merely because the writing is competent.
+- Err toward surfacing a real reader risk when the detailed analysis identifies meaningful friction, including a specific interruption, unsupported claim, delayed value, competing motive, or loss of trust. Do not reserve At risk for total failure.
+- Every non-none signal must be supported by the detailed diagnosis. Never intensify a signal for drama.
 
 ## Editor's Summary
 ${EDITOR_SUMMARY_CONTRACT}
@@ -182,6 +188,7 @@ function isContinuationContext(body: any): boolean {
   const ctx = typeof body?.context === "string" ? body.context.toLowerCase() : "";
   return (
     ctx.includes("## reader hold") ||
+    ctx.includes("## reader response") ||
     ctx.includes("## executive summary") ||
     ctx.includes("## editor's summary") ||
     ctx.includes("## editor’s summary") ||
