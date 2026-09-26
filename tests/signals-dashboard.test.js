@@ -7,6 +7,7 @@ const {
   buildFunnel,
   buildHighlights,
   buildSourceBreakdown,
+  buildSurfaceBreakdown,
   getDashboardWindowStart,
   paginateDashboardSignals,
 } = require("../lib/signals/dashboard.ts");
@@ -47,6 +48,20 @@ test("purchase-after-analysis counts distinct eligible journeys and never exceed
 
 test("funnel uses distinct sessions at each canonical stage", () => {
   assert.deepEqual(buildFunnel(rows).map(({ value }) => value), [2, 2, 1, 1, 1]);
+});
+
+test("workspace activity distinguishes free Jump In from paid editor use", () => {
+  const paid = [
+    row("8", "discovery.session_started", "paid-session", "visitor-c", { surface: "paid" }),
+    row("9", "analysis.started", "paid-session", "visitor-c", { surface: "paid" }),
+    row("10", "analysis.completed", "paid-session", "visitor-c", { surface: "paid", verified: true }),
+    row("11", "workflow.rewrite_revealed", "paid-session", "visitor-c", { surface: "paid" }),
+  ];
+
+  assert.deepEqual(buildSurfaceBreakdown([...rows, ...paid]), [
+    { surface: "jump-in", sessions: 2, starts: 2, completed: 1, rewrites: 1 },
+    { surface: "paid", sessions: 1, starts: 1, completed: 1, rewrites: 1 },
+  ]);
 });
 
 test("funnel purchase stage counts only distinct rewrite-eligible journeys", () => {

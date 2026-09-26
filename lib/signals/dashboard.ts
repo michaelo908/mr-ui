@@ -111,6 +111,51 @@ export function buildFunnel(rows: DashboardSignal[]) {
   return funnel;
 }
 
+export type SurfaceBreakdown = {
+  surface: "jump-in" | "paid";
+  sessions: number;
+  starts: number;
+  completed: number;
+  rewrites: number;
+};
+
+/**
+ * Keep the self-serve entry experience separate from work done after a
+ * Day Pass or subscription. Purchases are intentionally not shown here:
+ * they belong to the entry surface that initiated checkout, not necessarily
+ * to the workspace where later paid work happens.
+ */
+export function buildSurfaceBreakdown(rows: DashboardSignal[]): SurfaceBreakdown[] {
+  return (["jump-in", "paid"] as const).map((surface) => {
+    const scoped = rows.filter((row) => row.surface === surface);
+    return {
+      surface,
+      sessions: unique(
+        scoped.filter((row) => row.signal_name === "discovery.session_started"),
+        "session_id"
+      ),
+      starts: unique(
+        scoped.filter((row) => row.signal_name === "analysis.started"),
+        "session_id"
+      ),
+      completed: unique(
+        scoped.filter(
+          (row) => row.signal_name === "analysis.completed" && row.verified
+        ),
+        "session_id"
+      ),
+      rewrites: unique(
+        scoped.filter(
+          (row) =>
+            row.signal_name === "workflow.rewrite_revealed" ||
+            row.signal_name === "workflow.rewrite_created"
+        ),
+        "session_id"
+      ),
+    };
+  });
+}
+
 export function buildHighlights(rows: DashboardSignal[]) {
   const snapshot = buildFounderSnapshot(rows);
   const highlights: string[] = [];
