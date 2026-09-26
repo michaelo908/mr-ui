@@ -15,6 +15,7 @@ test("the editor displays a calm release number and its automatic deployment bui
   assert.match(version, /MULTIRRUPT_RELEASE = "1\.9"/);
   assert.match(version, /NEXT_PUBLIC_MULTIRRUPT_BUILD/);
   assert.match(config, /VERCEL_GIT_COMMIT_SHA/);
+  assert.match(config, /VERCEL_DEPLOYMENT_ID/);
   assert.match(config, /NEXT_PUBLIC_MULTIRRUPT_BUILD/);
   assert.match(app, /Multirrupt \{MULTIRRUPT_RELEASE\} · build \{MULTIRRUPT_BUILD\}/);
 });
