@@ -12,6 +12,6 @@ test("the editor displays a calm release number and a reliable build marker", ()
   const version = read("lib/multirrupt-version.ts");
 
   assert.match(version, /MULTIRRUPT_RELEASE = "1\.9"/);
-  assert.match(version, /MULTIRRUPT_BUILD = "2026\.09\.26\.5"/);
+  assert.match(version, /MULTIRRUPT_BUILD = "2026\.09\.27\.1"/);
   assert.match(app, /Multirrupt \{MULTIRRUPT_RELEASE\} · build \{MULTIRRUPT_BUILD\}/);
 });
