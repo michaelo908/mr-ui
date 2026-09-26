@@ -1,4 +1,5 @@
 export const MULTIRRUPT_RELEASE = "1.9";
 
-export const MULTIRRUPT_BUILD =
-  process.env.NEXT_PUBLIC_MULTIRRUPT_BUILD || "local";
+// Deliberately released with the client bundle, so manual deployments always
+// show the exact build under test even when deployment metadata is unavailable.
+export const MULTIRRUPT_BUILD = "2026.09.26.4";
