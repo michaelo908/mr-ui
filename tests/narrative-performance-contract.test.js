@@ -23,6 +23,14 @@ test("normal analysis contract places Narrative Performance after Editor's Summa
   assert.match(route, /up to 5 only for unusually complex material/);
 });
 
+test("reader analysis distinguishes earned complexity from genuine friction", () => {
+  const route = read("app/api/mr/route.ts");
+
+  assert.match(route, /Do not default to a generic impatient reader/);
+  assert.match(route, /may legitimately ask an interested reader for sustained attention/);
+  assert.match(route, /Distinguish genuine reader friction from a mere preference for shorter or simpler material/);
+});
+
 test("alternate rewrites bypass the full analysis contract", () => {
   const route = read("app/api/mr/route.ts");
   const app = read("components/GravitasApp.tsx");
