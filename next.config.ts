@@ -3,9 +3,10 @@ import type { NextConfig } from "next";
 const deployedCommit =
   process.env.VERCEL_GIT_COMMIT_SHA ??
   process.env.GIT_COMMIT_SHA ??
-  // Manual Vercel deployments do not always carry Git metadata. Its deployment
-  // ID is still a safe, unique build identifier and prevents a live release
-  // from being labelled "local".
+  // Manual Vercel deployments do not always carry Git metadata or the
+  // deployment ID while Next is building. The deployment URL is available at
+  // that point and remains a safe, unique build identifier.
+  process.env.VERCEL_URL ??
   process.env.VERCEL_DEPLOYMENT_ID ??
   "local";
 
