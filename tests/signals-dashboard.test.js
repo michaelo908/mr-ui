@@ -6,6 +6,7 @@ const {
   buildFounderSnapshot,
   buildFunnel,
   buildHighlights,
+  buildPurchaseAttribution,
   buildSourceBreakdown,
   buildSurfaceBreakdown,
   getDashboardWindowStart,
@@ -31,7 +32,7 @@ const rows = [
 test("Founder Snapshot counts distinct people and verified outcomes", () => {
   assert.deepEqual(buildFounderSnapshot(rows), {
     visitors: 2, sessions: 2, starts: 2, completed: 1, rewrites: 1,
-    purchases: 1, completionRate: 0.5, purchaseRate: 1,
+    purchases: 1, linkedPurchasesAfterAnalysis: 1, completionRate: 0.5, purchaseRate: 1,
   });
 });
 
@@ -48,6 +49,19 @@ test("purchase-after-analysis counts distinct eligible journeys and never exceed
 
 test("funnel uses distinct sessions at each canonical stage", () => {
   assert.deepEqual(buildFunnel(rows).map(({ value }) => value), [2, 2, 1, 1, 1]);
+  assert.equal(buildFunnel(rows).at(-1).label, "Linked purchase after rewrite");
+});
+
+test("purchase attribution keeps verified sales visible when checkout cannot be joined to a journey", () => {
+  const separatelyVerified = [
+    ...rows,
+    row("8", "purchase.checkout_completed", null, null),
+  ];
+  assert.deepEqual(buildPurchaseAttribution(separatelyVerified), {
+    verifiedPurchases: 2,
+    linkedPurchasesAfterRewrite: 1,
+    separatelyVerifiedPurchases: 1,
+  });
 });
 
 test("workspace activity distinguishes free Jump In from paid editor use", () => {

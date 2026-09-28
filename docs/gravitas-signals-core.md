@@ -51,3 +51,17 @@ commit;
 ```
 
 Export or back up affected rows first. Never grant trigger-management privileges to application roles.
+
+## Future direction: Signals as campaign intelligence
+
+Signals should remain a privacy-safe measurement layer in v1. A future Multirrupt Pro product direction is to extend it into campaign intelligence, with a possible standalone offering:
+
+- create or import a campaign sequence and landing page;
+- attach bounded campaign and message identifiers to links automatically;
+- observe progression from source through landing, analysis, rewrite engagement and verified purchase;
+- show where a campaign's intended narrative loses momentum in the real journey;
+- compare a revised campaign with its earlier version without storing message content in the signals stream.
+
+The longer-term product loop is **analyse → build → release → observe → learn → improve**. It must not imply deterministic conversion prediction. Any later calibration should report observed relationships between message structure, audience context and outcomes, with clear confidence and privacy boundaries.
+
+This can be a Multirrupt Pro retention feature and, once sufficiently self-contained, a standalone campaign-intelligence product. It is deliberately deferred until core Signals data, attribution and consent practices have been proven in production.

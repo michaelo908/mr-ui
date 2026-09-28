@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import SignalsBrowserExclusion from "@/components/SignalsBrowserExclusion";
+import SignalsRefreshButton from "@/components/SignalsRefreshButton";
 import { createClient } from "@/lib/supabase/server";
 import { getSignalsAdminClient } from "@/lib/signals/server";
 import {
@@ -8,6 +9,7 @@ import {
   buildFounderSnapshot,
   buildFunnel,
   buildHighlights,
+  buildPurchaseAttribution,
   buildSurfaceBreakdown,
   buildSourceBreakdown,
   getDashboardWindowStart,
@@ -57,6 +59,7 @@ export default async function SignalsPage({
 
   const snapshot = buildFounderSnapshot(rows);
   const funnel = buildFunnel(rows);
+  const purchaseAttribution = buildPurchaseAttribution(rows);
   const highlights = buildHighlights(rows);
   const surfaces = buildSurfaceBreakdown(rows);
   const sources = buildSourceBreakdown(rows);
@@ -71,17 +74,18 @@ export default async function SignalsPage({
           {([1, 7, 30] as const).map((value) => <Link key={value} href={`/signals?window=${value}${includeTest ? "&include_test=1" : ""}`} className={`rounded-lg border px-3 py-2 text-sm ${days === value ? "border-[#C6A75A] text-[#C6A75A]" : "border-neutral-800 text-neutral-400"}`}>{value === 1 ? "Today" : `${value} days`}</Link>)}
           <Link href={`/signals?window=${days}${includeTest ? "" : "&include_test=1"}`} className={`rounded-lg border px-3 py-2 text-sm transition ${includeTest ? "border-[#C6A75A] bg-[#C6A75A]/15 text-[#E7CD8D] hover:border-[#E7CD8D]" : "border-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-neutral-200"}`}>{includeTest ? "✓ Test/demo included" : "Include test/demo"}</Link>
           <SignalsBrowserExclusion />
+          <SignalsRefreshButton />
         </div>
         <p className="mt-3 text-xs text-neutral-500">Today begins at midnight in Australia/Melbourne. Seven- and thirty-day views are rolling windows ending now. Test/demo activity is excluded by default; keep this browser marked as excluded while developing.</p>
 
         {unavailable ? <div className="mt-6 rounded-xl border border-amber-700/50 bg-amber-950/30 p-4 text-amber-200">Signals storage is not available yet. Apply the included Supabase migration and configure the service-role key.</div> : null}
 
         <section className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {[["Visitors", snapshot.visitors], ["Sessions", snapshot.sessions], ["Verified analyses", snapshot.completed], ["Purchases", snapshot.purchases], ["Analysis completion", percent(snapshot.completionRate)], ["Purchase after analysis", percent(snapshot.purchaseRate)], ["Analysis starts", snapshot.starts], ["Rewrite engagement", snapshot.rewrites]].map(([label, value]) => <div key={label} className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4"><div className="text-sm text-neutral-400">{label}</div><div className="mt-2 text-2xl font-semibold">{value}</div></div>)}
+          {[["Visitors", snapshot.visitors], ["Sessions", snapshot.sessions], ["Verified analyses", snapshot.completed], ["Purchases", snapshot.purchases], ["Analysis completion", percent(snapshot.completionRate)], ["Linked purchase after analysis", percent(snapshot.purchaseRate)], ["Analysis starts", snapshot.starts], ["Rewrite engagement", snapshot.rewrites]].map(([label, value]) => <div key={label} className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4"><div className="text-sm text-neutral-400">{label}</div><div className="mt-2 text-2xl font-semibold">{value}</div></div>)}
         </section>
 
         <div className="mt-8 grid gap-6 lg:grid-cols-2">
-          <section className="rounded-2xl border border-neutral-800 p-5"><h2 className="text-xl font-semibold">Funnel</h2><div className="mt-5 space-y-4">{funnel.map((stage, index) => { const width = funnel[0]?.value ? Math.max(4, stage.value / funnel[0].value * 100) : 0; return <div key={stage.label}><div className="flex justify-between text-sm"><span>{stage.label}</span><span>{stage.value}</span></div><div className="mt-1 h-2 overflow-hidden rounded bg-neutral-800"><div className="h-full rounded bg-[#C6A75A]" style={{ width: `${width}%` }} /></div>{index > 0 && funnel[index - 1].value ? <div className="mt-1 text-xs text-neutral-500">{Math.round(stage.value / funnel[index - 1].value * 100)}% from prior stage</div> : null}</div>; })}</div></section>
+          <section className="rounded-2xl border border-neutral-800 p-5"><h2 className="text-xl font-semibold">Funnel</h2><div className="mt-5 space-y-4">{funnel.map((stage, index) => { const width = funnel[0]?.value ? Math.max(4, stage.value / funnel[0].value * 100) : 0; return <div key={stage.label}><div className="flex justify-between text-sm"><span>{stage.label}</span><span>{stage.value}</span></div><div className="mt-1 h-2 overflow-hidden rounded bg-neutral-800"><div className="h-full rounded bg-[#C6A75A]" style={{ width: `${width}%` }} /></div>{index > 0 && funnel[index - 1].value ? <div className="mt-1 text-xs text-neutral-500">{Math.round(stage.value / funnel[index - 1].value * 100)}% from prior stage</div> : null}</div>; })}</div>{purchaseAttribution.separatelyVerifiedPurchases ? <p className="mt-5 rounded-lg bg-neutral-900/60 p-3 text-sm text-neutral-400">{purchaseAttribution.separatelyVerifiedPurchases} verified {purchaseAttribution.separatelyVerifiedPurchases === 1 ? "purchase was" : "purchases were"} recorded separately and could not yet be linked to an earlier journey.</p> : null}</section>
           <section className="rounded-2xl border border-neutral-800 p-5"><h2 className="text-xl font-semibold">Highlights</h2><ul className="mt-5 space-y-3 text-neutral-300">{highlights.map((highlight) => <li key={highlight} className="rounded-lg bg-neutral-900/60 p-3">{highlight}</li>)}</ul></section>
         </div>
 

@@ -56,6 +56,34 @@ const unique = (rows: DashboardSignal[], key: "visitor_id" | "session_id") =>
 const journeyKey = (row: DashboardSignal) => row.visitor_id ?? row.session_id;
 const isJourneyKey = (key: string | null): key is string => Boolean(key);
 
+function verifiedPurchases(rows: DashboardSignal[]) {
+  return rows.filter(
+    (row) => row.signal_name === "purchase.checkout_completed" && row.verified
+  );
+}
+
+/**
+ * Stripe can verify a purchase even when checkout did not preserve the
+ * anonymous visitor key. Keep that commercial outcome visible, while only
+ * calling it a funnel conversion when its earlier journey is known.
+ */
+export function buildPurchaseAttribution(rows: DashboardSignal[]) {
+  const purchases = verifiedPurchases(rows);
+  const rewriteJourneys = new Set(rows
+    .filter((row) => row.signal_name === "workflow.rewrite_revealed")
+    .map(journeyKey)
+    .filter(isJourneyKey));
+  const linkedPurchaseJourneys = new Set(purchases
+    .map(journeyKey)
+    .filter(isJourneyKey)
+    .filter((key) => rewriteJourneys.has(key)));
+  return {
+    verifiedPurchases: purchases.length,
+    linkedPurchasesAfterRewrite: linkedPurchaseJourneys.size,
+    separatelyVerifiedPurchases: Math.max(0, purchases.length - linkedPurchaseJourneys.size),
+  };
+}
+
 export function buildFounderSnapshot(rows: DashboardSignal[]) {
   const count = (name: string, verified?: boolean) => rows.filter(
     (row) => row.signal_name === name && (verified === undefined || row.verified === verified)
@@ -81,6 +109,7 @@ export function buildFounderSnapshot(rows: DashboardSignal[]) {
     completed,
     rewrites: count("workflow.rewrite_revealed") + count("workflow.rewrite_created"),
     purchases,
+    linkedPurchasesAfterAnalysis: convertedJourneys.size,
     completionRate: starts ? completed / starts : 0,
     purchaseRate: completedJourneys.size ? convertedJourneys.size / completedJourneys.size : 0,
   };
@@ -92,22 +121,13 @@ export function buildFunnel(rows: DashboardSignal[]) {
     ["Analysis started", "analysis.started", false],
     ["Analysis completed", "analysis.completed", true],
     ["Rewrite engaged", "workflow.rewrite_revealed", false],
-    ["Purchase", "purchase.checkout_completed", true],
+    ["Linked purchase after rewrite", "purchase.checkout_completed", true],
   ] as const;
   const funnel = stages.map(([label, name, authoritative]) => ({
     label,
     value: unique(rows.filter((row) => row.signal_name === name && (!authoritative || row.verified)), "session_id"),
   }));
-  const rewriteJourneys = new Set(rows
-    .filter((row) => row.signal_name === "workflow.rewrite_revealed")
-    .map(journeyKey)
-    .filter(isJourneyKey));
-  const eligiblePurchases = new Set(rows
-    .filter((row) => row.signal_name === "purchase.checkout_completed" && row.verified)
-    .map(journeyKey)
-    .filter(isJourneyKey)
-    .filter((key) => rewriteJourneys.has(key)));
-  funnel[funnel.length - 1].value = eligiblePurchases.size;
+  funnel[funnel.length - 1].value = buildPurchaseAttribution(rows).linkedPurchasesAfterRewrite;
   return funnel;
 }
 
