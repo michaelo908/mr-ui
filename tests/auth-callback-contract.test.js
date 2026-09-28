@@ -28,6 +28,19 @@ test("magic-link initiation writes the PKCE verifier through a same-origin respo
   assert.doesNotMatch(route, /console\.info\([^\n]*(code|token|email|cookie value)/i);
 });
 
+test("a consented Jump In sign-in enters Mailchimp without making ordinary login marketing capture", () => {
+  const route = read("app/auth/magic-link/route.ts");
+  const login = read("app/login/page.tsx");
+
+  assert.match(login, /JUMP_IN_CONSENT_DISCLOSURE/);
+  assert.match(login, /marketingConsent: nextTarget === GRAVITAS_RESUME_TARGET/);
+  assert.match(route, /body\?\.marketingConsent === true && nextTarget === GRAVITAS_RESUME_TARGET/);
+  assert.match(route, /addMailchimpLead/);
+  assert.match(route, /JUMP_IN_MAILCHIMP_TAG/);
+  assert.match(route, /lifecycleState: "jump_in"/);
+  assert.doesNotMatch(route, /console\.(info|warn)\([^\n]*(email|token|code)/i);
+});
+
 test("PKCE callback exchanges a code and writes session cookies onto the success redirect", () => {
   const callback = read("app/auth/callback/route.ts");
 

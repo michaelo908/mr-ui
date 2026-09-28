@@ -2,12 +2,14 @@ import { createHash } from "node:crypto";
 import { higherLifecycle, type GravitasLifecycleState } from "@/lib/lifecycle";
 import type { FunnelSlug } from "@/lib/acquisition-funnels";
 
+export const JUMP_IN_MAILCHIMP_TAG = "multirrupt_jump_in_lead";
+
 type MailchimpSignup = {
   email: string;
   firstName: string;
   tag: string;
   consentTag: string;
-  doorway: FunnelSlug;
+  doorway: FunnelSlug | "jump-in";
   lifecycleState?: GravitasLifecycleState;
 };
 type MailchimpBuyer = { email: string };
@@ -106,7 +108,7 @@ async function updateLifecycleField(input: {
 async function updateDoorwayField(input: {
   endpoint: string;
   authorization: string;
-  doorway: FunnelSlug;
+  doorway: FunnelSlug | "jump-in";
 }) {
   const response = await mailchimpFetch(input.endpoint, {
     method: "PATCH",

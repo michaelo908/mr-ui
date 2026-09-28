@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import {
   GRAVITAS_RESUME_MARKER_KEY,
+  GRAVITAS_RESUME_TARGET,
   isValidResumeTarget,
 } from "@/lib/gravitas-workspace";
+import { JUMP_IN_CONSENT_DISCLOSURE } from "@/lib/acquisition-funnels";
 
 function getValidatedNextTarget() {
   const queryTarget = new URLSearchParams(window.location.search).get("next");
@@ -21,6 +24,7 @@ export default function LoginPage() {
   const [sending, setSending] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
   const [token, setToken] = useState("");
+  const [isJumpInSignIn, setIsJumpInSignIn] = useState(false);
   // Enable only for the verified staging and production Auth projects.
   const otpEnabled = [
     "https://gglalhqmdnbdygcxasyd.supabase.co",
@@ -56,6 +60,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     let mounted = true;
+    setIsJumpInSignIn(getValidatedNextTarget() === GRAVITAS_RESUME_TARGET);
 
     async function hydrateFromHash() {
       const hash = window.location.hash.startsWith("#")
@@ -125,12 +130,17 @@ export default function LoginPage() {
 
     setSending(true);
     setMessage("");
+    const nextTarget = getValidatedNextTarget();
 
     try {
       const loginResponse = await fetch("/auth/magic-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, next: getValidatedNextTarget() }),
+        body: JSON.stringify({
+          email,
+          next: nextTarget,
+          marketingConsent: nextTarget === GRAVITAS_RESUME_TARGET,
+        }),
       });
       const result = await loginResponse.json().catch(() => null);
 
@@ -226,6 +236,10 @@ export default function LoginPage() {
             {sending ? (codeSent ? "Verifying..." : "Sending...") : (codeSent ? "Verify code" : otpEnabled ? "Send sign-in code" : "Send login link")}
           </button>
 
+          {!codeSent && isJumpInSignIn ? (
+            <p className="text-center text-xs leading-5 text-neutral-500">{JUMP_IN_CONSENT_DISCLOSURE}</p>
+          ) : null}
+
           {codeSent && (
             <button type="button" disabled={sending} onClick={() => {
               setCodeSent(false);
@@ -238,9 +252,9 @@ export default function LoginPage() {
         </form>
         <p className="mt-6 text-center text-sm text-neutral-400">
           New to Multirrupt? — just{" "}
-          <a href="/" className="text-sky-300 underline underline-offset-4 hover:text-sky-200">
+          <Link href="/" className="text-sky-300 underline underline-offset-4 hover:text-sky-200">
             Jump In here
-          </a>
+          </Link>
         </p>
       </div>
     </main>

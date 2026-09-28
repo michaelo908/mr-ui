@@ -1,8 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { isValidResumeTarget } from "@/lib/gravitas-workspace";
+import { GRAVITAS_RESUME_TARGET, isValidResumeTarget } from "@/lib/gravitas-workspace";
 import { AUTH_RESUME_COOKIE } from "@/lib/auth-resume";
+import { ACQUISITION_CONSENT_VERSION } from "@/lib/acquisition-funnels";
+import {
+  addMailchimpLead,
+  describeMailchimpFailure,
+  JUMP_IN_MAILCHIMP_TAG,
+} from "@/lib/mailchimp";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -18,6 +24,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const email = typeof body?.email === "string" ? body.email.trim() : "";
   const nextTarget = isValidResumeTarget(body?.next) ? body.next : "/workbench";
+  const hasJumpInConsent = body?.marketingConsent === true && nextTarget === GRAVITAS_RESUME_TARGET;
 
   if (!EMAIL.test(email)) {
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
@@ -74,6 +81,30 @@ export async function POST(request: NextRequest) {
       path: "/",
       maxAge: 10 * 60,
     });
+    if (hasJumpInConsent) {
+      after(async () => {
+        try {
+          const result = await addMailchimpLead({
+            email,
+            firstName: "",
+            tag: JUMP_IN_MAILCHIMP_TAG,
+            consentTag: ACQUISITION_CONSENT_VERSION,
+            doorway: "jump-in",
+            lifecycleState: "jump_in",
+          });
+          console.info("auth_jump_in_mailchimp", {
+            outcome: result.outcome,
+            tagged: result.tagged,
+          });
+        } catch (mailchimpError) {
+          const failure = describeMailchimpFailure(mailchimpError);
+          console.warn("Jump In Mailchimp capture failed", {
+            category: failure.category,
+            providerStatus: failure.providerStatus,
+          });
+        }
+      });
+    }
   }
 
   console.info("auth_magic_link", {

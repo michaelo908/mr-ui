@@ -22,6 +22,8 @@ export type AcquisitionFunnel = {
 export const ACQUISITION_CONSENT_VERSION = "gravitas_doorway_consent_v1";
 export const ACQUISITION_CONSENT_DISCLOSURE =
   "By starting your free check, you agree to receive occasional Multirrupt emails. You can unsubscribe at any time.";
+export const JUMP_IN_CONSENT_DISCLOSURE =
+  "By sending your sign-in code, you agree to receive occasional Multirrupt emails. You can unsubscribe at any time.";
 
 export const ACQUISITION_FUNNELS: Record<FunnelSlug, AcquisitionFunnel> = {
   email: {
