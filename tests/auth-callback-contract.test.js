@@ -38,6 +38,9 @@ test("a consented Jump In sign-in enters Mailchimp without making ordinary login
   assert.match(route, /addMailchimpLead/);
   assert.match(route, /JUMP_IN_MAILCHIMP_TAG/);
   assert.match(route, /lifecycleState: "jump_in"/);
+  assert.doesNotMatch(route, /after\(/);
+  assert.match(route, /await addMailchimpLead/);
+  assert.match(route, /console\.warn\("Jump In Mailchimp capture failed"/);
   assert.doesNotMatch(route, /console\.(info|warn)\([^\n]*(email|token|code)/i);
 });
 
