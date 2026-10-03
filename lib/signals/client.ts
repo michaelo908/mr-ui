@@ -2,6 +2,7 @@
 
 import type { SignalAttribution } from "@/lib/signals/contracts";
 import type { SignalName } from "@/lib/signals/registry";
+import { trackMetaSignal } from "@/lib/meta-pixel";
 
 const VISITOR_KEY = "gravitasVisitorIdV1";
 const SESSION_KEY = "gravitasSessionIdV1";
@@ -91,6 +92,7 @@ export function emitSignal(
   properties: Record<string, unknown> = {}
 ) {
   try {
+    trackMetaSignal(name);
     const identity = initializeSignalIdentity();
     const isTest = location.hostname === "localhost" || isSignalsBrowserExcluded();
     void fetch("/api/signals", {

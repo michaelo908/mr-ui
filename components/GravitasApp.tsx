@@ -63,6 +63,7 @@ import {
   type TextEvidenceLaunch,
 } from "@/lib/text-evidence";
 import { emitSignal, initializeSignalIdentity, signalHeaders, toSignalIdentifier } from "@/lib/signals/client";
+import { trackMetaEvent } from "@/lib/meta-pixel";
 import type { SignalName } from "@/lib/signals/registry";
 import type { AcquisitionFunnel } from "@/lib/acquisition-funnels";
 import {
@@ -3778,6 +3779,7 @@ if (urlSourceImages.length > 0) {
         next.add(getAnalysisRunKey(activeSourceKey, selectedGraviton));
         return next;
       });
+      trackMetaEvent("AnalysisCompleted");
 
       const analysisJump = getRandomInt(14, 28);
       const rewriteJump = getRandomInt(36, 68);
