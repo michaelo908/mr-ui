@@ -30,3 +30,16 @@ test("quality events are wired at the actual product moments", () => {
   assert.match(clientSignals, /trackMetaSignal\(name\)/);
   assert.match(editor, /trackMetaEvent\("AnalysisCompleted"\)/);
 });
+
+test("server purchase measurement is authoritative and privacy-bounded", () => {
+  const capi = read("lib/meta-capi.ts");
+  const webhook = read("app/api/stripe/webhook/route.ts");
+
+  assert.match(capi, /event_name: "Purchase"/);
+  assert.match(capi, /event_id: input\.eventId/);
+  assert.match(capi, /action_source: "website"/);
+  assert.match(capi, /Deliberately excludes customer identity, submitted writing, report content/);
+  assert.doesNotMatch(capi, /user_data/);
+  assert.match(webhook, /eventId: `stripe-checkout:\$\{session\.id\}`/);
+  assert.match(webhook, /if \(event\.livemode\)/);
+});
