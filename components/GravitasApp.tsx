@@ -3919,10 +3919,16 @@ if (urlSourceImages.length > 0) {
             <div className="mt-2 text-[10px] font-medium uppercase tracking-[0.16em] text-neutral-600">
               Multirrupt {MULTIRRUPT_RELEASE} · build {MULTIRRUPT_BUILD}
             </div>
+            <a
+              href="https://multirrupt.com"
+              className="mt-3 inline-flex text-xs font-medium text-neutral-400 underline decoration-neutral-600 underline-offset-4 transition hover:text-neutral-200"
+            >
+              ← Back to Multirrupt.com
+            </a>
             {isJumpIn ? (
               <a
                 href="/workbench"
-                className="mt-3 inline-flex text-sm font-semibold text-sky-300 underline decoration-sky-400/60 underline-offset-4 transition hover:text-sky-200"
+                className="mt-3 block text-sm font-semibold text-sky-300 underline decoration-sky-400/60 underline-offset-4 transition hover:text-sky-200"
               >
                 Already have a subscription or Day Pass? Log in
               </a>
