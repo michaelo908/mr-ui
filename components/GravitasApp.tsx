@@ -2195,7 +2195,7 @@ const gravitonGroups = [
           setWorkspaceStorageWarning(
             isStorageQuotaError(error)
               ? "This browser does not have enough storage to carry your current work through checkout. Remove some large images or copy your work before continuing."
-              : "Your current work could not be prepared for checkout in this browser. Copy it before continuing."
+              : "This browser cannot save a recovery copy of this work. Your analysis can continue normally, but copy or download anything you want to keep before closing this window or purchasing access."
           );
           return false;
         }
