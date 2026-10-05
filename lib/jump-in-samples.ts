@@ -48,7 +48,7 @@ The outcome would be more than a refreshed visual presence. It would give staff 
 
 We recognise that the Network operates with a finite budget and a demanding annual calendar. For that reason, our proposed process is deliberately staged. The first phase creates useful clarity even if later design work is scheduled around funding or event commitments. The second phase can then focus resources on the pages and pathways that matter most, rather than attempting to rebuild every part of the site at once.
 
-Our fee for the discovery and narrative framework phase is $18,000 plus GST. A detailed scope, timeline and optional design-and-build pathway are included in the following pages. We believe this approach will give the Regional Arts Network a more confident public presence, while preserving the complexity and generosity that members already value.`,
+Our fee for the discovery and narrative framework phase is $18,000 plus Tax. A detailed scope, timeline and optional design-and-build pathway are included in the following pages. We believe this approach will give the Regional Arts Network a more confident public presence, while preserving the complexity and generosity that members already value.`,
   },
 ] as const;
 
