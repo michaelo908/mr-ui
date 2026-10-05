@@ -11,6 +11,7 @@ test("a first anonymous Jump In analysis is previewed, then gated before full ac
   const page = read("app/jump-in/page.tsx");
   const app = read("components/GravitasApp.tsx");
   const analysis = read("app/api/jump-in/mr/route.ts");
+  const start = read("app/api/jump-in/start/route.ts");
   const source = read("app/api/jump-in/sources/url/route.ts");
 
   assert.match(page, /requireAuthBeforeAnalysis/);
@@ -30,6 +31,10 @@ test("a first anonymous Jump In analysis is previewed, then gated before full ac
   assert.match(analysis, /X-Jump-In-Preview/);
   assert.match(analysis, /previewLocked: true/);
   assert.match(analysis, /const response = await handleMrRequest/);
+  assert.match(app, /fetch\("\/api\/jump-in\/start"/);
+  assert.match(app, /previewTimerStartRequestedRef/);
+  assert.match(start, /hasAuthenticatedJumpInUser/);
+  assert.match(start, /X-Jump-In-Started-At/);
   assert.match(source, /hasAuthenticatedJumpInUser/);
   assert.match(source, /status: 401/);
   assert.ok(source.indexOf("if (!(await hasAuthenticatedJumpInUser()))") < source.indexOf("return handleUrlSourceRequest"));

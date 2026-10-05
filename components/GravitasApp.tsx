@@ -2111,6 +2111,7 @@ const gravitonGroups = [
   const supabase = useMemo(() => createClient(), []);
   const sendLockRef = useRef(false);
   const runCoordinatorRef = useRef(createAnalysisRunCoordinator());
+  const previewTimerStartRequestedRef = useRef(false);
   const workspacePersistenceCoordinatorRef = useRef(
     createRevisionedPersistenceCoordinator()
   );
@@ -2760,6 +2761,56 @@ useEffect(() => {
     }, 150);
     return () => window.clearTimeout(timeout);
   }, [isJumpIn, jumpInSession, persistJumpInWorkspace, workspaceHydration]);
+
+  useEffect(() => {
+    if (
+      !isJumpIn ||
+      !jumpInAuthenticated ||
+      !jumpInSession ||
+      jumpInSession.startedAt !== null ||
+      !canAutosaveWorkspace(workspaceHydration) ||
+      !messages.some(
+        (message) =>
+          message.role === "assistant" && message.analysisStatus === "success"
+      ) ||
+      previewTimerStartRequestedRef.current
+    ) {
+      return;
+    }
+
+    previewTimerStartRequestedRef.current = true;
+    void (async () => {
+      const response = await fetch("/api/jump-in/start", {
+        method: "POST",
+        headers: { "X-Jump-In-Session-Id": jumpInSession.sessionId },
+      });
+      if (!response.ok) {
+        previewTimerStartRequestedRef.current = false;
+        if (response.status === 403) markJumpInExpired();
+        return;
+      }
+
+      const startedAt = Number(response.headers.get("X-Jump-In-Started-At"));
+      if (!Number.isFinite(startedAt) || startedAt <= 0) {
+        previewTimerStartRequestedRef.current = false;
+        return;
+      }
+
+      setJumpInSession((current) => {
+        if (!current || current.startedAt !== null) return current;
+        const next = { ...current, startedAt };
+        window.localStorage.setItem(JUMP_IN_STORAGE_KEY, JSON.stringify(next));
+        return next;
+      });
+      setJumpInNow(Date.now());
+    })();
+  }, [
+    isJumpIn,
+    jumpInAuthenticated,
+    jumpInSession,
+    messages,
+    workspaceHydration,
+  ]);
 
   useEffect(() => {
     if (
