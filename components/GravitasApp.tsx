@@ -214,7 +214,7 @@ function JumpInWelcome({ funnel, firstName }: { funnel?: AcquisitionFunnel; firs
           {funnel?.jumpInPrompt ?? "Paste it below. Then press Gravitate."}
         </p>
         <p className="jump-in-reveal jump-in-reveal-6 mt-2 text-xs text-neutral-600">
-          Your 20-minute session starts with your first analysis.
+          Your 20-minute session begins after you sign in.
         </p>
       </div>
 
@@ -2094,6 +2094,7 @@ const gravitonGroups = [
   const [accessResolved, setAccessResolved] = useState(false);
   const [authenticatedUserId, setAuthenticatedUserId] = useState<string | null>(null);
   const [jumpInAuthenticated, setJumpInAuthenticated] = useState(false);
+  const [previewUnlockRequired, setPreviewUnlockRequired] = useState(false);
   const [telemetrySeed, setTelemetrySeed] = useState<TelemetrySeed | null>(null);
   const [telemetryMinuteTick, setTelemetryMinuteTick] = useState(0);
   const [analysisBoost, setAnalysisBoost] = useState(0);
@@ -3097,10 +3098,12 @@ useEffect(() => {
     };
   }, [accessResolved, authenticatedUserId, isBookTrial, isJumpIn, isSubscribed, setMessages]);
 
-  function startJumpInSession() {
+  function startJumpInSession(startNow = true) {
     if (!isJumpIn) return null;
 
-    const startedAt = jumpInSession?.startedAt ?? Date.now();
+    const startedAt = startNow
+      ? jumpInSession?.startedAt ?? Date.now()
+      : jumpInSession?.startedAt ?? null;
     const session: JumpInSessionState = {
       sessionId: jumpInSession?.sessionId ?? crypto.randomUUID(),
       sessionStartedEventSent:
@@ -3113,6 +3116,21 @@ useEffect(() => {
     setJumpInSession(session);
     setJumpInNow(Date.now());
     return session;
+  }
+
+  async function unlockPreviewAnalysis() {
+    const workspaceReady = await persistJumpInWorkspace();
+    if (!workspaceReady) return;
+    window.localStorage.setItem(
+      GRAVITAS_RESUME_MARKER_KEY,
+      HOMEPAGE_JUMP_IN_RESUME_TARGET
+    );
+    emitSignal("discovery.jump_in_auth_requested", signalSurface, {
+      source_mode: inputMode,
+      graviton: toSignalIdentifier(selectedGraviton),
+      cadence,
+    });
+    router.push(`/login?next=${encodeURIComponent(HOMEPAGE_JUMP_IN_RESUME_TARGET)}`);
   }
 
   function markJumpInExpired() {
@@ -3293,96 +3311,8 @@ useEffect(() => {
         ? "Document accepted. Preparing your analysis…"
         : "Content accepted. Preparing your analysis…"
     );
-    // Let the immediate acknowledgement render before a possible sign-in
-    // navigation. This also makes the click feel deliberate rather than lost.
+    // Let the immediate acknowledgement render before starting the analysis.
     await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-
-    if (isJumpIn && requireAuthBeforeAnalysis && !jumpInAuthenticated) {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (session?.user) {
-        setJumpInAuthenticated(true);
-      } else {
-        setAnalysisProgress(
-          inputMode === "document"
-            ? "Document accepted. Taking you to sign in…"
-            : "Content accepted. Taking you to sign in…"
-        );
-        // The marketing page embeds this editor from a different site. Never
-        // attempt to authenticate in that third-party frame: browser privacy
-        // controls can withhold the resulting session. Carry the pending work
-        // to the first-party editor instead.
-        if (window.top !== window) {
-          try {
-            const images = await Promise.all(imageFiles.map(async (file) => ({
-              name: file.name,
-              type: file.type,
-              lastModified: file.lastModified,
-              dataUrl: await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onerror = () => reject(reader.error ?? new Error("image_read_failed"));
-                reader.onload = () => typeof reader.result === "string"
-                  ? resolve(reader.result)
-                  : reject(new Error("image_read_failed"));
-                reader.readAsDataURL(file);
-              }),
-            })));
-            const payload: JumpInHandoffPayload = {
-              version: JUMP_IN_HANDOFF_VERSION,
-              sessionId: jumpInSession?.sessionId ?? crypto.randomUUID(),
-              inputMode,
-              draft,
-              urlDraft,
-              selectedGraviton,
-              cadence,
-              images,
-              document: uploadedDocument,
-            };
-            const handoffResponse = await fetch("/api/jump-in/handoff", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
-            const handoff = await handoffResponse.json().catch(() => null);
-            if (!handoffResponse.ok || typeof handoff?.token !== "string") {
-              throw new Error("handoff_unavailable");
-            }
-            const destination = new URL("/jump-in", window.location.origin);
-            destination.searchParams.set("handoff", handoff.token);
-            window.open(destination.toString(), "_top");
-            return;
-          } catch {
-            sendLockRef.current = false;
-            setIsLoading(false);
-            setAnalysisProgress(null);
-            setWorkspaceStorageWarning(
-              "We could not safely carry this work into the full editor. Please copy it, then use Jump In from the top of the page."
-            );
-            return;
-          }
-        }
-        const workspaceReady = await persistJumpInWorkspace();
-        if (!workspaceReady) {
-          sendLockRef.current = false;
-          setIsLoading(false);
-          setAnalysisProgress(null);
-          return;
-        }
-        window.localStorage.setItem(
-          GRAVITAS_RESUME_MARKER_KEY,
-          HOMEPAGE_JUMP_IN_RESUME_TARGET
-        );
-        emitSignal("discovery.jump_in_auth_requested", signalSurface, {
-          source_mode: inputMode,
-          graviton: toSignalIdentifier(selectedGraviton),
-          cadence,
-        });
-        router.push(`/login?next=${encodeURIComponent(HOMEPAGE_JUMP_IN_RESUME_TARGET)}`);
-        return;
-      }
-    }
 
      if (!isJumpIn && !isSubscribed && !isBookTrial) {
 
@@ -3533,7 +3463,7 @@ useEffect(() => {
       return;
     }
 
-    const activeJumpInSession = startJumpInSession();
+    const activeJumpInSession = startJumpInSession(jumpInAuthenticated);
 
     setAnalysisProgress(
       inputMode === "url"
@@ -3664,6 +3594,9 @@ if (urlSourceImages.length > 0) {
         });
       }
 
+      const isAnonymousPreview =
+        isJumpIn && res.headers.get("X-Jump-In-Preview") === "true";
+
       if (res.status === 403 && data.expired) {
         markJumpInExpired();
         setMessages((m) =>
@@ -3696,7 +3629,9 @@ if (urlSourceImages.length > 0) {
         .filter(Boolean)
         .join("\n\n");
       const rewriteRequired =
-        !isHeresy && isRewriteCapableGraviton(selectedGraviton);
+        !isAnonymousPreview &&
+        !isHeresy &&
+        isRewriteCapableGraviton(selectedGraviton);
 
       if (
         rewriteRequired &&
@@ -3787,6 +3722,9 @@ if (urlSourceImages.length > 0) {
       setAnalysisBoost((prev) => prev + analysisJump);
       setRewriteBoost((prev) => prev + rewriteJump);
       scrollToLatestEditorSummary();
+      if (isAnonymousPreview) {
+        setPreviewUnlockRequired(true);
+      }
 
     } catch (err) {
       if (!runCoordinatorRef.current.isCurrent(runId)) return;
@@ -3894,6 +3832,36 @@ if (urlSourceImages.length > 0) {
 
   return (
     <main className={classNames("gravitas-shell text-neutral-100", embedded ? "rounded-[2rem]" : "min-h-screen")}>
+      {isJumpIn && previewUnlockRequired && !jumpInAuthenticated ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/65 px-4 backdrop-blur-[1px]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="preview-unlock-title"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-[#C6A75A]/70 bg-neutral-950 p-6 shadow-2xl sm:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#C6A75A]">
+              Your reader analysis is ready
+            </p>
+            <h2 id="preview-unlock-title" className="mt-3 text-2xl font-semibold text-white">
+              See the whole response.
+            </h2>
+            <p className="mt-3 text-base leading-7 text-neutral-300">
+              We&apos;ve completed your first Multirrupt analysis. Enter your email to unlock the detail, evidence and rewrites — your work will be waiting here.
+            </p>
+            <button
+              type="button"
+              onClick={() => void unlockPreviewAnalysis()}
+              className="mt-6 w-full rounded-xl bg-[#C6A75A] px-5 py-3 text-base font-semibold text-neutral-950 transition hover:bg-[#dbc078]"
+            >
+              Continue with email
+            </button>
+            <p className="mt-3 text-center text-xs text-neutral-500">
+              No password. We&apos;ll send a six-digit sign-in code.
+            </p>
+          </div>
+        </div>
+      ) : null}
       <div className={classNames("relative z-10 mx-auto w-full max-w-5xl px-4 sm:px-6", embedded ? "py-5 sm:py-6" : "py-8 sm:py-12")}>
         <header className="gravitas-header mb-6 flex flex-col gap-5 rounded-2xl px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div>
@@ -3944,7 +3912,7 @@ if (urlSourceImages.length > 0) {
             ) : null}
             {isJumpIn && requireAuthBeforeAnalysis && !jumpInAuthenticated ? (
               <div className="mt-2 text-xs text-neutral-400">
-                Enter your email when you&apos;re ready. Your time begins when you run your first analysis.
+                Your first reader analysis is free. Sign in after you see the result to unlock the full response and rewrites.
               </div>
             ) : null}
             {isJumpIn ? (
@@ -3958,8 +3926,10 @@ if (urlSourceImages.length > 0) {
               >
                 {jumpInExpired
                   ? "Free session ended"
-                  : jumpInSession?.startedAt === null
-                    ? "20:00 starts with your first analysis"
+                  : !jumpInAuthenticated
+                    ? "First analysis free · 20 minutes after sign-in"
+                    : jumpInSession?.startedAt === null
+                      ? "20:00 starts with your first analysis"
                     : `${formatJumpInRemaining(jumpInRemainingMs)} remaining`}
               </div>
             ) : null}

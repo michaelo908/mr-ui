@@ -6,13 +6,11 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
-test("embedded Jump In hands pending work to a first-party editor before login", () => {
+test("legacy Jump In handoffs remain recoverable in the first-party editor", () => {
   const editor = read("components/GravitasApp.tsx");
   const handoff = read("app/api/jump-in/handoff/route.ts");
 
-  assert.match(editor, /if \(window\.top !== window\)/);
-  assert.match(editor, /fetch\("\/api\/jump-in\/handoff"/);
-  assert.match(editor, /window\.open\(destination\.toString\(\), "_top"\)/);
+  assert.match(editor, /fetch\(`\/api\/jump-in\/handoff\?token=\$\{encodeURIComponent\(handoffToken\)\}`/);
   assert.match(editor, /window\.history\.replaceState\(\{\}, "", "\/jump-in"\)/);
   assert.match(handoff, /JUMP_IN_HANDOFF_MAX_BYTES/);
   assert.match(handoff, /too_many_requests/);
