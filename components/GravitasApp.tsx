@@ -3898,7 +3898,7 @@ if (urlSourceImages.length > 0) {
               See the whole response.
             </h2>
             <p className="mt-3 text-base leading-7 text-neutral-300">
-              We&apos;ve completed your first Multirrupt analysis. Enter your email to unlock the detail, evidence and rewrites — your work will be waiting here.
+              We&apos;ve completed your first Multirrupt analysis. Enter your email to unlock the detail, evidence and rewrites — and continue with more analyses. Your work will be waiting here.
             </p>
             <button
               type="button"
