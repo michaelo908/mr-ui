@@ -107,6 +107,7 @@ import {
 } from "@/lib/gravitas-active-workspace-store";
 import { createRevisionedPersistenceCoordinator } from "@/lib/gravitas-persistence-coordinator";
 import { MULTIRRUPT_BUILD, MULTIRRUPT_RELEASE } from "@/lib/multirrupt-version";
+import { JUMP_IN_SAMPLES, type JumpInSampleId } from "@/lib/jump-in-samples";
 import {
   alternateRewriteAnalysisContext,
   extractRewriteOrRaw,
@@ -1978,6 +1979,7 @@ export default function GravitasApp({
     rawSetMessages(next);
   }, []);
   const [draft, setDraft] = useState("");
+  const [jumpInSampleId, setJumpInSampleId] = useState<JumpInSampleId | null>(null);
   const [inputMode, setInputMode] = useState<"text" | "url" | "images" | "document">(funnel?.preferredSource ?? "text");
   const [urlDraft, setUrlDraft] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
@@ -3180,6 +3182,7 @@ useEffect(() => {
       source_mode: inputMode,
       graviton: toSignalIdentifier(selectedGraviton),
       cadence,
+      ...(jumpInSampleId ? { sample_id: jumpInSampleId } : {}),
     });
     router.push(`/login?next=${encodeURIComponent(HOMEPAGE_JUMP_IN_RESUME_TARGET)}`);
   }
@@ -3333,6 +3336,7 @@ useEffect(() => {
     lastSavedWorkspaceRef.current = null;
     setMessages([]);
     setDraft("");
+    setJumpInSampleId(null);
     setUrlDraft("");
     setUrlError(null);
     setImportedUrl(null);
@@ -3402,6 +3406,7 @@ useEffect(() => {
       source_mode: inputMode,
       graviton: toSignalIdentifier(selectedGraviton),
       cadence,
+      ...(jumpInSampleId ? { sample_id: jumpInSampleId } : {}),
     });
     setIsLoading(true);
     setIsCapturingUrl(inputMode === "url");
@@ -4319,6 +4324,7 @@ if (urlSourceImages.length > 0) {
             source_mode: value,
           });
           setInputMode(value);
+          setJumpInSampleId(null);
           setUrlError(null);
           setImportedUrl(null);
           if (value !== "images") setImageFiles([]);
@@ -4377,6 +4383,7 @@ if (urlSourceImages.length > 0) {
           // Keep the helpful scheme visible while preserving an empty draft
           // until the visitor has entered an actual address.
           setUrlDraft(nextUrl === "https://" ? "" : nextUrl);
+          setJumpInSampleId(null);
           setUrlError(null);
           setImportedUrl(null);
         }}
@@ -4448,11 +4455,46 @@ if (urlSourceImages.length > 0) {
       {documentError ? <p className="mt-2 text-sm text-amber-300">{documentError}</p> : null}
     </div>
   ) : (
+  <>
+  {isJumpIn ? (
+    <div className="mb-3 rounded-xl border border-neutral-800 bg-neutral-900/40 p-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-neutral-200">Nothing handy to paste?</p>
+          <p className="mt-0.5 text-xs text-neutral-500">Try a realistic sample first, then test something of your own.</p>
+        </div>
+        <select
+          value={jumpInSampleId ?? ""}
+          onChange={(event) => {
+            const sample = JUMP_IN_SAMPLES.find((item) => item.id === event.target.value);
+            if (!sample) return;
+            workspacePersistencePausedRef.current = false;
+            setDraft(sample.content);
+            setJumpInSampleId(sample.id);
+            setImageFiles([]);
+            setUploadedDocument(null);
+            setDocumentError(null);
+            emitSignal("discovery.sample_selected", signalSurface, { sample_id: sample.id });
+          }}
+          disabled={isDemoLocked}
+          aria-label="Try a sample"
+          className="h-11 w-full rounded-lg border border-[#C6A75A]/60 bg-[#C6A75A]/10 px-3 text-sm font-semibold text-[#E7CD8D] outline-none disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+        >
+          <option value="" disabled>Try a sample…</option>
+          {JUMP_IN_SAMPLES.map((sample) => <option key={sample.id} value={sample.id}>{sample.label}</option>)}
+        </select>
+      </div>
+      {jumpInSampleId ? (
+        <p className="mt-2 text-xs text-[#C6A75A]">Sample loaded. Press Gravitate to see how it lands — or replace it with your own writing.</p>
+      ) : null}
+    </div>
+  ) : null}
   <textarea
     value={draft}
     onChange={(e) => {
   workspacePersistencePausedRef.current = false;
   setDraft(e.target.value);
+  setJumpInSampleId(null);
 
   if (e.target.value.trim().length > 0 && imageFiles.length > 0) {
     setImageFiles([]);
@@ -4466,6 +4508,7 @@ if (urlSourceImages.length > 0) {
       isDemoLocked && "cursor-not-allowed opacity-60"
     )}
   />
+  </>
   )}
 
   <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -4551,6 +4594,7 @@ if (urlSourceImages.length > 0) {
       setImageFiles(compressedFiles);
       setInputMode("images");
       setDraft("");
+      setJumpInSampleId(null);
     }}
     disabled={isDemoLocked}
     className="hidden"
@@ -4582,6 +4626,7 @@ if (urlSourceImages.length > 0) {
           throw new Error(typeof body?.error === "string" ? body.error : "Multirrupt could not read that document.");
         }
         setDraft(body.text);
+        setJumpInSampleId(null);
         setUploadedDocument(body.document as UploadedDocument);
         setImageFiles([]);
         setInputMode("document");
