@@ -3978,7 +3978,7 @@ if (urlSourceImages.length > 0) {
                 {jumpInExpired
                   ? "Free session ended"
                   : !jumpInAuthenticated
-                    ? "First analysis free · 20 minutes after sign-in"
+                    ? "20 minutes of free analysis and rewrites after sign-in"
                     : jumpInSession?.startedAt === null
                       ? "20:00 starts with your first analysis"
                     : `${formatJumpInRemaining(jumpInRemainingMs)} remaining`}
