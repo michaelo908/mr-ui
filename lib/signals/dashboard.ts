@@ -276,6 +276,82 @@ export function buildSourceBreakdown(rows: DashboardSignal[]) {
     .sort((a, b) => b.completed - a.completed || b.starts - a.starts || b.sessions - a.sessions || a.source.localeCompare(b.source));
 }
 
+export type CampaignBreakdown = {
+  campaign: string;
+  sessions: number;
+  starts: number;
+  completed: number;
+  authRequests: number;
+  dayPassClicks: number;
+  purchases: number;
+};
+
+function campaignFor(row: DashboardSignal) {
+  const attribution = attributionFor(row);
+  const campaign = attribution.utmCampaign;
+  if (typeof campaign === "string" && campaign) return readableSource(campaign);
+
+  const metaCampaignId = attribution.metaCampaignId;
+  if (typeof metaCampaignId === "string" && metaCampaignId) {
+    return `Meta campaign ${metaCampaignId}`;
+  }
+
+  // Keep a missing label visible rather than quietly folding these visitors
+  // into direct traffic. It tells us the ad needs a campaign parameter.
+  return sourceFor(row) === "Facebook" ? "Facebook (campaign label missing)" : null;
+}
+
+/**
+ * Campaign-level acquisition view. It uses only anonymous attribution that
+ * arrives with the visit and with Stripe's verified checkout event; no IP,
+ * location, submitted material, or identity is used.
+ */
+export function buildCampaignBreakdown(rows: DashboardSignal[]): CampaignBreakdown[] {
+  const campaigns = new Map<string, {
+    campaign: string;
+    sessions: Set<string>;
+    starts: Set<string>;
+    completed: Set<string>;
+    authRequests: Set<string>;
+    dayPassClicks: Set<string>;
+    purchases: Set<string>;
+  }>();
+
+  for (const row of rows) {
+    const campaign = campaignFor(row);
+    const key = row.session_id ?? row.visitor_id ?? row.id;
+    if (!campaign || !key) continue;
+    const current = campaigns.get(campaign) ?? {
+      campaign,
+      sessions: new Set<string>(),
+      starts: new Set<string>(),
+      completed: new Set<string>(),
+      authRequests: new Set<string>(),
+      dayPassClicks: new Set<string>(),
+      purchases: new Set<string>(),
+    };
+    current.sessions.add(key);
+    if (row.signal_name === "analysis.started") current.starts.add(key);
+    if (row.signal_name === "analysis.completed" && row.verified) current.completed.add(key);
+    if (row.signal_name === "discovery.jump_in_auth_requested") current.authRequests.add(key);
+    if (row.signal_name === "discovery.day_pass_clicked") current.dayPassClicks.add(key);
+    if (row.signal_name === "purchase.checkout_completed" && row.verified) current.purchases.add(key);
+    campaigns.set(campaign, current);
+  }
+
+  return [...campaigns.values()]
+    .map(({ campaign, sessions, starts, completed, authRequests, dayPassClicks, purchases }) => ({
+      campaign,
+      sessions: sessions.size,
+      starts: starts.size,
+      completed: completed.size,
+      authRequests: authRequests.size,
+      dayPassClicks: dayPassClicks.size,
+      purchases: purchases.size,
+    }))
+    .sort((a, b) => b.purchases - a.purchases || b.completed - a.completed || b.starts - a.starts || b.sessions - a.sessions || a.campaign.localeCompare(b.campaign));
+}
+
 export function buildAnonymousStories(rows: DashboardSignal[], limit = 12) {
   const grouped = new Map<string, DashboardSignal[]>();
   for (const row of rows) {

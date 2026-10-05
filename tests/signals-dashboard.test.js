@@ -3,6 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   buildAnonymousStories,
+  buildCampaignBreakdown,
   buildFounderSnapshot,
   buildFunnel,
   buildHighlights,
@@ -104,6 +105,22 @@ test("source breakdown ties tagged activity to anonymous sessions and verified c
   assert.deepEqual(buildSourceBreakdown(attributed), [
     { source: "Facebook", sessions: 1, starts: 1, completed: 1 },
     { source: "Google", sessions: 1, starts: 0, completed: 0 },
+  ]);
+});
+
+test("campaign performance follows attribution through sign-in, Day Pass interest and purchase", () => {
+  const campaignRows = [
+    row("12", "discovery.session_started", "au-session", "visitor-au", { first_touch: { utmSource: "facebook", utmCampaign: "mr_reader_side_au_v1" } }),
+    row("13", "analysis.started", "au-session", "visitor-au", { first_touch: { utmSource: "facebook", utmCampaign: "mr_reader_side_au_v1" } }),
+    row("14", "analysis.completed", "au-session", "visitor-au", { verified: true, first_touch: { utmSource: "facebook", utmCampaign: "mr_reader_side_au_v1" } }),
+    row("15", "discovery.jump_in_auth_requested", "au-session", "visitor-au", { first_touch: { utmSource: "facebook", utmCampaign: "mr_reader_side_au_v1" } }),
+    row("16", "discovery.day_pass_clicked", "au-session", "visitor-au", { first_touch: { utmSource: "facebook", utmCampaign: "mr_reader_side_au_v1" } }),
+    row("17", "purchase.checkout_completed", "au-session", "visitor-au", { verified: true, first_touch: { utmSource: "facebook", utmCampaign: "mr_reader_side_au_v1" } }),
+    row("18", "discovery.session_started", "us-session", "visitor-us", { first_touch: { utmSource: "facebook", utmCampaign: "mr_reader_side_us_v1" } }),
+  ];
+  assert.deepEqual(buildCampaignBreakdown(campaignRows), [
+    { campaign: "Mr Reader Side Au V1", sessions: 1, starts: 1, completed: 1, authRequests: 1, dayPassClicks: 1, purchases: 1 },
+    { campaign: "Mr Reader Side Us V1", sessions: 1, starts: 0, completed: 0, authRequests: 0, dayPassClicks: 0, purchases: 0 },
   ]);
 });
 
