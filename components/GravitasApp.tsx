@@ -1011,8 +1011,12 @@ function ReaderResponsePanel({
     READER_RESPONSE_VALUES[signals.Vulnerable],
     READER_RESPONSE_VALUES[signals["At risk"]]
   ) / 4;
-  const total = hold + tension;
-  const holdWidth = total > 0 ? `${Math.round((hold / total) * 100)}%` : "50%";
+  // Reader hold and reader tension are independent qualitative signals.  Do not
+  // make the visual a zero-sum contest between them: a present but contained
+  // tension should not make half of an otherwise strong piece appear to be at
+  // risk.  Reserve half the bar for only the most pronounced tension.
+  const tensionWidth = tension === 0 ? 0 : Math.min(55, Math.round(12 + tension * 40));
+  const holdWidth = `${100 - tensionWidth}%`;
   const holdLabel =
     hold >= 0.7 ? "Strong reader hold" : hold >= 0.35 ? "Reader hold developing" : "Reader hold is fragile";
   const tensionLabel =
