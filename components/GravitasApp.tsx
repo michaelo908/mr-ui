@@ -50,9 +50,7 @@ import {
 import {
   parseLegacyReaderHold,
   parseReaderResponse,
-  READER_RESPONSE_DIMENSIONS,
   type ReaderResponse,
-  type ReaderResponseDimension,
   type ReaderResponseIntensity,
 } from "@/lib/reader-hold";
 import ImageLightbox from "@/components/ImageLightbox";
@@ -990,20 +988,12 @@ function ThinkingStatus() {
   return <span className="italic text-emerald-200/80">{steps[idx]}</span>;
 }
 
-const READER_RESPONSE_COLORS: Record<ReaderResponseDimension, string> = {
-  Strong: "#4ADE80",
-  Engaged: "#2DD4BF",
-  Uneven: "#FACC15",
-  Vulnerable: "#FB923C",
-  "At risk": "#F87171",
-};
-
-const READER_RESPONSE_WIDTHS: Record<ReaderResponseIntensity, string> = {
-  none: "0%",
-  trace: "18%",
-  present: "43%",
-  pronounced: "70%",
-  dominant: "100%",
+const READER_RESPONSE_VALUES: Record<ReaderResponseIntensity, number> = {
+  none: 0,
+  trace: 1,
+  present: 2,
+  pronounced: 3,
+  dominant: 4,
 };
 
 function ReaderResponsePanel({
@@ -1012,48 +1002,50 @@ function ReaderResponsePanel({
   response: ReaderResponse;
 }) {
   const { signals, verdict } = response;
+  const hold =
+    (READER_RESPONSE_VALUES[signals.Strong] +
+      READER_RESPONSE_VALUES[signals.Engaged]) /
+    8;
+  const tension = Math.max(
+    READER_RESPONSE_VALUES[signals.Uneven],
+    READER_RESPONSE_VALUES[signals.Vulnerable],
+    READER_RESPONSE_VALUES[signals["At risk"]]
+  ) / 4;
+  const total = hold + tension;
+  const holdWidth = total > 0 ? `${Math.round((hold / total) * 100)}%` : "50%";
+  const holdLabel =
+    hold >= 0.7 ? "Strong reader hold" : hold >= 0.35 ? "Reader hold developing" : "Reader hold is fragile";
+  const tensionLabel =
+    tension >= 0.7 ? "Meaningful reader tension" : tension >= 0.35 ? "Reader tension to review" : "Limited reader tension";
   return (
     <section
-      aria-label="Reader Response"
+      aria-label="Reader Hold"
       data-editor-summary-anchor="true"
       className="rounded-2xl border border-neutral-700 bg-neutral-950/70 px-4 py-5 sm:px-5"
     >
       <h2 className="text-[20px] font-semibold tracking-tight text-neutral-100">
-        Reader Response
+        Reader Hold
       </h2>
-      <div className="mt-4 grid gap-3 sm:grid-cols-5">
-        {READER_RESPONSE_DIMENSIONS.map((dimension) => {
-          const intensity = signals[dimension];
-          const color = READER_RESPONSE_COLORS[dimension];
-          return (
-            <div key={dimension} className="min-w-0">
-              <div
-                className="h-2 overflow-hidden rounded-full bg-neutral-800"
-                aria-label={`${dimension}: ${intensity}`}
-                role="img"
-              >
-                <div
-                  className="h-full rounded-full transition-[width] duration-500"
-                  style={{
-                    width: READER_RESPONSE_WIDTHS[intensity],
-                    backgroundColor: color,
-                  }}
-                />
-              </div>
-              <div
-                className="mt-2 text-center text-[10px] font-medium leading-3 text-neutral-500 sm:text-[11px]"
-                style={{ color: intensity === "none" ? undefined : color }}
-              >
-                {dimension}
-              </div>
-            </div>
-          );
-        })}
+      <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-950/55 px-4 py-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm font-semibold">
+          <span className="text-emerald-300">{holdLabel}</span>
+          <span className="text-amber-200">{tensionLabel}</span>
+        </div>
+        <div
+          className="mt-3 flex h-3 overflow-hidden rounded-full bg-amber-400/70"
+          aria-label={`${holdLabel}; ${tensionLabel}`}
+          role="img"
+        >
+          <div
+            className="h-full bg-gradient-to-r from-emerald-500 via-emerald-400 to-[#C6A75A] transition-[width] duration-500"
+            style={{ width: holdWidth }}
+          />
+        </div>
+        <p className="mt-3 text-xs leading-5 text-neutral-500">
+          Green marks what is holding. Amber marks the concentrated opportunity for improvement.
+        </p>
       </div>
       <p className="mt-5 text-[16px] leading-7 text-neutral-200">{verdict}</p>
-      <p className="mt-2 text-xs leading-5 text-neutral-500">
-        Strengths and risks are separate signals; one does not cancel another.
-      </p>
     </section>
   );
 }
