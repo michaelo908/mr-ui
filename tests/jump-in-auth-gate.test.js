@@ -20,6 +20,15 @@ test("a first anonymous Jump In analysis is previewed, then gated before full ac
   assert.match(app, /const \[previewUnlockRequired, setPreviewUnlockRequired\]/);
   assert.match(app, /res\.headers\.get\("X-Jump-In-Preview"\)/);
   assert.match(app, /setPreviewUnlockRequired\(true\)/);
+  assert.match(app, /const rewriteRequired = !isAnonymousPreview && rewriteCapable/);
+  assert.match(
+    app,
+    /first anonymous analysis is intentionally covered by the sign-in[\s\S]*?usable rewrite must survive that handoff/
+  );
+  assert.match(
+    app,
+    /const initialRewrites = initialRewriteContent[\s\S]*?\? \[makeRewriteVariant\(initialRewriteContent, 0\)\]/
+  );
   assert.match(app, /async function unlockPreviewAnalysis\(\)/);
   assert.match(app, /persistJumpInWorkspace\(\)/);
   assert.match(app, /const HOMEPAGE_JUMP_IN_RESUME_TARGET = GRAVITAS_RESUME_TARGET/);

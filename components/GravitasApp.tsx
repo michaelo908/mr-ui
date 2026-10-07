@@ -3680,10 +3680,13 @@ if (urlSourceImages.length > 0) {
       ]
         .filter(Boolean)
         .join("\n\n");
-      const rewriteRequired =
-        !isAnonymousPreview &&
-        !isHeresy &&
-        isRewriteCapableGraviton(selectedGraviton);
+      const rewriteCapable =
+        !isHeresy && isRewriteCapableGraviton(selectedGraviton);
+      // The first anonymous analysis is intentionally covered by the sign-in
+      // prompt, but its usable rewrite must survive that handoff. Otherwise a
+      // person returns from sign-in to a completed analysis with no Rewrite
+      // button and has to run the same source again.
+      const rewriteRequired = !isAnonymousPreview && rewriteCapable;
 
       if (
         rewriteRequired &&
@@ -3735,7 +3738,20 @@ if (urlSourceImages.length > 0) {
       ) {
         throw new Error("The rewrite could not be completed. Please try again.");
       }
-      if (!rewriteRequired) {
+      if (!rewriteCapable) {
+        initialRewriteContent = undefined;
+        normalizedOutput = removeStructuredRewrite(normalizedOutput);
+      }
+      if (
+        isAnonymousPreview &&
+        !isValidRewriteCandidate(
+          initialRewriteContent,
+          specialistAnalysisContext,
+          cadence
+        )
+      ) {
+        // Preserve the completed first analysis even if the model omitted an
+        // initial rewrite. Authenticated analyses still repair this case.
         initialRewriteContent = undefined;
         normalizedOutput = removeStructuredRewrite(normalizedOutput);
       }
