@@ -52,9 +52,7 @@ import {
 import {
   parseLegacyReaderHold,
   parseReaderResponse,
-  READER_RESPONSE_DIMENSIONS,
   type ReaderResponse,
-  type ReaderResponseDimension,
   type ReaderResponseIntensity,
 } from "@/lib/reader-hold";
 import ImageLightbox from "@/components/ImageLightbox";
@@ -65,6 +63,7 @@ import {
   type TextEvidenceLaunch,
 } from "@/lib/text-evidence";
 import { emitSignal, initializeSignalIdentity, signalHeaders, toSignalIdentifier } from "@/lib/signals/client";
+import { trackMetaEvent } from "@/lib/meta-pixel";
 import type { SignalName } from "@/lib/signals/registry";
 import type { AcquisitionFunnel } from "@/lib/acquisition-funnels";
 import {
@@ -108,6 +107,7 @@ import {
 } from "@/lib/gravitas-active-workspace-store";
 import { createRevisionedPersistenceCoordinator } from "@/lib/gravitas-persistence-coordinator";
 import { MULTIRRUPT_BUILD, MULTIRRUPT_RELEASE } from "@/lib/multirrupt-version";
+import { JUMP_IN_SAMPLES, type JumpInSampleId } from "@/lib/jump-in-samples";
 import {
   alternateRewriteAnalysisContext,
   extractRewriteOrRaw,
@@ -215,7 +215,7 @@ function JumpInWelcome({ funnel, firstName }: { funnel?: AcquisitionFunnel; firs
           {funnel?.jumpInPrompt ?? "Paste it below. Then press Gravitate."}
         </p>
         <p className="jump-in-reveal jump-in-reveal-6 mt-2 text-xs text-neutral-600">
-          Your 20-minute session starts with your first analysis.
+          Your 20-minute session begins after you sign in.
         </p>
       </div>
 
@@ -991,20 +991,12 @@ function ThinkingStatus() {
   return <span className="italic text-emerald-200/80">{steps[idx]}</span>;
 }
 
-const READER_RESPONSE_COLORS: Record<ReaderResponseDimension, string> = {
-  Strong: "#4ADE80",
-  Engaged: "#2DD4BF",
-  Uneven: "#FACC15",
-  Vulnerable: "#FB923C",
-  "At risk": "#F87171",
-};
-
-const READER_RESPONSE_WIDTHS: Record<ReaderResponseIntensity, string> = {
-  none: "0%",
-  trace: "18%",
-  present: "43%",
-  pronounced: "70%",
-  dominant: "100%",
+const READER_RESPONSE_VALUES: Record<ReaderResponseIntensity, number> = {
+  none: 0,
+  trace: 1,
+  present: 2,
+  pronounced: 3,
+  dominant: 4,
 };
 
 function ReaderResponsePanel({
@@ -1013,48 +1005,54 @@ function ReaderResponsePanel({
   response: ReaderResponse;
 }) {
   const { signals, verdict } = response;
+  const hold =
+    (READER_RESPONSE_VALUES[signals.Strong] +
+      READER_RESPONSE_VALUES[signals.Engaged]) /
+    8;
+  const tension = Math.max(
+    READER_RESPONSE_VALUES[signals.Uneven],
+    READER_RESPONSE_VALUES[signals.Vulnerable],
+    READER_RESPONSE_VALUES[signals["At risk"]]
+  ) / 4;
+  // Reader hold and reader tension are independent qualitative signals.  Do not
+  // make the visual a zero-sum contest between them: a present but contained
+  // tension should not make half of an otherwise strong piece appear to be at
+  // risk.  Reserve half the bar for only the most pronounced tension.
+  const tensionWidth = tension === 0 ? 0 : Math.min(55, Math.round(12 + tension * 40));
+  const holdWidth = `${100 - tensionWidth}%`;
+  const holdLabel =
+    hold >= 0.7 ? "Strong reader hold" : hold >= 0.35 ? "Reader hold developing" : "Reader hold is fragile";
+  const tensionLabel =
+    tension >= 0.7 ? "Meaningful reader tension" : tension >= 0.35 ? "Reader tension to review" : "Limited reader tension";
   return (
     <section
-      aria-label="Reader Response"
+      aria-label="Reader Hold"
       data-editor-summary-anchor="true"
       className="rounded-2xl border border-neutral-700 bg-neutral-950/70 px-4 py-5 sm:px-5"
     >
       <h2 className="text-[20px] font-semibold tracking-tight text-neutral-100">
-        Reader Response
+        Reader Hold
       </h2>
-      <div className="mt-4 grid gap-3 sm:grid-cols-5">
-        {READER_RESPONSE_DIMENSIONS.map((dimension) => {
-          const intensity = signals[dimension];
-          const color = READER_RESPONSE_COLORS[dimension];
-          return (
-            <div key={dimension} className="min-w-0">
-              <div
-                className="h-2 overflow-hidden rounded-full bg-neutral-800"
-                aria-label={`${dimension}: ${intensity}`}
-                role="img"
-              >
-                <div
-                  className="h-full rounded-full transition-[width] duration-500"
-                  style={{
-                    width: READER_RESPONSE_WIDTHS[intensity],
-                    backgroundColor: color,
-                  }}
-                />
-              </div>
-              <div
-                className="mt-2 text-center text-[10px] font-medium leading-3 text-neutral-500 sm:text-[11px]"
-                style={{ color: intensity === "none" ? undefined : color }}
-              >
-                {dimension}
-              </div>
-            </div>
-          );
-        })}
+      <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-950/55 px-4 py-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm font-semibold">
+          <span className="text-emerald-300">{holdLabel}</span>
+          <span className="text-amber-200">{tensionLabel}</span>
+        </div>
+        <div
+          className="mt-3 flex h-3 overflow-hidden rounded-full bg-amber-400/70"
+          aria-label={`${holdLabel}; ${tensionLabel}`}
+          role="img"
+        >
+          <div
+            className="h-full bg-gradient-to-r from-emerald-500 via-emerald-400 to-[#C6A75A] transition-[width] duration-500"
+            style={{ width: holdWidth }}
+          />
+        </div>
+        <p className="mt-3 text-xs leading-5 text-neutral-500">
+          Green marks what is holding. Amber marks the concentrated opportunity for improvement.
+        </p>
       </div>
       <p className="mt-5 text-[16px] leading-7 text-neutral-200">{verdict}</p>
-      <p className="mt-2 text-xs leading-5 text-neutral-500">
-        Strengths and risks are separate signals; one does not cancel another.
-      </p>
     </section>
   );
 }
@@ -1994,6 +1992,7 @@ export default function GravitasApp({
     rawSetMessages(next);
   }, []);
   const [draft, setDraft] = useState("");
+  const [jumpInSampleId, setJumpInSampleId] = useState<JumpInSampleId | null>(null);
   const [inputMode, setInputMode] = useState<"text" | "url" | "images" | "document">(funnel?.preferredSource ?? "text");
   const [urlDraft, setUrlDraft] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
@@ -2110,6 +2109,7 @@ const gravitonGroups = [
   const [accessResolved, setAccessResolved] = useState(false);
   const [authenticatedUserId, setAuthenticatedUserId] = useState<string | null>(null);
   const [jumpInAuthenticated, setJumpInAuthenticated] = useState(false);
+  const [previewUnlockRequired, setPreviewUnlockRequired] = useState(false);
   const [telemetrySeed, setTelemetrySeed] = useState<TelemetrySeed | null>(null);
   const [telemetryMinuteTick, setTelemetryMinuteTick] = useState(0);
   const [analysisBoost, setAnalysisBoost] = useState(0);
@@ -2126,6 +2126,7 @@ const gravitonGroups = [
   const supabase = useMemo(() => createClient(), []);
   const sendLockRef = useRef(false);
   const runCoordinatorRef = useRef(createAnalysisRunCoordinator());
+  const previewTimerStartRequestedRef = useRef(false);
   const workspacePersistenceCoordinatorRef = useRef(
     createRevisionedPersistenceCoordinator()
   );
@@ -2211,7 +2212,7 @@ const gravitonGroups = [
           setWorkspaceStorageWarning(
             isStorageQuotaError(error)
               ? "This browser does not have enough storage to carry your current work through checkout. Remove some large images or copy your work before continuing."
-              : "Your current work could not be prepared for checkout in this browser. Copy it before continuing."
+              : "This browser cannot save a recovery copy of this work. Your analysis can continue normally, but copy or download anything you want to keep before closing this window or purchasing access."
           );
           return false;
         }
@@ -2779,6 +2780,56 @@ useEffect(() => {
 
   useEffect(() => {
     if (
+      !isJumpIn ||
+      !jumpInAuthenticated ||
+      !jumpInSession ||
+      jumpInSession.startedAt !== null ||
+      !canAutosaveWorkspace(workspaceHydration) ||
+      !messages.some(
+        (message) =>
+          message.role === "assistant" && message.analysisStatus === "success"
+      ) ||
+      previewTimerStartRequestedRef.current
+    ) {
+      return;
+    }
+
+    previewTimerStartRequestedRef.current = true;
+    void (async () => {
+      const response = await fetch("/api/jump-in/start", {
+        method: "POST",
+        headers: { "X-Jump-In-Session-Id": jumpInSession.sessionId },
+      });
+      if (!response.ok) {
+        previewTimerStartRequestedRef.current = false;
+        if (response.status === 403) markJumpInExpired();
+        return;
+      }
+
+      const startedAt = Number(response.headers.get("X-Jump-In-Started-At"));
+      if (!Number.isFinite(startedAt) || startedAt <= 0) {
+        previewTimerStartRequestedRef.current = false;
+        return;
+      }
+
+      setJumpInSession((current) => {
+        if (!current || current.startedAt !== null) return current;
+        const next = { ...current, startedAt };
+        window.localStorage.setItem(JUMP_IN_STORAGE_KEY, JSON.stringify(next));
+        return next;
+      });
+      setJumpInNow(Date.now());
+    })();
+  }, [
+    isJumpIn,
+    jumpInAuthenticated,
+    jumpInSession,
+    messages,
+    workspaceHydration,
+  ]);
+
+  useEffect(() => {
+    if (
       isJumpIn ||
       !canAutosaveWorkspace(paidWorkspaceHydration) ||
       !(draft.trim() || urlDraft.trim() || importedUrl || imageFiles.length || messages.length)
@@ -3114,10 +3165,12 @@ useEffect(() => {
     };
   }, [accessResolved, authenticatedUserId, isBookTrial, isJumpIn, isSubscribed, setMessages]);
 
-  function startJumpInSession() {
+  function startJumpInSession(startNow = true) {
     if (!isJumpIn) return null;
 
-    const startedAt = jumpInSession?.startedAt ?? Date.now();
+    const startedAt = startNow
+      ? jumpInSession?.startedAt ?? Date.now()
+      : jumpInSession?.startedAt ?? null;
     const session: JumpInSessionState = {
       sessionId: jumpInSession?.sessionId ?? crypto.randomUUID(),
       sessionStartedEventSent:
@@ -3130,6 +3183,22 @@ useEffect(() => {
     setJumpInSession(session);
     setJumpInNow(Date.now());
     return session;
+  }
+
+  async function unlockPreviewAnalysis() {
+    const workspaceReady = await persistJumpInWorkspace();
+    if (!workspaceReady) return;
+    window.localStorage.setItem(
+      GRAVITAS_RESUME_MARKER_KEY,
+      HOMEPAGE_JUMP_IN_RESUME_TARGET
+    );
+    emitSignal("discovery.jump_in_auth_requested", signalSurface, {
+      source_mode: inputMode,
+      graviton: toSignalIdentifier(selectedGraviton),
+      cadence,
+      ...(jumpInSampleId ? { sample_id: jumpInSampleId } : {}),
+    });
+    router.push(`/login?next=${encodeURIComponent(HOMEPAGE_JUMP_IN_RESUME_TARGET)}`);
   }
 
   function markJumpInExpired() {
@@ -3281,6 +3350,7 @@ useEffect(() => {
     lastSavedWorkspaceRef.current = null;
     setMessages([]);
     setDraft("");
+    setJumpInSampleId(null);
     setUrlDraft("");
     setUrlError(null);
     setImportedUrl(null);
@@ -3310,96 +3380,8 @@ useEffect(() => {
         ? "Document accepted. Preparing your analysis…"
         : "Content accepted. Preparing your analysis…"
     );
-    // Let the immediate acknowledgement render before a possible sign-in
-    // navigation. This also makes the click feel deliberate rather than lost.
+    // Let the immediate acknowledgement render before starting the analysis.
     await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-
-    if (isJumpIn && requireAuthBeforeAnalysis && !jumpInAuthenticated) {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (session?.user) {
-        setJumpInAuthenticated(true);
-      } else {
-        setAnalysisProgress(
-          inputMode === "document"
-            ? "Document accepted. Taking you to sign in…"
-            : "Content accepted. Taking you to sign in…"
-        );
-        // The marketing page embeds this editor from a different site. Never
-        // attempt to authenticate in that third-party frame: browser privacy
-        // controls can withhold the resulting session. Carry the pending work
-        // to the first-party editor instead.
-        if (window.top !== window) {
-          try {
-            const images = await Promise.all(imageFiles.map(async (file) => ({
-              name: file.name,
-              type: file.type,
-              lastModified: file.lastModified,
-              dataUrl: await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onerror = () => reject(reader.error ?? new Error("image_read_failed"));
-                reader.onload = () => typeof reader.result === "string"
-                  ? resolve(reader.result)
-                  : reject(new Error("image_read_failed"));
-                reader.readAsDataURL(file);
-              }),
-            })));
-            const payload: JumpInHandoffPayload = {
-              version: JUMP_IN_HANDOFF_VERSION,
-              sessionId: jumpInSession?.sessionId ?? crypto.randomUUID(),
-              inputMode,
-              draft,
-              urlDraft,
-              selectedGraviton,
-              cadence,
-              images,
-              document: uploadedDocument,
-            };
-            const handoffResponse = await fetch("/api/jump-in/handoff", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
-            const handoff = await handoffResponse.json().catch(() => null);
-            if (!handoffResponse.ok || typeof handoff?.token !== "string") {
-              throw new Error("handoff_unavailable");
-            }
-            const destination = new URL("/jump-in", window.location.origin);
-            destination.searchParams.set("handoff", handoff.token);
-            window.open(destination.toString(), "_top");
-            return;
-          } catch {
-            sendLockRef.current = false;
-            setIsLoading(false);
-            setAnalysisProgress(null);
-            setWorkspaceStorageWarning(
-              "We could not safely carry this work into the full editor. Please copy it, then use Jump In from the top of the page."
-            );
-            return;
-          }
-        }
-        const workspaceReady = await persistJumpInWorkspace();
-        if (!workspaceReady) {
-          sendLockRef.current = false;
-          setIsLoading(false);
-          setAnalysisProgress(null);
-          return;
-        }
-        window.localStorage.setItem(
-          GRAVITAS_RESUME_MARKER_KEY,
-          HOMEPAGE_JUMP_IN_RESUME_TARGET
-        );
-        emitSignal("discovery.jump_in_auth_requested", signalSurface, {
-          source_mode: inputMode,
-          graviton: toSignalIdentifier(selectedGraviton),
-          cadence,
-        });
-        router.push(`/login?next=${encodeURIComponent(HOMEPAGE_JUMP_IN_RESUME_TARGET)}`);
-        return;
-      }
-    }
 
      if (!isJumpIn && !isSubscribed && !isBookTrial) {
 
@@ -3438,6 +3420,7 @@ useEffect(() => {
       source_mode: inputMode,
       graviton: toSignalIdentifier(selectedGraviton),
       cadence,
+      ...(jumpInSampleId ? { sample_id: jumpInSampleId } : {}),
     });
     setIsLoading(true);
     setIsCapturingUrl(inputMode === "url");
@@ -3550,7 +3533,7 @@ useEffect(() => {
       return;
     }
 
-    const activeJumpInSession = startJumpInSession();
+    const activeJumpInSession = startJumpInSession(jumpInAuthenticated);
 
     setAnalysisProgress(
       inputMode === "url"
@@ -3681,6 +3664,9 @@ if (urlSourceImages.length > 0) {
         });
       }
 
+      const isAnonymousPreview =
+        isJumpIn && res.headers.get("X-Jump-In-Preview") === "true";
+
       if (res.status === 403 && data.expired) {
         markJumpInExpired();
         setMessages((m) =>
@@ -3712,8 +3698,13 @@ if (urlSourceImages.length > 0) {
       ]
         .filter(Boolean)
         .join("\n\n");
-      const rewriteRequired =
+      const rewriteCapable =
         !isHeresy && isRewriteCapableGraviton(selectedGraviton);
+      // The first anonymous analysis is intentionally covered by the sign-in
+      // prompt, but its usable rewrite must survive that handoff. Otherwise a
+      // person returns from sign-in to a completed analysis with no Rewrite
+      // button and has to run the same source again.
+      const rewriteRequired = !isAnonymousPreview && rewriteCapable;
 
       if (
         rewriteRequired &&
@@ -3765,7 +3756,20 @@ if (urlSourceImages.length > 0) {
       ) {
         throw new Error("The rewrite could not be completed. Please try again.");
       }
-      if (!rewriteRequired) {
+      if (!rewriteCapable) {
+        initialRewriteContent = undefined;
+        normalizedOutput = removeStructuredRewrite(normalizedOutput);
+      }
+      if (
+        isAnonymousPreview &&
+        !isValidRewriteCandidate(
+          initialRewriteContent,
+          specialistAnalysisContext,
+          cadence
+        )
+      ) {
+        // Preserve the completed first analysis even if the model omitted an
+        // initial rewrite. Authenticated analyses still repair this case.
         initialRewriteContent = undefined;
         normalizedOutput = removeStructuredRewrite(normalizedOutput);
       }
@@ -3796,6 +3800,7 @@ if (urlSourceImages.length > 0) {
         next.add(getAnalysisRunKey(activeSourceKey, selectedGraviton, cadence));
         return next;
       });
+      trackMetaEvent("AnalysisCompleted");
 
       const analysisJump = getRandomInt(14, 28);
       const rewriteJump = getRandomInt(36, 68);
@@ -3803,6 +3808,9 @@ if (urlSourceImages.length > 0) {
       setAnalysisBoost((prev) => prev + analysisJump);
       setRewriteBoost((prev) => prev + rewriteJump);
       scrollToLatestEditorSummary();
+      if (isAnonymousPreview) {
+        setPreviewUnlockRequired(true);
+      }
 
     } catch (err) {
       if (!runCoordinatorRef.current.isCurrent(runId)) return;
@@ -3910,6 +3918,36 @@ if (urlSourceImages.length > 0) {
 
   return (
     <main className={classNames("gravitas-shell text-neutral-100", embedded ? "rounded-[2rem]" : "min-h-screen")}>
+      {isJumpIn && previewUnlockRequired && !jumpInAuthenticated ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/65 px-4 backdrop-blur-[1px]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="preview-unlock-title"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-[#C6A75A]/70 bg-neutral-950 p-6 shadow-2xl sm:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#C6A75A]">
+              Your reader analysis is ready
+            </p>
+            <h2 id="preview-unlock-title" className="mt-3 text-2xl font-semibold text-white">
+              See the whole response.
+            </h2>
+            <p className="mt-3 text-base leading-7 text-neutral-300">
+              We&apos;ve completed your first Multirrupt analysis. Enter your email to unlock the detail, evidence and rewrites — and continue with more analyses. Your work will be waiting here.
+            </p>
+            <button
+              type="button"
+              onClick={() => void unlockPreviewAnalysis()}
+              className="mt-6 w-full rounded-xl bg-[#C6A75A] px-5 py-3 text-base font-semibold text-neutral-950 transition hover:bg-[#dbc078]"
+            >
+              Continue with email
+            </button>
+            <p className="mt-3 text-center text-xs text-neutral-500">
+              No password. We&apos;ll send a six-digit sign-in code.
+            </p>
+          </div>
+        </div>
+      ) : null}
       <div className={classNames("relative z-10 mx-auto w-full max-w-5xl px-4 sm:px-6", embedded ? "py-5 sm:py-6" : "py-8 sm:py-12")}>
         <header className="gravitas-header mb-6 flex flex-col gap-5 rounded-2xl px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div>
@@ -3935,10 +3973,16 @@ if (urlSourceImages.length > 0) {
             <div className="mt-2 text-[10px] font-medium uppercase tracking-[0.16em] text-neutral-600">
               Multirrupt {MULTIRRUPT_RELEASE} · build {MULTIRRUPT_BUILD}
             </div>
+            <a
+              href="https://multirrupt.com"
+              className="mt-3 inline-flex text-xs font-medium text-neutral-400 underline decoration-neutral-600 underline-offset-4 transition hover:text-neutral-200"
+            >
+              ← Back to Multirrupt.com
+            </a>
             {isJumpIn ? (
               <a
                 href="/workbench"
-                className="mt-3 inline-flex text-sm font-semibold text-sky-300 underline decoration-sky-400/60 underline-offset-4 transition hover:text-sky-200"
+                className="mt-3 block text-sm font-semibold text-sky-300 underline decoration-sky-400/60 underline-offset-4 transition hover:text-sky-200"
               >
                 Already have a subscription or Day Pass? Log in
               </a>
@@ -3954,7 +3998,7 @@ if (urlSourceImages.length > 0) {
             ) : null}
             {isJumpIn && requireAuthBeforeAnalysis && !jumpInAuthenticated ? (
               <div className="mt-2 text-xs text-neutral-400">
-                Enter your email when you&apos;re ready. Your time begins when you run your first analysis.
+                Your first reader analysis is free. Sign in after you see the result to unlock the full response and rewrites.
               </div>
             ) : null}
             {isJumpIn ? (
@@ -3968,8 +4012,10 @@ if (urlSourceImages.length > 0) {
               >
                 {jumpInExpired
                   ? "Free session ended"
-                  : jumpInSession?.startedAt === null
-                    ? "20:00 starts with your first analysis"
+                  : !jumpInAuthenticated
+                    ? "20 minutes of free analysis and rewrites after sign-in"
+                    : jumpInSession?.startedAt === null
+                      ? "20:00 starts with your first analysis"
                     : `${formatJumpInRemaining(jumpInRemainingMs)} remaining`}
               </div>
             ) : null}
@@ -4310,6 +4356,7 @@ if (urlSourceImages.length > 0) {
             source_mode: value,
           });
           setInputMode(value);
+          setJumpInSampleId(null);
           setUrlError(null);
           setImportedUrl(null);
           if (value !== "images") setImageFiles([]);
@@ -4368,6 +4415,7 @@ if (urlSourceImages.length > 0) {
           // Keep the helpful scheme visible while preserving an empty draft
           // until the visitor has entered an actual address.
           setUrlDraft(nextUrl === "https://" ? "" : nextUrl);
+          setJumpInSampleId(null);
           setUrlError(null);
           setImportedUrl(null);
         }}
@@ -4439,11 +4487,46 @@ if (urlSourceImages.length > 0) {
       {documentError ? <p className="mt-2 text-sm text-amber-300">{documentError}</p> : null}
     </div>
   ) : (
+  <>
+  {isJumpIn ? (
+    <div className="mb-3 rounded-xl border border-neutral-800 bg-neutral-900/40 p-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-neutral-200">Nothing handy to paste?</p>
+          <p className="mt-0.5 text-xs text-neutral-500">Try a realistic sample first, then test something of your own.</p>
+        </div>
+        <select
+          value={jumpInSampleId ?? ""}
+          onChange={(event) => {
+            const sample = JUMP_IN_SAMPLES.find((item) => item.id === event.target.value);
+            if (!sample) return;
+            workspacePersistencePausedRef.current = false;
+            setDraft(sample.content);
+            setJumpInSampleId(sample.id);
+            setImageFiles([]);
+            setUploadedDocument(null);
+            setDocumentError(null);
+            emitSignal("discovery.sample_selected", signalSurface, { sample_id: sample.id });
+          }}
+          disabled={isDemoLocked}
+          aria-label="Try a sample"
+          className="h-11 w-full rounded-lg border border-[#C6A75A]/60 bg-[#C6A75A]/10 px-3 text-sm font-semibold text-[#E7CD8D] outline-none disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+        >
+          <option value="" disabled>Try a sample…</option>
+          {JUMP_IN_SAMPLES.map((sample) => <option key={sample.id} value={sample.id}>{sample.label}</option>)}
+        </select>
+      </div>
+      {jumpInSampleId ? (
+        <p className="mt-2 text-xs text-[#C6A75A]">Sample loaded. Press Gravitate to see how it lands — or replace it with your own writing.</p>
+      ) : null}
+    </div>
+  ) : null}
   <textarea
     value={draft}
     onChange={(e) => {
   workspacePersistencePausedRef.current = false;
   setDraft(e.target.value);
+  setJumpInSampleId(null);
 
   if (e.target.value.trim().length > 0 && imageFiles.length > 0) {
     setImageFiles([]);
@@ -4457,6 +4540,7 @@ if (urlSourceImages.length > 0) {
       isDemoLocked && "cursor-not-allowed opacity-60"
     )}
   />
+  </>
   )}
 
   <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -4559,6 +4643,7 @@ if (urlSourceImages.length > 0) {
       setImageFiles(compressedFiles);
       setInputMode("images");
       setDraft("");
+      setJumpInSampleId(null);
     }}
     disabled={isDemoLocked}
     className="hidden"
@@ -4590,6 +4675,7 @@ if (urlSourceImages.length > 0) {
           throw new Error(typeof body?.error === "string" ? body.error : "Multirrupt could not read that document.");
         }
         setDraft(body.text);
+        setJumpInSampleId(null);
         setUploadedDocument(body.document as UploadedDocument);
         setImageFiles([]);
         setInputMode("document");

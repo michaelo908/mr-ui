@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { after, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { recordSignal } from "@/lib/signals/server";
+import { sendMetaPurchase } from "@/lib/meta-capi";
 import { sanitizeAttribution } from "@/lib/signals/contracts";
 import {
   describeMailchimpFailure,
@@ -315,6 +316,15 @@ async function processCheckout(event: Stripe.Event, session: Stripe.Checkout.Ses
     dedupeKey: `stripe:${event.id}:checkout`,
     properties: { purchase_type: isDayPass ? "day_pass" : "subscription" },
   }));
+  if (event.livemode) {
+    after(() => sendMetaPurchase({
+      eventId: `stripe-checkout:${session.id}`,
+      eventTime: event.created,
+      amountTotal: session.amount_total,
+      currency: session.currency,
+      product: isDayPass ? "day_pass" : "subscription",
+    }));
+  }
 }
 
 async function subscriptionEmail(subscription: Stripe.Subscription) {
