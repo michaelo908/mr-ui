@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { after, NextResponse } from "next/server";
-import { cadenceInstruction, type CadenceMode } from "@/lib/cadence";
+import { cadenceInstruction, isCadenceMode, type CadenceMode } from "@/lib/cadence";
 import { MAX_URL_VIEWPORTS } from "@/lib/sources";
 import {
   assessEditorSummary,
@@ -242,7 +242,7 @@ export async function handleMrRequest(
       ? body.selectedGraviton.trim()
       : "Full Analysis";
   const cadence: CadenceMode =
-    body?.cadence === "sustained" ? "sustained" : "dynamic";
+    isCadenceMode(body?.cadence) ? body.cadence : "dynamic";
 
   // Preserve any per-request context from the UI
   const originalContext = typeof body?.context === "string" ? body.context : "";

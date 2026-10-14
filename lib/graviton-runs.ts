@@ -40,15 +40,17 @@ export function getActiveSourceKey(source: ActiveSource): string {
 
 export function getAnalysisRunKey(
   sourceKey: string,
-  graviton: string
+  graviton: string,
+  cadence = "dynamic"
 ): string {
-  return JSON.stringify([sourceKey, graviton]);
+  return JSON.stringify([sourceKey, graviton, cadence]);
 }
 
 export function hasCompletedAnalysis(
   completedRuns: ReadonlySet<string>,
   sourceKey: string,
-  graviton: string
+  graviton: string,
+  cadence = "dynamic"
 ): boolean {
-  return completedRuns.has(getAnalysisRunKey(sourceKey, graviton));
+  return completedRuns.has(getAnalysisRunKey(sourceKey, graviton, cadence));
 }

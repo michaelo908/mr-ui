@@ -1,22 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import {
   isSignalsBrowserExcluded,
   setSignalsBrowserExcluded,
+  subscribeSignalsBrowserExclusion,
 } from "@/lib/signals/client";
 
 export default function SignalsBrowserExclusion() {
-  const [excluded, setExcluded] = useState(false);
-
-  useEffect(() => {
-    setExcluded(isSignalsBrowserExcluded());
-  }, []);
+  const excluded = useSyncExternalStore(
+    subscribeSignalsBrowserExclusion,
+    isSignalsBrowserExcluded,
+    () => false
+  );
 
   function toggle() {
     const next = !excluded;
     setSignalsBrowserExcluded(next);
-    setExcluded(next);
   }
 
   return (

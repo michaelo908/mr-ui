@@ -1,4 +1,4 @@
-export type CadenceMode = "dynamic" | "sustained";
+export type CadenceMode = "dynamic" | "dynamic-preserve" | "sustained" | "sustained-preserve";
 
 export const CADENCE_OPTIONS: Array<{
   value: CadenceMode;
@@ -12,16 +12,32 @@ export const CADENCE_OPTIONS: Array<{
       "Contemporary movement with shorter sentences and paragraphs.",
   },
   {
+    value: "dynamic-preserve",
+    label: "Dynamic Preserve",
+    description: "Contemporary movement while protecting your voice and original rhythm.",
+  },
+  {
     value: "sustained",
     label: "Sustained",
     description:
       "Fuller paragraphs and a traditional long-form reading rhythm.",
   },
+  {
+    value: "sustained-preserve",
+    label: "Sustained Preserve",
+    description: "Connected long-form prose while protecting your voice and original rhythm.",
+  },
 ];
+
+export function isCadenceMode(value: unknown): value is CadenceMode {
+  return CADENCE_OPTIONS.some((option) => option.value === value);
+}
+
+export const PRESERVE_DESCRIPTION = "Preserve protects voice, rhythm, unusual turns of phrase, humour and useful anecdotes. It changes only the top 2–3 critical reader-side problems, or fewer when fewer need fixing.";
 
 export function cadenceInstruction(mode: CadenceMode) {
   const rhythm =
-    mode === "sustained"
+    (mode === "sustained" || mode === "sustained-preserve")
       ? `SUSTAINED CADENCE:
 - Use developed, connected paragraphs as the default rewrite shape.
 - Use longer and more varied sentence structures than Dynamic.
@@ -35,6 +51,12 @@ export function cadenceInstruction(mode: CadenceMode) {
 
   return `CADENCE CONTROL — APPLY TO REWRITE OUTPUT ONLY:
 ${rhythm}
+${mode.endsWith("-preserve") ? `
+PRESERVE — OVERRIDES RHYTHM AND GENERAL REWRITE DIRECTIONS WHERE THEY CONFLICT:
+${PRESERVE_DESCRIPTION}
+Use the existing diagnosis to identify only those critical problems. Leave everything else intact.
+Preserve the author's wording, structure and rhythm unless changing them is necessary to solve one of those problems. Do not normalize distinctive prose, remove humour or anecdotes, or rewrite merely to match the cadence. Apply the selected rhythm only within necessary edits.
+` : ""}
 
 This cadence instruction is mandatory for every Rewrite section and every rewrite-only response.
 

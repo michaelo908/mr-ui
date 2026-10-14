@@ -48,7 +48,7 @@ test("rewrites are parent-owned and restored with their original cadence", () =>
   assert.match(app, /rewrites=\{m\.rewrites \?\? \[\]\}/);
   assert.match(app, /onRewriteAdded=\{\(rewriteRecord\)/);
   assert.match(app, /commitAnalysisRewrites/);
-  assert.match(app, /cadence=\{m\.cadence \?\? cadence\}/);
+  assert.match(app, /cadence=\{m\.cadence \?\? "dynamic"\}/);
   assert.doesNotMatch(app, /const \[rewrites, setRewrites\]/);
   assert.doesNotMatch(app, /onRewritesChange/);
   assert.doesNotMatch(app, /Conversion Rewrite|Authority Rewrite|Concise Rewrite/);

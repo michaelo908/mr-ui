@@ -1,5 +1,6 @@
 import {
   hasValidWorkspaceFiles,
+  isCadenceMode,
   hasValidWorkspaceMessages,
   type GravitasMessageSnapshot,
   type GravitasUploadedFileSnapshot,
@@ -66,7 +67,7 @@ export function isValidActiveWorkspace(
       Array.isArray(record.uploadedFiles) &&
       (record.uploadedDocument === null || record.uploadedDocument === undefined || isUploadedDocument(record.uploadedDocument)) &&
       typeof record.selectedGraviton === "string" &&
-      (record.cadence === "dynamic" || record.cadence === "sustained") &&
+      isCadenceMode(record.cadence) &&
       Array.isArray(record.messages) &&
       typeof record.createdAt === "number" &&
       typeof record.updatedAt === "number" &&

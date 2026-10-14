@@ -216,3 +216,10 @@ test("rewrite open state cannot be restored or leaked between analyses", () => {
   assert.doesNotMatch(app, /showRewrite\s*:/);
   assert.doesNotMatch(app, /rewritePanelOpen/);
 });
+
+
+test("Preserve accepts distinctive short-line rhythm but still rejects placeholder output", () => {
+  const prose = "We stopped.\n\nThe room was silent.\n\nThen someone laughed.\n\nAnd everything changed.";
+  assert.equal(isValidRewriteCandidate(prose, "", "sustained-preserve"), true);
+  assert.equal(isValidRewriteCandidate("The user did not request a rewrite of this document.", "", "sustained-preserve"), false);
+});

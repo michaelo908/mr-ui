@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   CADENCE_OPTIONS,
+  PRESERVE_DESCRIPTION,
   cadenceInstruction,
   type CadenceMode,
 } from "@/lib/cadence";
@@ -15,6 +16,7 @@ import {
   hasCompletedAnalysis,
   isValidPublicHttpUrl,
 } from "@/lib/graviton-runs";
+import { GRAVITON_GUIDANCE } from "@/lib/graviton-guidance";
 import { buildAnalysisInput } from "@/lib/gravitas-analysis-request";
 import {
   buildRenderedUrlAnalysisInput,
@@ -292,6 +294,7 @@ function makeRewriteVariant(content: string, index: number): RewriteVariant {
     label: makeRewriteLabel(index),
     content,
     copyFormat: getSavedCopyFormat(),
+    generatedAt: Date.now(),
   };
 }
 
@@ -1056,6 +1059,17 @@ function ReaderResponsePanel({
   );
 }
 
+function SettingsMarker({ cadence, graviton, generatedAt, source, variant }: {
+  cadence?: CadenceMode; graviton?: string; generatedAt?: number; source?: string; variant?: string;
+}) {
+  return <p className="mb-3 text-xs leading-5 text-neutral-400" aria-label="Settings used">
+    Cadence: {CADENCE_OPTIONS.find((option) => option.value === cadence)?.label ?? "Not recorded"}
+    {" · "}Graviton: {graviton ?? "Not recorded"}
+    {" · "}Generated: {generatedAt ? <time dateTime={new Date(generatedAt).toISOString()}>{new Date(generatedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</time> : "Not recorded"}
+    {source ? ` · Source: ${source}` : ""}{variant ? ` · Variant: ${variant}` : ""}
+  </p>;
+}
+
 function StructuredAssistantMessage({
   content,
   sourceRaw,
@@ -1065,6 +1079,7 @@ function StructuredAssistantMessage({
   sourceDocumentName,
   graviton,
   cadence,
+  completedAt,
   apiEndpoint,
   interactionLocked,
   rewrites,
@@ -1082,6 +1097,7 @@ function StructuredAssistantMessage({
   sourceDocumentName?: string;
   graviton: string;
   cadence: CadenceMode;
+  completedAt?: number;
   apiEndpoint: string;
   interactionLocked: boolean;
   rewrites: RewriteVariant[];
@@ -1735,6 +1751,7 @@ ${cadenceInstruction(cadence)}${
                   showRewrite ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
                 )}
               >
+                <SettingsMarker cadence={cadence} graviton={graviton} generatedAt={variant.generatedAt ?? (idx === 0 ? completedAt : undefined)} source={sourceDocumentName ? `Document: ${sourceDocumentName}` : sourceIdentity?.type ?? (sourceImageData.length ? "images" : "text")} variant={variant.label} />
                 {renderMR(variant.content)}
               </div>
             </div>
@@ -2361,7 +2378,8 @@ const gravitonGroups = [
   const isRepeatedGraviton = hasCompletedAnalysis(
     completedAnalysisRuns,
     activeSourceKey,
-    selectedGraviton
+    selectedGraviton,
+    cadence
   );
   const hasValidActiveSource = hasReadySource(
     inputMode === "text" || inputMode === "document"
@@ -2703,7 +2721,7 @@ useEffect(() => {
               message.graviton
             ) {
               restoredCompletedRuns.add(
-                getAnalysisRunKey(restoredSourceKey, message.graviton)
+                getAnalysisRunKey(restoredSourceKey, message.graviton, message.cadence)
               );
             }
           });
@@ -2995,7 +3013,7 @@ useEffect(() => {
           message.graviton
         ) {
           restoredCompletedRuns.add(
-            getAnalysisRunKey(restoredSourceKey, message.graviton)
+            getAnalysisRunKey(restoredSourceKey, message.graviton, message.cadence)
           );
         }
       });
@@ -3775,7 +3793,7 @@ if (urlSourceImages.length > 0) {
       );
       setCompletedAnalysisRuns((current) => {
         const next = new Set(current);
-        next.add(getAnalysisRunKey(activeSourceKey, selectedGraviton));
+        next.add(getAnalysisRunKey(activeSourceKey, selectedGraviton, cadence));
         return next;
       });
 
@@ -4211,6 +4229,7 @@ if (urlSourceImages.length > 0) {
                         <ThinkingStatus />
                       ) : m.role === "assistant" ? (
                         <>
+                          {m.analysisStatus === "success" ? <SettingsMarker cadence={m.cadence} graviton={m.graviton} generatedAt={m.completedAt} source={sourceDocumentName ? `Document: ${sourceDocumentName}` : sourceIdentity?.type ?? (sourceImageData.length ? "images" : "text")} /> : null}
                           <StructuredAssistantMessage
                             content={m.content}
                             sourceRaw={sourceRaw}
@@ -4218,8 +4237,9 @@ if (urlSourceImages.length > 0) {
                             sourceImages={sourceImages}
                             sourceIdentity={sourceIdentity}
                             sourceDocumentName={sourceDocumentName}
-                            graviton={m.graviton ?? selectedGraviton}
-                            cadence={m.cadence ?? cadence}
+                            graviton={m.graviton ?? "Full Analysis"}
+                            cadence={m.cadence ?? "dynamic"}
+                            completedAt={m.completedAt}
                             apiEndpoint={apiEndpoint}
                             interactionLocked={isDemoLocked}
                             rewrites={m.rewrites ?? []}
@@ -4448,7 +4468,7 @@ if (urlSourceImages.length > 0) {
       }}
       disabled={isDemoLocked}
       aria-label="Gravitons"
-      className="h-[56px] w-full min-w-0 flex-1 rounded-xl border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-200 disabled:cursor-not-allowed disabled:opacity-60"
+      className="h-[56px] w-full min-w-0 shrink-0 sm:flex-1 rounded-xl border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-200 disabled:cursor-not-allowed disabled:opacity-60"
     >
       {gravitonGroups.map((group) => (
         <optgroup key={group.label} label={group.label}>
@@ -4490,6 +4510,23 @@ if (urlSourceImages.length > 0) {
       {isLoading ? "Working…" : "Gravitate"}
     </button>
   </div>
+  <div className="mt-2 grid gap-2 text-sm text-neutral-300 sm:grid-cols-2">
+    <details className="rounded-xl border border-neutral-800 p-3">
+      <summary className="cursor-pointer font-semibold">Gravitons help</summary>
+      <p className="mt-2">A Graviton is the lens used to examine your source. Choose the question that matters most.</p>
+      <p className="mt-2"><strong>{selectedGraviton}</strong>: {GRAVITON_GUIDANCE[selectedGraviton]?.description}</p>
+      <p className="mt-2">{GRAVITON_GUIDANCE[selectedGraviton]?.recommendedCadence
+        ? `Suggested Cadence: ${CADENCE_OPTIONS.find((option) => option.value === GRAVITON_GUIDANCE[selectedGraviton].recommendedCadence)?.label}. Your choice stays in your control.`
+        : "This image lens provides analysis only; Cadence does not change its output."}</p>
+    </details>
+    <details className="rounded-xl border border-neutral-800 p-3">
+      <summary className="cursor-pointer font-semibold">Cadence help</summary>
+      <p className="mt-2">Cadence guides the rhythm of rewrites. It does not change the analysis.</p>
+      <p className="mt-2">{PRESERVE_DESCRIPTION}</p>
+      <ul className="mt-2 space-y-2">{CADENCE_OPTIONS.map((option) => <li key={option.value}><strong>{option.label}</strong>: {option.description}</li>)}</ul>
+      <p className="mt-2">For books, chapters, essays and substantial reports, try Sustained Preserve.</p>
+    </details>
+  </div>
   {analysisProgress ? (
     <p className="mt-2 text-sm text-[#C6A75A]" role="status" aria-live="polite">
       {analysisProgress}
@@ -4502,7 +4539,7 @@ if (urlSourceImages.length > 0) {
   ) : null}
   {isRepeatedGraviton ? (
     <p className="mt-2 text-sm text-[#C6A75A]">
-      Select a different Graviton to analyse this source again.
+      Select a different Graviton or Cadence to analyse this source again.
     </p>
   ) : null}
 

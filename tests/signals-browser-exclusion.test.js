@@ -21,3 +21,37 @@ test("a browser can mark its own Signals activity as test/demo", () => {
   assert.match(dashboard, /✓ Test\/demo included/);
   assert.match(read("components\/SignalsBrowserExclusion.tsx"), /✓ This browser is excluded/);
 });
+
+test("exclusion subscribers follow persisted changes and unsubscribe cleanly", () => {
+  const ts = require("typescript");
+  const vm = require("node:vm");
+  const storage = new Map();
+  const window = new EventTarget();
+  const module = { exports: {} };
+  vm.runInNewContext(ts.transpileModule(read("lib/signals/client.ts"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText, {
+    module, exports: module.exports, window, Event,
+    localStorage: {
+      getItem: (key) => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, value),
+      removeItem: (key) => storage.delete(key),
+    },
+  });
+  const client = module.exports;
+  let changes = 0;
+  const unsubscribe = client.subscribeSignalsBrowserExclusion(() => changes++);
+  client.setSignalsBrowserExcluded(true);
+  assert.equal(client.isSignalsBrowserExcluded(), true);
+  assert.equal(changes, 1);
+  storage.clear();
+  const event = new Event("storage");
+  Object.defineProperty(event, "key", { value: null });
+  window.dispatchEvent(event);
+  assert.equal(client.isSignalsBrowserExcluded(), false);
+  assert.equal(changes, 2);
+  unsubscribe();
+  client.setSignalsBrowserExcluded(false);
+  window.dispatchEvent(event);
+  assert.equal(changes, 2);
+});

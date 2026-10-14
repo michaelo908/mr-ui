@@ -9,6 +9,20 @@ const FIRST_TOUCH_KEY = "gravitasFirstTouchV1";
 const LAST_TOUCH_KEY = "gravitasLastTouchV1";
 export const SIGNALS_BROWSER_EXCLUSION_KEY = "multirruptSignalsBrowserExcludedV1";
 
+const SIGNALS_EXCLUSION_CHANGED = "multirrupt-signals-exclusion-changed";
+
+export function subscribeSignalsBrowserExclusion(onChange: () => void) {
+  function onStorage(event: StorageEvent) {
+    if (event.key === SIGNALS_BROWSER_EXCLUSION_KEY || event.key === null) onChange();
+  }
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(SIGNALS_EXCLUSION_CHANGED, onChange);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(SIGNALS_EXCLUSION_CHANGED, onChange);
+  };
+}
+
 export function isSignalsBrowserExcluded() {
   try {
     return localStorage.getItem(SIGNALS_BROWSER_EXCLUSION_KEY) === "1";
@@ -24,6 +38,7 @@ export function setSignalsBrowserExcluded(excluded: boolean) {
     } else {
       localStorage.removeItem(SIGNALS_BROWSER_EXCLUSION_KEY);
     }
+    window.dispatchEvent(new Event(SIGNALS_EXCLUSION_CHANGED));
   } catch {}
 }
 

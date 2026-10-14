@@ -18,13 +18,13 @@ export const SIGNAL_REGISTRY = {
   "discovery.jump_in_auth_requested": { category: "discovery", client: true, properties: {
     source_mode: { type: "enum", values: ["text", "url", "images", "document"] },
     graviton: { type: "identifier", maxLength: 80 },
-    cadence: { type: "enum", values: ["dynamic", "sustained"] },
+    cadence: { type: "enum", values: ["dynamic", "dynamic-preserve", "sustained", "sustained-preserve"] },
   } },
   "analysis.started": { category: "analysis", client: true, properties: {
     analysis_id: { type: "uuid" },
     source_mode: { type: "enum", values: ["text", "url", "images", "document"] },
     graviton: { type: "identifier", maxLength: 80 },
-    cadence: { type: "enum", values: ["dynamic", "sustained"] },
+    cadence: { type: "enum", values: ["dynamic", "dynamic-preserve", "sustained", "sustained-preserve"] },
   } },
   "analysis.completed": { category: "analysis", client: false, properties: {} },
   "analysis.failed": { category: "analysis", client: false, properties: {} },
