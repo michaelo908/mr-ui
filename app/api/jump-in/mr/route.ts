@@ -8,6 +8,7 @@ import {
   isJumpInTokenExpired,
   isJumpInTokenResetEligible,
   JUMP_IN_COOKIE_NAME,
+  JUMP_IN_PREVIEW_COOKIE_NAME,
   readJumpInToken,
 } from "@/lib/jump-in-server";
 import {
@@ -18,16 +19,10 @@ import {
 import { hasAuthenticatedJumpInUser } from "@/lib/jump-in-auth";
 
 export async function POST(req: Request) {
-  if (!(await hasAuthenticatedJumpInUser())) {
-    return NextResponse.json({ error: "Sign in to start your Jump In." }, { status: 401 });
-  }
+  const authenticated = await hasAuthenticatedJumpInUser();
 
   const cookieStore = await cookies();
   const now = Date.now();
-  const existing = readJumpInToken(
-    cookieStore.get(JUMP_IN_COOKIE_NAME)?.value,
-    now
-  );
   const requestedSessionId = req.headers.get("X-Jump-In-Session-Id");
   const safeRequestedSessionId =
     requestedSessionId &&
@@ -36,6 +31,53 @@ export async function POST(req: Request) {
     )
       ? requestedSessionId
       : null;
+
+  // Let a new visitor experience one real analysis before asking for an email.
+  // The signed preview cookie prevents that generosity becoming an anonymous
+  // unlimited-use route, while the paid Jump In clock remains untouched until
+  // the visitor has authenticated.
+  if (!authenticated) {
+    const preview = readJumpInToken(
+      cookieStore.get(JUMP_IN_PREVIEW_COOKIE_NAME)?.value,
+      now
+    );
+    const previewResetEligible = preview && isJumpInTokenResetEligible(preview, now);
+    if (preview && !previewResetEligible) {
+      return NextResponse.json(
+        {
+          error: "Your first reader analysis is ready. Sign in to unlock the full response.",
+          previewLocked: true,
+        },
+        { status: 401 }
+      );
+    }
+
+    const response = await handleMrRequest(req, {
+      maxUrlViewports: JUMP_IN_MAX_URL_VIEWPORTS,
+      maxPastedTextWords: JUMP_IN_MAX_PASTED_WORDS,
+    });
+    if (response.ok) {
+      const sessionId = safeRequestedSessionId ?? crypto.randomUUID();
+      response.cookies.set(
+        JUMP_IN_PREVIEW_COOKIE_NAME,
+        createJumpInToken(now, sessionId),
+        {
+          httpOnly: true,
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+          maxAge: JUMP_IN_RESET_MS / 1000,
+          path: "/",
+        }
+      );
+      response.headers.set("X-Jump-In-Preview", "true");
+    }
+    return response;
+  }
+
+  const existing = readJumpInToken(
+    cookieStore.get(JUMP_IN_COOKIE_NAME)?.value,
+    now
+  );
 
   const resetEligible =
     existing && isJumpInTokenResetEligible(existing, now);

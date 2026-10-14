@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { after, NextResponse } from "next/server";
-import { cadenceInstruction, type CadenceMode } from "@/lib/cadence";
+import { cadenceInstruction, isCadenceMode, type CadenceMode } from "@/lib/cadence";
 import { MAX_URL_VIEWPORTS } from "@/lib/sources";
 import {
   assessEditorSummary,
@@ -15,6 +15,10 @@ import {
   isValidRewriteCandidate,
   rewriteOnlyInstruction,
 } from "@/lib/graviton-rewrite";
+import {
+  isShortFormEditorialCandidate,
+  SHORT_FORM_EDITORIAL_POLICY,
+} from "@/lib/short-form-editorial";
 
 /**
  * Default domain frame (normal Multirrupt operation).
@@ -242,7 +246,7 @@ export async function handleMrRequest(
       ? body.selectedGraviton.trim()
       : "Full Analysis";
   const cadence: CadenceMode =
-    body?.cadence === "sustained" ? "sustained" : "dynamic";
+    isCadenceMode(body?.cadence) ? body.cadence : "dynamic";
 
   // Preserve any per-request context from the UI
   const originalContext = typeof body?.context === "string" ? body.context : "";
@@ -333,6 +337,13 @@ Any extracted page text in the input is supporting readability assistance only. 
 
   // If we already have a diagnostic in the context, avoid re-arming intake rules.
   const continuation = isContinuationContext(body);
+  const shortFormEditorial = !heresyMode && isShortFormEditorialCandidate({
+    input: body?.input,
+    sourceMode: body?.sourceMode,
+    hasVisualInput: hasImageData,
+    rewriteOnly: rewriteOnlyRequest,
+    continuation,
+  });
 
   // Sealed framing rules:
   // - Normal mode: MR_DOMAIN_FRAME (+ originalContext), except continuation where we keep originalContext only
@@ -348,6 +359,7 @@ Any extracted page text in the input is supporting readability assistance only. 
     renderedUrlContext,
     sourceAvailabilityContext,
     rewriteCadenceContext,
+    shortFormEditorial ? SHORT_FORM_EDITORIAL_POLICY : "",
     heresyMode
       ? ""
       : rewriteOnlyRequest

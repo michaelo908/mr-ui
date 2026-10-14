@@ -238,3 +238,24 @@ test("serialized persistence prevents delayed stale work from overtaking the hig
   assert.equal(afterStaleArrival.revision, 3);
   assert.equal(afterStaleArrival.messages[1].rewrites.length, 2);
 });
+
+test("Preserve settings and per-version timestamps survive storage and promotion", async () => {
+  for (const cadence of ["dynamic-preserve", "sustained-preserve"]) {
+    const sessionId = `preserve-${crypto.randomUUID()}`;
+    const messages = analysis("preserve-run", 2);
+    messages.forEach((message) => { message.cadence = cadence; });
+    messages[1].rewrites.forEach((rewrite, index) => { rewrite.generatedAt = now + index; });
+    const snapshot = workspace.createWorkspaceSnapshot(canonicalInput(sessionId, messages, { cadence }), null, now);
+    assert.equal(workspace.isValidWorkspaceSnapshot(snapshot, sessionId, now), true);
+    await pendingStore.saveWorkspaceSnapshotSafely(snapshot, now);
+    const restored = await pendingStore.loadWorkspaceSnapshot(sessionId, now);
+    assert.equal(restored.cadence, cadence);
+    assert.equal(restored.messages[1].cadence, cadence);
+    assert.equal(restored.messages[1].rewrites[1].generatedAt, now + 1);
+    const active = activeModel.activeWorkspaceFromPending(restored, "preserve-user", undefined, now);
+    assert.equal(activeModel.isValidActiveWorkspace(active, "preserve-user"), true);
+    assert.equal(active.messages[1].rewrites[1].generatedAt, now + 1);
+    restored.messages[1].rewrites[1].generatedAt = "invalid";
+    assert.equal(workspace.isValidWorkspaceSnapshot(restored, sessionId, now), false);
+  }
+});

@@ -1,4 +1,4 @@
-import { after, NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { GRAVITAS_RESUME_TARGET, isValidResumeTarget } from "@/lib/gravitas-workspace";
@@ -82,28 +82,29 @@ export async function POST(request: NextRequest) {
       maxAge: 10 * 60,
     });
     if (hasJumpInConsent) {
-      after(async () => {
-        try {
-          const result = await addMailchimpLead({
-            email,
-            firstName: "",
-            tag: JUMP_IN_MAILCHIMP_TAG,
-            consentTag: ACQUISITION_CONSENT_VERSION,
-            doorway: "jump-in",
-            lifecycleState: "jump_in",
-          });
-          console.info("auth_jump_in_mailchimp", {
-            outcome: result.outcome,
-            tagged: result.tagged,
-          });
-        } catch (mailchimpError) {
-          const failure = describeMailchimpFailure(mailchimpError);
-          console.warn("Jump In Mailchimp capture failed", {
-            category: failure.category,
-            providerStatus: failure.providerStatus,
-          });
-        }
-      });
+      // Do this before returning the sign-in response. The detached background
+      // task made this best-effort work invisible when an invocation ended early.
+      // Mailchimp failure remains non-blocking: Jump In must still work.
+      try {
+        const result = await addMailchimpLead({
+          email,
+          firstName: "",
+          tag: JUMP_IN_MAILCHIMP_TAG,
+          consentTag: ACQUISITION_CONSENT_VERSION,
+          doorway: "jump-in",
+          lifecycleState: "jump_in",
+        });
+        console.info("auth_jump_in_mailchimp", {
+          outcome: result.outcome,
+          tagged: result.tagged,
+        });
+      } catch (mailchimpError) {
+        const failure = describeMailchimpFailure(mailchimpError);
+        console.warn("Jump In Mailchimp capture failed", {
+          category: failure.category,
+          providerStatus: failure.providerStatus,
+        });
+      }
     }
   }
 

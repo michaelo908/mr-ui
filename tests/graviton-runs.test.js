@@ -119,3 +119,10 @@ test("a failed URL render does not create a completed Source–Graviton lock", (
     false
   );
 });
+
+
+test("a different cadence permits comparison while identical settings remain blocked", () => {
+  const runs = new Set([getAnalysisRunKey("text:source", "Full Analysis", "dynamic-preserve")]);
+  assert.equal(hasCompletedAnalysis(runs, "text:source", "Full Analysis", "dynamic-preserve"), true);
+  assert.equal(hasCompletedAnalysis(runs, "text:source", "Full Analysis", "sustained-preserve"), false);
+});

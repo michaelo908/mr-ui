@@ -4,7 +4,7 @@ export const JUMP_IN_MAX_URL_VIEWPORTS = 10;
 export const JUMP_IN_MAX_PASTED_WORDS = 3000;
 export const JUMP_IN_STORAGE_KEY = "gravitasJumpInSessionV1";
 export const JUMP_IN_DAY_PASS_URL =
-  process.env.NEXT_PUBLIC_DAY_PASS_URL || "https://multirrupt.com/day-pass/";
+  process.env.NEXT_PUBLIC_DAY_PASS_URL || "https://buy.stripe.com/aFacN7gm82hh0uU1m63AY0m";
 
 export type JumpInSessionState = {
   sessionId: string;

@@ -7,6 +7,7 @@ import {
 } from "@/lib/jump-in-token";
 
 export const JUMP_IN_COOKIE_NAME = "gravitas_jump_in";
+export const JUMP_IN_PREVIEW_COOKIE_NAME = "gravitas_jump_in_preview";
 
 type JumpInToken = {
   startedAt: number;

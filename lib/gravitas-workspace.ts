@@ -14,6 +14,7 @@ export type GravitasRewriteSnapshot = {
   label: string;
   content: string;
   copyFormat: "email" | "word";
+  generatedAt?: number;
 };
 
 export type GravitasMessageSnapshot = {
@@ -62,7 +63,7 @@ export type GravitasWorkspaceSnapshot = {
 };
 
 export function isCadenceMode(value: unknown): value is CadenceMode {
-  return value === "dynamic" || value === "sustained";
+  return value === "dynamic" || value === "sustained" || value === "dynamic-preserve" || value === "sustained-preserve";
 }
 
 export function isValidResumeTarget(value: unknown): value is typeof GRAVITAS_RESUME_TARGET {
@@ -150,6 +151,7 @@ export function hasValidWorkspaceMessages(messages: unknown[]): messages is Grav
             typeof rewrite.id === "string" &&
             typeof rewrite.label === "string" &&
             typeof rewrite.content === "string" &&
+            (rewrite.generatedAt === undefined || (typeof rewrite.generatedAt === "number" && Number.isFinite(rewrite.generatedAt))) &&
             (rewrite.copyFormat === "email" || rewrite.copyFormat === "word")
         ))
     ) {

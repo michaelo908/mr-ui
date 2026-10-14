@@ -2,12 +2,27 @@
 
 import type { SignalAttribution } from "@/lib/signals/contracts";
 import type { SignalName } from "@/lib/signals/registry";
+import { trackMetaSignal } from "@/lib/meta-pixel";
 
 const VISITOR_KEY = "gravitasVisitorIdV1";
 const SESSION_KEY = "gravitasSessionIdV1";
 const FIRST_TOUCH_KEY = "gravitasFirstTouchV1";
 const LAST_TOUCH_KEY = "gravitasLastTouchV1";
 export const SIGNALS_BROWSER_EXCLUSION_KEY = "multirruptSignalsBrowserExcludedV1";
+
+const SIGNALS_EXCLUSION_CHANGED = "multirrupt-signals-exclusion-changed";
+
+export function subscribeSignalsBrowserExclusion(onChange: () => void) {
+  function onStorage(event: StorageEvent) {
+    if (event.key === SIGNALS_BROWSER_EXCLUSION_KEY || event.key === null) onChange();
+  }
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(SIGNALS_EXCLUSION_CHANGED, onChange);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(SIGNALS_EXCLUSION_CHANGED, onChange);
+  };
+}
 
 export function isSignalsBrowserExcluded() {
   try {
@@ -24,6 +39,7 @@ export function setSignalsBrowserExcluded(excluded: boolean) {
     } else {
       localStorage.removeItem(SIGNALS_BROWSER_EXCLUSION_KEY);
     }
+    window.dispatchEvent(new Event(SIGNALS_EXCLUSION_CHANGED));
   } catch {}
 }
 
@@ -91,6 +107,7 @@ export function emitSignal(
   properties: Record<string, unknown> = {}
 ) {
   try {
+    trackMetaSignal(name);
     const identity = initializeSignalIdentity();
     const isTest = location.hostname === "localhost" || isSignalsBrowserExcluded();
     void fetch("/api/signals", {

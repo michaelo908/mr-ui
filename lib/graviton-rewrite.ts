@@ -1,3 +1,5 @@
+import type { CadenceMode } from "./cadence";
+
 const NON_REWRITEABLE_GRAVITONS = new Set([
   "Describe this/these images.",
   "What recurring themes are present?",
@@ -81,7 +83,7 @@ ${analysis}`;
 export function isValidRewriteCandidate(
   candidate: string | null | undefined,
   analysisContext = "",
-  cadence: "dynamic" | "sustained" = "dynamic"
+  cadence: CadenceMode = "dynamic"
 ) {
   const value = candidate?.trim() ?? "";
   if (!value || value.split(/\s+/).length < 8) return false;
