@@ -1,5 +1,7 @@
 "use client";
 
+import { parseRecommendedAddition } from "@/lib/recommended-addition";
+
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -1001,8 +1003,10 @@ const READER_RESPONSE_VALUES: Record<ReaderResponseIntensity, number> = {
 
 function ReaderResponsePanel({
   response,
+  hasRecommendedAddition = false,
 }: {
   response: ReaderResponse;
+  hasRecommendedAddition?: boolean;
 }) {
   const { signals, verdict } = response;
   const hold =
@@ -1038,16 +1042,31 @@ function ReaderResponsePanel({
           <span className="text-emerald-300">{holdLabel}</span>
           <span className="text-amber-200">{tensionLabel}</span>
         </div>
-        <div
-          className="mt-3 flex h-3 overflow-hidden rounded-full bg-amber-400/70"
-          aria-label={`${holdLabel}; ${tensionLabel}`}
-          role="img"
-        >
+        <div className="mt-3 flex items-center gap-2">
           <div
-            className="h-full bg-gradient-to-r from-emerald-500 via-emerald-400 to-[#C6A75A] transition-[width] duration-500"
-            style={{ width: holdWidth }}
-          />
+            className="flex h-3 flex-1 overflow-hidden rounded-full bg-amber-400/70"
+            aria-label={`${holdLabel}; ${tensionLabel}`}
+            role="img"
+          >
+            <div
+              className="h-full bg-gradient-to-r from-emerald-500 via-emerald-400 to-[#C6A75A] transition-[width] duration-500"
+              style={{ width: holdWidth }}
+            />
+          </div>
+          {hasRecommendedAddition ? (
+            <span
+              role="img"
+              aria-label="Recommended Addition: additional source information is needed. This indicator is separate from Reader Hold. See the Editor’s Summary."
+              className="h-3 w-2 shrink-0 rounded-full bg-red-400"
+            />
+          ) : null}
         </div>
+        {hasRecommendedAddition ? (
+          <p className="mt-2 text-xs leading-5 text-red-200">
+            Recommended Addition: source information needed. Separate from Reader
+            Hold; see the Editor’s Summary below.
+          </p>
+        ) : null}
         <p className="mt-3 text-xs leading-5 text-neutral-500">
           Green marks what is holding. Amber marks the concentrated opportunity for improvement.
         </p>
@@ -1130,6 +1149,7 @@ function StructuredAssistantMessage({
     useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const summary = sections.summary?.trim();
+  const { addition: recommendedAddition, findings: summaryFindings } = parseRecommendedAddition(summary ?? "");
   const readerResponse = useMemo(
     () =>
       sections.readerHold
@@ -1461,7 +1481,7 @@ ${cadenceInstruction(cadence)}${
   return (
     <div className="space-y-5">
       {readerResponse ? (
-        <ReaderResponsePanel response={readerResponse} />
+        <ReaderResponsePanel response={readerResponse} hasRecommendedAddition={Boolean(recommendedAddition)} />
       ) : null}
       {summary ? (
         <section>
@@ -1501,7 +1521,18 @@ ${cadenceInstruction(cadence)}${
           >
             Editor’s Summary
           </h2>
-          <div className="mt-3">{renderMR(summary)}</div>
+          {recommendedAddition ? (
+            <aside
+              aria-label="Recommended Addition"
+              className="mt-3 rounded-xl border border-red-400/30 px-4 py-3"
+            >
+              <h3 className="font-semibold text-red-200">Recommended Addition</h3>
+              <div className="mt-1 text-sm leading-6">
+                {renderMR(recommendedAddition)}
+              </div>
+            </aside>
+          ) : null}
+          <div className="mt-3">{renderMR(summaryFindings)}</div>
 
           {rewrites.length > 0 && !showRewrite && showRewriteButton ? (
             <div

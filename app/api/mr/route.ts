@@ -1,4 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import {
+  RECOMMENDED_ADDITION_CONTRACT,
+  SOURCE_RESTRAINT_CONTRACT,
+} from "@/lib/recommended-addition";
 import { after, NextResponse } from "next/server";
 import { cadenceInstruction, isCadenceMode, type CadenceMode } from "@/lib/cadence";
 import { MAX_URL_VIEWPORTS } from "@/lib/sources";
@@ -84,6 +88,7 @@ SECTION RULES:
 
 ## Editor's Summary
 ${EDITOR_SUMMARY_CONTRACT}
+${RECOMMENDED_ADDITION_CONTRACT}
 
 ## Narrative Performance
 - This is a concise operational consequence of the completed analysis, not a second analysis, scorecard, estimated conversion assessment, or generic advice layer.
@@ -359,6 +364,7 @@ Any extracted page text in the input is supporting readability assistance only. 
     renderedUrlContext,
     sourceAvailabilityContext,
     rewriteCadenceContext,
+    heresyMode ? "" : SOURCE_RESTRAINT_CONTRACT,
     shortFormEditorial ? SHORT_FORM_EDITORIAL_POLICY : "",
     heresyMode
       ? ""
