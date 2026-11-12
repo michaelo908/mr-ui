@@ -4069,6 +4069,14 @@ if (urlSourceImages.length > 0) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <a
+              href="https://multirrupt.com/multirrupt-answers/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-xl border border-neutral-800 px-3 py-2 text-sm hover:bg-neutral-900"
+            >
+              Multirrupt Answers
+            </a>
             {!isJumpIn && isSubscribed === false ? (
               <button
                 onClick={handleSubscribe}

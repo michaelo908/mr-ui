@@ -13,7 +13,7 @@ function loadRoute() {
   const calls = [];
   const exports = {};
   vm.runInNewContext(code, {
-    exports, Request, Response, console: { log() {}, warn() {} },
+    exports, Request, Response, crypto: require('node:crypto').webcrypto, console: { log() {}, info() {}, warn() {} },
     process: { env: { MR_API_URL: 'https://staging.invalid/generate', MR_API_KEY: 'test-only' } },
     fetch: async (_url, options) => { calls.push(JSON.parse(options.body)); return Response.json({ output: 'The harbour committee opened the hall to residents on Tuesday. They reviewed the repair plan, checked the survey findings and recorded the questions that still needed answers. The next meeting would consider those findings before any decision about the bridge.' }); },
     require: (name) => {

@@ -35,7 +35,7 @@ function harness() {
     vm.runInNewContext(source, {
       exports: loadedModule.exports, module: loadedModule, require: localRequire,
       process: { env: { MR_API_URL: 'https://analysis.invalid/test', MR_API_KEY: 'test-only' } },
-      console: { log() {}, warn() {} }, Response,
+      console: { log() {}, info() {}, warn() {} }, Response, crypto: require('node:crypto').webcrypto,
       fetch: async (url, options) => {
         assert.equal(url, 'https://analysis.invalid/test');
         requests.push(JSON.parse(options.body));
