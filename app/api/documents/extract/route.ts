@@ -1,3 +1,4 @@
+import { SOURCE_TEXT_LIMIT_ERROR } from "@/lib/source-text-limit";
 import { NextResponse } from "next/server";
 import mammoth from "mammoth";
 import {
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
     }
     if (text.length > DOCUMENT_MAX_CHARACTERS) {
       return NextResponse.json({
-        error: "For this first document upload, keep the extracted text under 60,000 characters.",
+        error: SOURCE_TEXT_LIMIT_ERROR,
       }, { status: 413 });
     }
 

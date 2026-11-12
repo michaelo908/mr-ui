@@ -1,5 +1,6 @@
 "use client";
 
+import { exceedsSourceTextLimit, SOURCE_TEXT_LIMIT_ERROR } from "@/lib/source-text-limit";
 import { parseRecommendedAddition } from "@/lib/recommended-addition";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
@@ -92,7 +93,6 @@ import {
   type JumpInHandoffPayload,
 } from "@/lib/jump-in-handoff";
 import {
-  DOCUMENT_MAX_CHARACTERS,
   documentKindForFile,
   type UploadedDocument,
 } from "@/lib/document-upload";
@@ -3530,9 +3530,8 @@ useEffect(() => {
     )
       return;
 
-    const maxCharacters = inputMode === "document" ? DOCUMENT_MAX_CHARACTERS : 30000;
-    if (raw.length > maxCharacters) {
-      alert(`That’s a large input. For best results, keep it under ${maxCharacters.toLocaleString()} characters.`);
+    if (exceedsSourceTextLimit(raw)) {
+      alert(SOURCE_TEXT_LIMIT_ERROR);
       return;
     }
 

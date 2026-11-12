@@ -1,3 +1,4 @@
+import { analysisSourceText, exceedsSourceTextLimit, SOURCE_TEXT_LIMIT_ERROR } from "@/lib/source-text-limit";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   RECOMMENDED_ADDITION_CONTRACT,
@@ -222,24 +223,49 @@ export async function handleMrRequest(
     maxPastedTextWords?: number;
   } = {}
 ) {
+  const routeStartedAt = Date.now();
+  const requestId = crypto.randomUUID();
+  const logRouteTiming = (
+    stage: string,
+    details: Record<string, string | number | boolean | null> = {}
+  ) => {
+    console.info("mr_route_timing", {
+      stage,
+      request_id: requestId,
+      timestamp: new Date().toISOString(),
+      duration_ms: Date.now() - routeStartedAt,
+      ...details,
+    });
+  };
+  const returnRouteResponse = <T extends Response>(response: T): T => {
+    logRouteTiming("route_response_returned", { status_code: response.status });
+    return response;
+  };
+
+  logRouteTiming("route_entry");
   const signalContext = signalContextFromRequest(req);
   const analysisId = req.headers.get("x-gravitas-analysis-id");
   const MR_API_URL = process.env.MR_API_URL;
   const MR_API_KEY = process.env.MR_API_KEY;
 
   if (!MR_API_URL || !MR_API_KEY) {
-    return NextResponse.json(
+    return returnRouteResponse(NextResponse.json(
       { error: "Missing MR_API_URL or MR_API_KEY in .env.local" },
       { status: 500 }
-    );
+    ));
   }
 
   let body: any;
   try {
     body = await req.json();
     console.log("MR_UI route.ts incoming mode:", body?.mode, "mr_heresy:", body?.mr_heresy);
+    logRouteTiming("request_body_parse_completed");
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return returnRouteResponse(NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }));
+  }
+
+  if (exceedsSourceTextLimit(analysisSourceText(body ?? {}))) {
+    return returnRouteResponse(NextResponse.json({ error: SOURCE_TEXT_LIMIT_ERROR }, { status: 413 }));
   }
 
   const heresyMode = isMrHeresyMode(body);
@@ -274,12 +300,12 @@ export async function handleMrRequest(
     Array.isArray(imageData) &&
     imageData.length > maxUrlViewports
   ) {
-    return NextResponse.json(
+    return returnRouteResponse(NextResponse.json(
       {
         error: `Rendered URL analysis supports up to ${maxUrlViewports} ordered viewports.`,
       },
       { status: 400 }
-    );
+    ));
   }
 
   if (
@@ -294,12 +320,12 @@ export async function handleMrRequest(
         : "";
     const wordCount = entitlementSourceText.trim().split(/\s+/).filter(Boolean).length;
     if (!entitlementSourceText || wordCount > options.maxPastedTextWords) {
-      return NextResponse.json(
+      return returnRouteResponse(NextResponse.json(
         {
           error: `The free embedded session supports pasted text up to ${options.maxPastedTextWords} words.`,
         },
         { status: 400 }
-      );
+      ));
     }
   }
 
@@ -409,6 +435,7 @@ Any extracted page text in the input is supporting readability assistance only. 
   }
 
   try {
+    logRouteTiming("railway_fetch_started");
     const upstream = await fetch(MR_API_URL, {
       method: "POST",
       headers: {
@@ -417,6 +444,8 @@ Any extracted page text in the input is supporting readability assistance only. 
       },
       body: JSON.stringify(patchedBody),
     });
+
+    logRouteTiming("railway_response_received", { status_code: upstream.status });
 
     const text = await upstream.text();
 
@@ -458,10 +487,10 @@ Any extracted page text in the input is supporting readability assistance only. 
         typeof json?.output === "string" &&
         !isValidRewriteCandidate(extractRewriteOrRaw(json.output), "", cadence)
       ) {
-        return NextResponse.json(
+        return returnRouteResponse(NextResponse.json(
           { error: "The rewrite could not be completed." },
           { status: 502 }
-        );
+        ));
       }
       if (!rewriteOnlyRequest && typeof json?.output === "string") {
         const summaryAssessment = assessEditorSummary(json.output);
@@ -471,23 +500,27 @@ Any extracted page text in the input is supporting readability assistance only. 
           });
         }
       }
-      return NextResponse.json(json, { status: upstream.status });
+      return returnRouteResponse(NextResponse.json(json, { status: upstream.status }));
     }
-    return new NextResponse(text, {
+    return returnRouteResponse(new NextResponse(text, {
       status: upstream.status,
       headers: { "Content-Type": "text/plain" },
-    });
+    }));
   } catch (err: any) {
+    logRouteTiming("railway_fetch_failed", {
+      error_class: typeof err?.name === "string" ? err.name : "UnknownError",
+      is_abort: err?.name === "AbortError",
+    });
     after(() => recordSignal("analysis.failed", {
       ...signalContext,
       verified: true,
       dedupeKey: analysisId ? `analysis:${analysisId}:failed` : null,
       properties: { failure_stage: "upstream_transport" },
     }));
-    return NextResponse.json(
+    return returnRouteResponse(NextResponse.json(
       { error: "Upstream request failed", detail: String(err?.message ?? err) },
       { status: 502 }
-    );
+    ));
   }
 }
 

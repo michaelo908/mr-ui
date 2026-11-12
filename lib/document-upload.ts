@@ -1,5 +1,5 @@
 export const DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
-export const DOCUMENT_MAX_CHARACTERS = 60_000;
+export { SOURCE_TEXT_MAX_CHARACTERS as DOCUMENT_MAX_CHARACTERS } from "./source-text-limit";
 
 export type DocumentKind = "docx" | "pdf";
 

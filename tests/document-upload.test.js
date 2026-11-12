@@ -26,7 +26,7 @@ test("document upload accepts Word and text PDFs without pretending to support s
   assert.match(proxy, /"\/api\/documents"/);
   assert.match(nextConfig, /serverExternalPackages: \["pdf-parse"\]/);
   assert.match(contract, /DOCUMENT_MAX_BYTES = 10 \* 1024 \* 1024/);
-  assert.match(contract, /DOCUMENT_MAX_CHARACTERS = 60_000/);
+  assert.match(contract, /SOURCE_TEXT_MAX_CHARACTERS as DOCUMENT_MAX_CHARACTERS/);
 });
 
 test("documents follow existing analysis, session, and telemetry boundaries", () => {
@@ -36,7 +36,7 @@ test("documents follow existing analysis, session, and telemetry boundaries", ()
   const handoff = read("app/api/jump-in/handoff/route.ts");
 
   assert.match(app, /inputMode === "text" \|\| inputMode === "document"/);
-  assert.match(app, /inputMode === "document" \? DOCUMENT_MAX_CHARACTERS : 30000/);
+  assert.match(app, /exceedsSourceTextLimit\(raw\)/);
   assert.match(app, /Document accepted\. Preparing your analysis/);
   assert.match(app, /value=\{urlDraft \|\| "https:\/\/"\}/);
   assert.match(app, /JUMP_IN_MAX_PASTED_WORDS/);
