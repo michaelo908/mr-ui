@@ -4489,7 +4489,7 @@ if (urlSourceImages.length > 0) {
       isDemoLocked && "cursor-not-allowed opacity-60"
     )}
   />
-  {isJumpIn ? (
+  {showSimpleJumpIn ? (
     <button type="button" className="mt-2 text-sm text-sky-300 underline underline-offset-4 disabled:opacity-50"
       disabled={isDemoLocked || isLoading}
       onClick={() => {
@@ -4556,14 +4556,14 @@ if (urlSourceImages.length > 0) {
     </>) : null}
     <button
       onClick={() => {
-        if (isJumpIn) emitSignal("discovery.go_clicked", signalSurface);
+        if (showSimpleJumpIn) emitSignal("discovery.go_clicked", signalSurface);
         void onSend();
       }}
       data-copy-ui="true"
       disabled={!canSend}
-      className="h-[56px] w-full rounded-xl bg-neutral-100 px-5 text-sm font-semibold text-neutral-950 hover:bg-white disabled:bg-neutral-800 disabled:text-neutral-500 sm:min-w-32"
+      className="h-[56px] w-full rounded-xl bg-neutral-100 px-5 text-sm font-semibold text-neutral-950 hover:bg-white disabled:bg-neutral-800 disabled:text-neutral-500 sm:w-auto"
     >
-      {isLoading ? "Working…" : isJumpIn ? "GO" : "Gravitate"}
+      {isLoading ? "Working…" : showSimpleJumpIn ? "GO" : "Gravitate"}
     </button>
   </div>
   {!showSimpleJumpIn ? (<div className="mt-2 grid gap-2 text-sm text-neutral-300 sm:grid-cols-2">
