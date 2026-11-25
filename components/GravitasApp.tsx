@@ -4493,7 +4493,7 @@ if (urlSourceImages.length > 0) {
     <button type="button" className="mt-2 text-sm text-sky-300 underline underline-offset-4 disabled:opacity-50"
       disabled={isDemoLocked || isLoading}
       onClick={() => {
-        const sample = JUMP_IN_SAMPLES.find((item) => item.id === "proposal-opening");
+        const sample = JUMP_IN_SAMPLES.find((item) => item.id === "clearpoint-advisory");
         if (!sample) return;
         workspacePersistencePausedRef.current = false;
         setDraft(sample.content);
@@ -4506,6 +4506,9 @@ if (urlSourceImages.length > 0) {
       }}>
       Use a sample instead...
     </button>
+  ) : null}
+  {showSimpleJumpIn && jumpInSampleId === "clearpoint-advisory" ? (
+    <p className="mt-2 text-sm text-neutral-400">Clearpoint Advisory — fictional sample. All companies and performance figures are fictional.</p>
   ) : null}
   </>
   )}
