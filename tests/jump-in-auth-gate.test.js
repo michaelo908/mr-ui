@@ -85,6 +85,7 @@ test('expired sessions block analysis, rewrites, capture and restart until the w
     const res = await route(h.request({ requestKind: 'alternate-rewrite' }));
     assert.equal(res.status, 403);
     assert.equal((await res.json()).expired, true);
+    if (route === h.start) assert.equal(Number(res.headers.get("X-Jump-In-Started-At")), began);
   }
   assert.equal(h.calls.length, 0);
   h.jar.set('gravitas_jump_in', h.tokens.createJumpInToken(Date.now() - reset - 1000, randomUUID()));

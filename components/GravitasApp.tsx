@@ -65,6 +65,7 @@ import {
   type TextEvidenceLaunch,
 } from "@/lib/text-evidence";
 import { emitSignal, initializeSignalIdentity, signalHeaders, toSignalIdentifier } from "@/lib/signals/client";
+import { jumpInPurchaseUrl } from "@/lib/signals/jump-in-purchase";
 import { trackMetaEvent } from "@/lib/meta-pixel";
 import type { SignalName } from "@/lib/signals/registry";
 import type { AcquisitionFunnel } from "@/lib/acquisition-funnels";
@@ -2143,7 +2144,7 @@ const gravitonGroups = [
   const [accessResolved, setAccessResolved] = useState(false);
   const [authenticatedUserId, setAuthenticatedUserId] = useState<string | null>(null);
   const [jumpInAuthenticated, setJumpInAuthenticated] = useState(false);
-  const showSimpleJumpIn = isJumpIn && !messages.some((message) => message.analysisStatus === "success");
+  const showSimpleJumpIn = isJumpIn && inputMode === "text" && !messages.some((message) => message.analysisStatus === "success");
   const [telemetrySeed, setTelemetrySeed] = useState<TelemetrySeed | null>(null);
   const [telemetryMinuteTick, setTelemetryMinuteTick] = useState(0);
   const [analysisBoost, setAnalysisBoost] = useState(0);
@@ -3231,7 +3232,7 @@ useEffect(() => {
         keepalive: true,
       });
     }
-    window.location.assign(JUMP_IN_DAY_PASS_URL);
+    window.location.assign(isJumpIn ? jumpInPurchaseUrl(JUMP_IN_DAY_PASS_URL, initializeSignalIdentity()) : JUMP_IN_DAY_PASS_URL);
   }
 
   async function handleLogout() {
@@ -3350,6 +3351,11 @@ useEffect(() => {
     window.localStorage.removeItem(GRAVITAS_RESUME_MARKER_KEY);
     lastSavedWorkspaceRef.current = null;
     setMessages([]);
+    if (isJumpIn) {
+      setInputMode("text");
+      setSelectedGraviton("Full Analysis");
+      setCadence("sustained");
+    }
     setDraft("");
     setJumpInSampleId(null);
     setUrlDraft("");
@@ -3533,14 +3539,20 @@ useEffect(() => {
         method: "POST",
         headers: { "X-Jump-In-Session-Id": activeJumpInSession.sessionId },
       });
-      if (sessionResponse.status === 403) { markJumpInExpired(); return; }
-      if (!sessionResponse.ok) throw new Error("Your free session could not start. Please try again.");
       const startedAt = Number(sessionResponse.headers.get("X-Jump-In-Started-At"));
-      if (!Number.isFinite(startedAt) || startedAt <= 0) throw new Error("Invalid session response.");
-      const synced = { ...activeJumpInSession, startedAt };
-      window.localStorage.setItem(JUMP_IN_STORAGE_KEY, JSON.stringify(synced));
-      setJumpInSession(synced);
-      setJumpInNow(Date.now());
+      if (Number.isFinite(startedAt) && startedAt > 0) {
+        const synced = { ...activeJumpInSession, startedAt };
+        window.localStorage.setItem(JUMP_IN_STORAGE_KEY, JSON.stringify(synced));
+        setJumpInSession(synced);
+        setJumpInNow(Date.now());
+        if (sessionResponse.status === 403) {
+          setJumpInNow(Math.max(Date.now(), startedAt + JUMP_IN_DURATION_MS));
+          return;
+        }
+      }
+      if (!sessionResponse.ok || !Number.isFinite(startedAt) || startedAt <= 0) {
+        throw new Error("Your free session could not start. Please try again.");
+      }
     }
 
     emitSignal("analysis.started", signalSurface, {

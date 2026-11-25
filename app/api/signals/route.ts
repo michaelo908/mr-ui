@@ -9,7 +9,10 @@ export async function POST(req: Request) {
   try {
     const rateLimit = await consumeSignalRateLimit(req);
     if (rateLimit === "limited") return new NextResponse(null, { status: 429 });
-    if (rateLimit === "unavailable") return new NextResponse(null, { status: 202 });
+    if (rateLimit === "unavailable") {
+      if (process.env.GRAVITAS_SIGNALS_TEST_MODE === "true") console.warn("Staging Signals rate limiter unavailable");
+      return new NextResponse(null, { status: 202 });
+    }
     const body = await req.json();
     if (!body || !isClientSignalName(String(body.name)) || body.version !== 1) {
       return NextResponse.json({ error: "Invalid signal" }, { status: 400 });

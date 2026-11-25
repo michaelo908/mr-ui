@@ -38,6 +38,9 @@ export async function recordSignal(
       console.warn("Gravitas signal write failed", { name, code: error.code });
       return false;
     }
+    if (process.env.GRAVITAS_SIGNALS_TEST_MODE === "true") {
+      console.info("Staging signal recorded", { name, verified: signal.verified });
+    }
     return true;
   } catch (error) {
     console.warn("Gravitas signal write failed", {

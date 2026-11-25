@@ -1,3 +1,4 @@
+import { readJumpInPurchaseReference } from "@/lib/signals/jump-in-purchase";
 import Stripe from "stripe";
 import { Resend } from "resend";
 import { headers } from "next/headers";
@@ -283,14 +284,15 @@ async function checkoutLineItems(sessionId: string) {
 }
 
 async function processCheckout(event: Stripe.Event, session: Stripe.Checkout.Session) {
+  const jumpInReference = readJumpInPurchaseReference(session.client_reference_id);
   const lineItems = await checkoutLineItems(session.id);
   const isDayPass = lineItems.data.some((item) => item.price?.id === GRAVITAS_DAY_PASS_PRICE_ID);
   if (isDayPass) {
     await fulfilDayPass(event, session);
     after(() => recordSignal("purchase.day_pass_completed", {
-      visitorId: session.metadata?.gravitas_visitor_id || null,
-      sessionId: session.metadata?.gravitas_session_id || null,
-      surface: session.metadata?.gravitas_surface === "jump-in" ? "jump-in" : "paid",
+      visitorId: session.metadata?.gravitas_visitor_id || jumpInReference?.visitorId || null,
+      sessionId: session.metadata?.gravitas_session_id || jumpInReference?.sessionId || null,
+      surface: session.metadata?.gravitas_surface === "jump-in" || jumpInReference ? "jump-in" : "paid",
       verified: true,
       isTest: !event.livemode,
       dedupeKey: `stripe:${event.id}:day-pass`,
@@ -305,10 +307,10 @@ async function processCheckout(event: Stripe.Event, session: Stripe.Checkout.Ses
     }
   }
   after(() => recordSignal("purchase.checkout_completed", {
-    visitorId: session.metadata?.gravitas_visitor_id || null,
-    sessionId: session.metadata?.gravitas_session_id || null,
+    visitorId: session.metadata?.gravitas_visitor_id || jumpInReference?.visitorId || null,
+    sessionId: session.metadata?.gravitas_session_id || jumpInReference?.sessionId || null,
     userId: session.metadata?.user_id || null,
-    surface: session.metadata?.gravitas_surface === "jump-in" ? "jump-in" : "paid",
+    surface: session.metadata?.gravitas_surface === "jump-in" || jumpInReference ? "jump-in" : "paid",
     verified: true,
     isTest: !event.livemode,
     firstTouch: stripeAttribution(session.metadata, "ft"),

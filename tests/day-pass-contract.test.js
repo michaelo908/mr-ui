@@ -37,7 +37,7 @@ test("Jump In and paid renewal share the configured Day Pass destination", () =>
   const app = read("components/GravitasApp.tsx");
 
   assert.match(app, /href=\{JUMP_IN_DAY_PASS_URL\}/);
-  assert.match(app, /window\.location\.assign\(JUMP_IN_DAY_PASS_URL\)/);
+  assert.match(app, /window\.location\.assign\(isJumpIn \? jumpInPurchaseUrl\(JUMP_IN_DAY_PASS_URL/);
   assert.match(
     app,
     /new 48-hour Day Pass here:\\n\\n\$\{JUMP_IN_DAY_PASS_URL\}/

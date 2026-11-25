@@ -38,7 +38,7 @@ export async function POST(req: Request) {
   if (existing && isJumpInTokenExpired(existing, now) && !resetEligible) {
     return NextResponse.json(
       { error: "Your 20-minute Jump In session has ended.", expired: true },
-      { status: 403 }
+      { status: 403, headers: { "X-Jump-In-Started-At": String(existing.startedAt) } }
     );
   }
 
