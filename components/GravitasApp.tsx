@@ -1725,7 +1725,7 @@ ${cadenceInstruction(cadence)}${
                   {variant.label}
                 </h3>
 
-                <div className="rewrite-actions ml-auto flex items-center gap-2" data-copy-ui="true">
+                <div className="ml-auto flex items-center gap-2" data-copy-ui="true" data-rewrite-actions="true">
                   <button
                     onClick={() => handleCopyRewrite(variant, variant.copyFormat)}
                     className="rounded-xl border px-4 py-2 text-sm font-semibold text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"

@@ -287,12 +287,12 @@ body {
 
 /* Keep Jump In rewrite actions within narrow mobile viewports. */
 @media (max-width: 639px) {
-  .jump-in-shell .rewrite-actions {
+  .jump-in-shell [data-rewrite-actions] {
     flex-wrap: wrap;
     width: 100%;
     min-width: 0;
   }
-  .jump-in-shell .rewrite-actions select {
+  .jump-in-shell [data-rewrite-actions] select {
     max-width: 100%;
   }
 }
