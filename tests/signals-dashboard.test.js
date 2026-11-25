@@ -158,3 +158,21 @@ test("Today begins at Melbourne midnight while 7 and 30 days remain rolling wind
   assert.equal(getDashboardWindowStart(7, now).toISOString(), "2026-07-30T06:30:00.000Z");
   assert.equal(getDashboardWindowStart(30, now).toISOString(), "2026-07-07T06:30:00.000Z");
 });
+
+
+test("automatic initialisation is separate from deliberate Jump In engagement", () => {
+  const journey = [
+    row("1", "discovery.session_started", "idle"),
+    row("2", "discovery.session_started", "active"),
+    row("3", "discovery.sample_selected", "active"),
+    row("4", "discovery.go_clicked", "active"),
+    row("5", "analysis.started", "active"),
+    row("6", "analysis.completed", "active"),
+    row("7", "discovery.registration_completed", "active"),
+  ];
+  const funnel = buildFunnel(journey);
+  assert.equal(funnel.find((stage) => stage.label === "Editor initialised (automatic)").value, 2);
+  assert.equal(funnel.find((stage) => stage.label === "Sample selected").value, 1);
+  assert.equal(funnel.find((stage) => stage.label === "GO clicked").value, 1);
+  assert.equal(funnel.find((stage) => stage.label === "Optional registration / sign-in").value, 1);
+});

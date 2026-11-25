@@ -70,3 +70,10 @@ export function isJumpInTokenResetEligible(
 ) {
   return now >= token.startedAt + JUMP_IN_RESET_MS;
 }
+
+// Reject cross-site browser requests before creating or consuming a free session.
+export function isJumpInSameOrigin(req: Request) {
+  const origin = req.headers.get("origin");
+  return req.headers.get("sec-fetch-site") !== "cross-site" &&
+    (!origin || origin === new URL(req.url).origin);
+}

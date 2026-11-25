@@ -22,7 +22,7 @@ test("Jump In tracks sample selection and sample-led analysis without storing it
   const app = read("components/GravitasApp.tsx");
   const registry = read("lib/signals/registry.ts");
 
-  assert.match(app, /Nothing handy to paste\?/);
+  assert.match(app, /Use a sample instead\.\.\./);
   assert.match(app, /emitSignal\("discovery\.sample_selected", signalSurface, \{ sample_id: sample\.id \}\)/);
   assert.ok(app.includes("...(jumpInSampleId ? { sample_id: jumpInSampleId } : {})"));
   assert.match(registry, /"discovery\.sample_selected"/);

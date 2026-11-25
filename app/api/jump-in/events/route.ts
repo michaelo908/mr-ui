@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 const EVENTS = new Set([
   "session_started",
+  "session_initialised",
   "session_expired",
   "day_pass_clicked",
 ]);

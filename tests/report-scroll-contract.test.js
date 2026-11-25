@@ -26,7 +26,7 @@ test("the shared completion path covers every source and entitlement mode", () =
   assert.match(app, /inputMode === "images"/);
   assert.match(request, /Analysis Lens:/);
   assert.match(app, /buildAnalysisInput/);
-  assert.equal((app.match(/scrollToLatestEditorSummary\(\);/g) ?? []).length, 1);
+  assert.equal((app.match(/scrollToLatestEditorSummary\(\);/g) ?? []).length, 2);
 });
 
 test("layout settling receives one guarded correction without another animation", () => {

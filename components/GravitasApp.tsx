@@ -1397,6 +1397,7 @@ function StructuredAssistantMessage({
     if (!parsed.content.trim() && sourceImageData.length === 0) return;
 
     setIsGeneratingAlternate(true);
+    onInteractionSignal?.("workflow.rewrite_started");
 
     const alternateInstruction = `Provide only a fresh alternate rewrite of this same original text. Do not include summary, diagnosis, notes, headings, labels, or debrief. Return only the rewritten copy.
 
@@ -1416,6 +1417,7 @@ ${cadenceInstruction(cadence)}${
         ? {
             mode: "mr_heresy",
             requestKind: "alternate-rewrite",
+            entitlementSourceText: sourceText,
             input: " ",
             context: `${alternateInstruction}\n\nApply Multirrupt Mode to the following source:\n\n${sourceText}`,
             constraints: {},
@@ -1427,6 +1429,7 @@ ${cadenceInstruction(cadence)}${
         : {
             mode: "general",
             requestKind: "alternate-rewrite",
+            entitlementSourceText: sourceText,
             input: sourceText,
             context: alternateInstruction,
             constraints: {},
@@ -2024,14 +2027,14 @@ export default function GravitasApp({
   }, []);
   const [draft, setDraft] = useState("");
   const [jumpInSampleId, setJumpInSampleId] = useState<JumpInSampleId | null>(null);
-  const [inputMode, setInputMode] = useState<"text" | "url" | "images" | "document">(funnel?.preferredSource ?? "text");
+  const [inputMode, setInputMode] = useState<"text" | "url" | "images" | "document">(isJumpIn ? "text" : (funnel?.preferredSource ?? "text"));
   const [urlDraft, setUrlDraft] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
   const [importedUrl, setImportedUrl] = useState<{
     requestedUrl: string;
     source: UrlSource;
   } | null>(null);
-  const [cadence, setCadence] = useState<CadenceMode>("dynamic");
+  const [cadence, setCadence] = useState<CadenceMode>(isJumpIn ? "sustained" : "dynamic");
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [uploadedDocument, setUploadedDocument] = useState<UploadedDocument | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
@@ -2140,7 +2143,7 @@ const gravitonGroups = [
   const [accessResolved, setAccessResolved] = useState(false);
   const [authenticatedUserId, setAuthenticatedUserId] = useState<string | null>(null);
   const [jumpInAuthenticated, setJumpInAuthenticated] = useState(false);
-  const [previewUnlockRequired, setPreviewUnlockRequired] = useState(false);
+  const showSimpleJumpIn = isJumpIn && !messages.some((message) => message.analysisStatus === "success");
   const [telemetrySeed, setTelemetrySeed] = useState<TelemetrySeed | null>(null);
   const [telemetryMinuteTick, setTelemetryMinuteTick] = useState(0);
   const [analysisBoost, setAnalysisBoost] = useState(0);
@@ -2157,7 +2160,6 @@ const gravitonGroups = [
   const supabase = useMemo(() => createClient(), []);
   const sendLockRef = useRef(false);
   const runCoordinatorRef = useRef(createAnalysisRunCoordinator());
-  const previewTimerStartRequestedRef = useRef(false);
   const workspacePersistenceCoordinatorRef = useRef(
     createRevisionedPersistenceCoordinator()
   );
@@ -2385,8 +2387,15 @@ const gravitonGroups = [
     } catch {}
     emitSignal("discovery.session_started", signalSurface, {
       entry_path: window.location.pathname,
+      initiation: "automatic",
     });
   }, [signalSurface]);
+
+  useEffect(() => {
+    if (!isJumpIn || !jumpInAuthenticated || !window.sessionStorage.getItem("jumpInOptionalRegistrationPending")) return;
+    window.sessionStorage.removeItem("jumpInOptionalRegistrationPending");
+    emitSignal("discovery.registration_completed", "jump-in");
+  }, [isJumpIn, jumpInAuthenticated]);
 
   const activeSourceKey = useMemo(() => {
     if (inputMode === "url") {
@@ -2538,7 +2547,7 @@ useEffect(() => {
     }, 50);
   }
 
-  function scrollToLatestEditorSummary() {
+  const scrollToLatestEditorSummary = useCallback(() => {
     const positionSummary = (behavior: ScrollBehavior) => {
       const scroller = scrollerRef.current;
       if (!scroller) return;
@@ -2550,6 +2559,10 @@ useEffect(() => {
 
       const scrollerRect = scroller.getBoundingClientRect();
       const targetRect = target.getBoundingClientRect();
+      if (isJumpIn) {
+        window.scrollTo({ top: window.scrollY + targetRect.top - 24, behavior: "auto" });
+        return;
+      }
       const pageTop = window.scrollY + scrollerRect.top;
       const top = calculateEditorSummaryScrollTop({
         currentScrollTop: scroller.scrollTop,
@@ -2575,6 +2588,10 @@ useEffect(() => {
       if (!target) return;
       const scrollerRect = scroller.getBoundingClientRect();
       const targetRect = target.getBoundingClientRect();
+      if (isJumpIn) {
+        window.scrollTo({ top: window.scrollY + targetRect.top - 24, behavior: "auto" });
+        return;
+      }
       const pageTop = window.scrollY + scrollerRect.top;
       const expectedTop = calculateEditorSummaryScrollTop({
         currentScrollTop: scroller.scrollTop,
@@ -2589,7 +2606,7 @@ useEffect(() => {
         scroller.scrollTo({ top: expectedTop, behavior: "auto" });
       }
     }, 900);
-  }
+  }, [isJumpIn]);
 
   useEffect(() => {
     setTelemetrySeed(getTelemetrySeed());
@@ -2700,7 +2717,7 @@ useEffect(() => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          event: "session_started",
+          event: "session_initialised",
           sessionId: session.sessionId,
         }),
       });
@@ -2768,6 +2785,7 @@ useEffect(() => {
           setSelectedGraviton(snapshot.selectedGraviton);
           setCadence(snapshot.cadence);
           setMessages(restoredMessages);
+          if (restoredMessages.some((message) => message.analysisStatus === "success")) scrollToLatestEditorSummary();
           setCompletedAnalysisRuns(restoredCompletedRuns);
         }
 
@@ -2785,7 +2803,7 @@ useEffect(() => {
     return () => {
       cancelled = true;
     };
-  }, [isJumpIn, jumpInSessionId, setMessages]);
+  }, [isJumpIn, jumpInSessionId, setMessages, scrollToLatestEditorSummary]);
 
   useEffect(() => {
     if (
@@ -2808,56 +2826,6 @@ useEffect(() => {
     }, 150);
     return () => window.clearTimeout(timeout);
   }, [isJumpIn, jumpInSession, persistJumpInWorkspace, workspaceHydration]);
-
-  useEffect(() => {
-    if (
-      !isJumpIn ||
-      !jumpInAuthenticated ||
-      !jumpInSession ||
-      jumpInSession.startedAt !== null ||
-      !canAutosaveWorkspace(workspaceHydration) ||
-      !messages.some(
-        (message) =>
-          message.role === "assistant" && message.analysisStatus === "success"
-      ) ||
-      previewTimerStartRequestedRef.current
-    ) {
-      return;
-    }
-
-    previewTimerStartRequestedRef.current = true;
-    void (async () => {
-      const response = await fetch("/api/jump-in/start", {
-        method: "POST",
-        headers: { "X-Jump-In-Session-Id": jumpInSession.sessionId },
-      });
-      if (!response.ok) {
-        previewTimerStartRequestedRef.current = false;
-        if (response.status === 403) markJumpInExpired();
-        return;
-      }
-
-      const startedAt = Number(response.headers.get("X-Jump-In-Started-At"));
-      if (!Number.isFinite(startedAt) || startedAt <= 0) {
-        previewTimerStartRequestedRef.current = false;
-        return;
-      }
-
-      setJumpInSession((current) => {
-        if (!current || current.startedAt !== null) return current;
-        const next = { ...current, startedAt };
-        window.localStorage.setItem(JUMP_IN_STORAGE_KEY, JSON.stringify(next));
-        return next;
-      });
-      setJumpInNow(Date.now());
-    })();
-  }, [
-    isJumpIn,
-    jumpInAuthenticated,
-    jumpInSession,
-    messages,
-    workspaceHydration,
-  ]);
 
   useEffect(() => {
     if (
@@ -2961,8 +2929,9 @@ useEffect(() => {
   }, [isJumpIn, jumpInExpired, jumpInNow, jumpInSession, signalSurface]);
 
   useEffect(() => {
+    if (isJumpIn && messagesRef.current.some((message) => message.analysisStatus === "success")) return;
     scrollToBottom();
-  }, [messages.length]);
+  }, [isJumpIn, messages.length]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -3216,7 +3185,7 @@ useEffect(() => {
     return session;
   }
 
-  async function unlockPreviewAnalysis() {
+  async function registerOptionally() {
     const workspaceReady = await persistJumpInWorkspace();
     if (!workspaceReady) return;
     window.localStorage.setItem(
@@ -3229,6 +3198,7 @@ useEffect(() => {
       cadence,
       ...(jumpInSampleId ? { sample_id: jumpInSampleId } : {}),
     });
+    window.sessionStorage.setItem("jumpInOptionalRegistrationPending", "1");
     router.push(`/login?next=${encodeURIComponent(HOMEPAGE_JUMP_IN_RESUME_TARGET)}`);
   }
 
@@ -3446,13 +3416,6 @@ useEffect(() => {
       return;
     }
     sendLockRef.current = true;
-    emitSignal("analysis.started", signalSurface, {
-      analysis_id: runId,
-      source_mode: inputMode,
-      graviton: toSignalIdentifier(selectedGraviton),
-      cadence,
-      ...(jumpInSampleId ? { sample_id: jumpInSampleId } : {}),
-    });
     setIsLoading(true);
     setIsCapturingUrl(inputMode === "url");
     setAnalysisProgress(
@@ -3564,7 +3527,30 @@ useEffect(() => {
       return;
     }
 
-    const activeJumpInSession = startJumpInSession(jumpInAuthenticated);
+    const activeJumpInSession = startJumpInSession(false);
+    if (activeJumpInSession) {
+      const sessionResponse = await fetch("/api/jump-in/start", {
+        method: "POST",
+        headers: { "X-Jump-In-Session-Id": activeJumpInSession.sessionId },
+      });
+      if (sessionResponse.status === 403) { markJumpInExpired(); return; }
+      if (!sessionResponse.ok) throw new Error("Your free session could not start. Please try again.");
+      const startedAt = Number(sessionResponse.headers.get("X-Jump-In-Started-At"));
+      if (!Number.isFinite(startedAt) || startedAt <= 0) throw new Error("Invalid session response.");
+      const synced = { ...activeJumpInSession, startedAt };
+      window.localStorage.setItem(JUMP_IN_STORAGE_KEY, JSON.stringify(synced));
+      setJumpInSession(synced);
+      setJumpInNow(Date.now());
+    }
+
+    emitSignal("analysis.started", signalSurface, {
+      analysis_id: runId,
+      source_mode: inputMode,
+      graviton: toSignalIdentifier(selectedGraviton),
+      cadence,
+      ...(jumpInSampleId ? { sample_id: jumpInSampleId } : {}),
+    });
+
 
     setAnalysisProgress(
       inputMode === "url"
@@ -3679,7 +3665,7 @@ if (urlSourceImages.length > 0) {
 
       if (
         isJumpIn &&
-        Number.isFinite(authoritativeStartedAt)
+        Number.isFinite(authoritativeStartedAt) && authoritativeStartedAt > 0
       ) {
         setJumpInSession((current) => {
           if (!current) return current;
@@ -3695,8 +3681,6 @@ if (urlSourceImages.length > 0) {
         });
       }
 
-      const isAnonymousPreview =
-        isJumpIn && res.headers.get("X-Jump-In-Preview") === "true";
 
       if (res.status === 403 && data.expired) {
         markJumpInExpired();
@@ -3731,11 +3715,7 @@ if (urlSourceImages.length > 0) {
         .join("\n\n");
       const rewriteCapable =
         !isHeresy && isRewriteCapableGraviton(selectedGraviton);
-      // The first anonymous analysis is intentionally covered by the sign-in
-      // prompt, but its usable rewrite must survive that handoff. Otherwise a
-      // person returns from sign-in to a completed analysis with no Rewrite
-      // button and has to run the same source again.
-      const rewriteRequired = !isAnonymousPreview && rewriteCapable;
+      const rewriteRequired = rewriteCapable;
 
       if (
         rewriteRequired &&
@@ -3754,6 +3734,7 @@ if (urlSourceImages.length > 0) {
           body: JSON.stringify({
             mode: "general",
             requestKind: "initial-rewrite-repair",
+            entitlementSourceText: raw,
             input: effectiveText,
             context: `SPECIALIST ANALYSIS TO USE AS THE EDITORIAL BASIS:\n\n${specialistAnalysisContext}`,
             constraints: {},
@@ -3788,19 +3769,6 @@ if (urlSourceImages.length > 0) {
         throw new Error("The rewrite could not be completed. Please try again.");
       }
       if (!rewriteCapable) {
-        initialRewriteContent = undefined;
-        normalizedOutput = removeStructuredRewrite(normalizedOutput);
-      }
-      if (
-        isAnonymousPreview &&
-        !isValidRewriteCandidate(
-          initialRewriteContent,
-          specialistAnalysisContext,
-          cadence
-        )
-      ) {
-        // Preserve the completed first analysis even if the model omitted an
-        // initial rewrite. Authenticated analyses still repair this case.
         initialRewriteContent = undefined;
         normalizedOutput = removeStructuredRewrite(normalizedOutput);
       }
@@ -3839,14 +3807,13 @@ if (urlSourceImages.length > 0) {
       setAnalysisBoost((prev) => prev + analysisJump);
       setRewriteBoost((prev) => prev + rewriteJump);
       scrollToLatestEditorSummary();
-      if (isAnonymousPreview) {
-        setPreviewUnlockRequired(true);
-      }
+      if (isJumpIn) emitSignal("discovery.result_revealed", signalSurface);
 
     } catch (err) {
       if (!runCoordinatorRef.current.isCurrent(runId)) return;
-      setMessages((m) =>
-        m.map((msg) =>
+      setMessages((m) => {
+        if (!m.some((msg) => msg.runId === runId && msg.content === THINKING_TOKEN)) return [...m, { role: "assistant", content: `Something went wrong while analysing: ${String(err)}`, analysisStatus: "error", runId }];
+        return m.map((msg) =>
           msg.role === "assistant" &&
           msg.content === THINKING_TOKEN &&
           msg.runId === runId
@@ -3860,8 +3827,8 @@ if (urlSourceImages.length > 0) {
                completedAt: Date.now(),
              }
             : msg
-        )
-      );
+        );
+      });
       scrollToBottom();
     }
     } finally {
@@ -3949,36 +3916,6 @@ if (urlSourceImages.length > 0) {
 
   return (
     <main className={classNames("gravitas-shell text-neutral-100", embedded ? "rounded-[2rem]" : "min-h-screen")}>
-      {isJumpIn && previewUnlockRequired && !jumpInAuthenticated ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/65 px-4 backdrop-blur-[1px]"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="preview-unlock-title"
-        >
-          <div className="w-full max-w-md rounded-2xl border border-[#C6A75A]/70 bg-neutral-950 p-6 shadow-2xl sm:p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#C6A75A]">
-              Your reader analysis is ready
-            </p>
-            <h2 id="preview-unlock-title" className="mt-3 text-2xl font-semibold text-white">
-              See the whole response.
-            </h2>
-            <p className="mt-3 text-base leading-7 text-neutral-300">
-              We&apos;ve completed your first Multirrupt analysis. Enter your email to unlock the detail, evidence and rewrites — and continue with more analyses. Your work will be waiting here.
-            </p>
-            <button
-              type="button"
-              onClick={() => void unlockPreviewAnalysis()}
-              className="mt-6 w-full rounded-xl bg-[#C6A75A] px-5 py-3 text-base font-semibold text-neutral-950 transition hover:bg-[#dbc078]"
-            >
-              Continue with email
-            </button>
-            <p className="mt-3 text-center text-xs text-neutral-500">
-              No password. We&apos;ll send a six-digit sign-in code.
-            </p>
-          </div>
-        </div>
-      ) : null}
       <div className={classNames("relative z-10 mx-auto w-full max-w-5xl px-4 sm:px-6", embedded ? "py-5 sm:py-6" : "py-8 sm:py-12")}>
         <header className="gravitas-header mb-6 flex flex-col gap-5 rounded-2xl px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div>
@@ -3987,7 +3924,9 @@ if (urlSourceImages.length > 0) {
               aria-label="Multirrupt Narrative Intelligence"
               className="gravitas-blue-logo multirrupt-editor-logo"
             />
-            {isJumpIn ? (
+            {showSimpleJumpIn ? (
+              <div className="mt-3 text-base font-semibold text-neutral-300">See the narrative from the other side....</div>
+            ) : isJumpIn ? (
               <>
                 <div className="mt-3 text-sm font-medium text-neutral-300">
                   {funnel ? funnel.eyebrow : "Jump Into Multirrupt"}
@@ -4001,6 +3940,7 @@ if (urlSourceImages.length > 0) {
                 See the narrative from the other side.
               </div>
             )}
+            {!showSimpleJumpIn ? (<>
             <div className="mt-2 text-[10px] font-medium uppercase tracking-[0.16em] text-neutral-600">
               Multirrupt {MULTIRRUPT_RELEASE} · build {MULTIRRUPT_BUILD}
             </div>
@@ -4027,10 +3967,10 @@ if (urlSourceImages.length > 0) {
                 Signed in with a different account? Log out
               </button>
             ) : null}
-            {isJumpIn && requireAuthBeforeAnalysis && !jumpInAuthenticated ? (
-              <div className="mt-2 text-xs text-neutral-400">
-                Your first reader analysis is free. Sign in after you see the result to unlock the full response and rewrites.
-              </div>
+            {isJumpIn && !jumpInAuthenticated ? (
+              <button type="button" onClick={() => void registerOptionally()} className="mt-3 block text-sm text-sky-300 underline underline-offset-4">
+                Register or sign in (optional)
+              </button>
             ) : null}
             {isJumpIn ? (
               <div
@@ -4043,9 +3983,7 @@ if (urlSourceImages.length > 0) {
               >
                 {jumpInExpired
                   ? "Free session ended"
-                  : !jumpInAuthenticated
-                    ? "20 minutes of free analysis and rewrites after sign-in"
-                    : jumpInSession?.startedAt === null
+                  : jumpInSession?.startedAt === null
                       ? "20:00 starts with your first analysis"
                     : `${formatJumpInRemaining(jumpInRemainingMs)} remaining`}
               </div>
@@ -4067,6 +4005,7 @@ if (urlSourceImages.length > 0) {
               <div>Analyses today: {analysesToday}</div>
               <div>Narratives refined: {narrativesRefinedToday}</div>
             </div>
+            </>) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
@@ -4179,8 +4118,8 @@ if (urlSourceImages.length > 0) {
           ref={scrollerRef}
           className={classNames(
             "gravitas-output order-2 mt-5 rounded-2xl p-4 sm:p-6",
-            isJumpIn && messages.length === 0 && !jumpInExpired
-              ? "min-h-[460px] overflow-visible sm:min-h-[540px]"
+            showSimpleJumpIn && messages.length === 0
+              ? "hidden"
               : "overflow-visible"
           )}
         >
@@ -4371,7 +4310,7 @@ if (urlSourceImages.length > 0) {
         </div>
 
         <div className="gravitas-input-panel order-1 rounded-2xl p-4 sm:p-5">
-  <div className="mb-3 flex flex-wrap gap-2" aria-label="Source type">
+  <div className={classNames("mb-3 flex flex-wrap gap-2", showSimpleJumpIn && "hidden")} aria-label="Source type">
     {([
       ["text", "Text"],
       ["url", "URL"],
@@ -4519,39 +4458,6 @@ if (urlSourceImages.length > 0) {
     </div>
   ) : (
   <>
-  {isJumpIn ? (
-    <div className="mb-3 rounded-xl border border-neutral-800 bg-neutral-900/40 p-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm font-semibold text-neutral-200">Nothing handy to paste?</p>
-          <p className="mt-0.5 text-xs text-neutral-500">Try a realistic sample first, then test something of your own.</p>
-        </div>
-        <select
-          value={jumpInSampleId ?? ""}
-          onChange={(event) => {
-            const sample = JUMP_IN_SAMPLES.find((item) => item.id === event.target.value);
-            if (!sample) return;
-            workspacePersistencePausedRef.current = false;
-            setDraft(sample.content);
-            setJumpInSampleId(sample.id);
-            setImageFiles([]);
-            setUploadedDocument(null);
-            setDocumentError(null);
-            emitSignal("discovery.sample_selected", signalSurface, { sample_id: sample.id });
-          }}
-          disabled={isDemoLocked}
-          aria-label="Try a sample"
-          className="h-11 w-full rounded-lg border border-[#C6A75A]/60 bg-[#C6A75A]/10 px-3 text-sm font-semibold text-[#E7CD8D] outline-none disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-        >
-          <option value="" disabled>Try a sample…</option>
-          {JUMP_IN_SAMPLES.map((sample) => <option key={sample.id} value={sample.id}>{sample.label}</option>)}
-        </select>
-      </div>
-      {jumpInSampleId ? (
-        <p className="mt-2 text-xs text-[#C6A75A]">Sample loaded. Press Gravitate to see how it lands — or replace it with your own writing.</p>
-      ) : null}
-    </div>
-  ) : null}
   <textarea
     value={draft}
     onChange={(e) => {
@@ -4565,16 +4471,35 @@ if (urlSourceImages.length > 0) {
 }}
     onKeyDown={onKeyDown}
     disabled={isDemoLocked}
-    placeholder="Paste here"
+    placeholder={showSimpleJumpIn ? "Paste your text here..." : "Paste here"}
     className={classNames(
       "h-[96px] w-full resize-none rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-[17px] leading-7 text-neutral-100 outline-none focus:border-neutral-600",
       isDemoLocked && "cursor-not-allowed opacity-60"
     )}
   />
+  {isJumpIn ? (
+    <button type="button" className="mt-2 text-sm text-sky-300 underline underline-offset-4 disabled:opacity-50"
+      disabled={isDemoLocked || isLoading}
+      onClick={() => {
+        const sample = JUMP_IN_SAMPLES.find((item) => item.id === "proposal-opening");
+        if (!sample) return;
+        workspacePersistencePausedRef.current = false;
+        setDraft(sample.content);
+        setJumpInSampleId(sample.id);
+        setInputMode("text");
+        setImageFiles([]);
+        setUploadedDocument(null);
+        setDocumentError(null);
+        emitSignal("discovery.sample_selected", signalSurface, { sample_id: sample.id });
+      }}>
+      Use a sample instead...
+    </button>
+  ) : null}
   </>
   )}
 
   <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+    {!showSimpleJumpIn ? (<>
     <select
       value={selectedGraviton}
       onChange={(e) => {
@@ -4616,16 +4541,20 @@ if (urlSourceImages.length > 0) {
       ))}
     </select>
 
+    </>) : null}
     <button
-      onClick={onSend}
+      onClick={() => {
+        if (isJumpIn) emitSignal("discovery.go_clicked", signalSurface);
+        void onSend();
+      }}
       data-copy-ui="true"
       disabled={!canSend}
-      className="h-[56px] w-full rounded-xl bg-neutral-100 px-5 text-sm font-semibold text-neutral-950 hover:bg-white disabled:bg-neutral-800 disabled:text-neutral-500 sm:w-auto"
+      className="h-[56px] w-full rounded-xl bg-neutral-100 px-5 text-sm font-semibold text-neutral-950 hover:bg-white disabled:bg-neutral-800 disabled:text-neutral-500 sm:min-w-32"
     >
-      {isLoading ? "Working…" : "Gravitate"}
+      {isLoading ? "Working…" : isJumpIn ? "GO" : "Gravitate"}
     </button>
   </div>
-  <div className="mt-2 grid gap-2 text-sm text-neutral-300 sm:grid-cols-2">
+  {!showSimpleJumpIn ? (<div className="mt-2 grid gap-2 text-sm text-neutral-300 sm:grid-cols-2">
     <details className="rounded-xl border border-neutral-800 p-3">
       <summary className="cursor-pointer font-semibold">Gravitons help</summary>
       <p className="mt-2">A Graviton is the lens used to examine your source. Choose the question that matters most.</p>
@@ -4641,7 +4570,7 @@ if (urlSourceImages.length > 0) {
       <ul className="mt-2 space-y-2">{CADENCE_OPTIONS.map((option) => <li key={option.value}><strong>{option.label}</strong>: {option.description}</li>)}</ul>
       <p className="mt-2">For books, chapters, essays and substantial reports, try Sustained Preserve.</p>
     </details>
-  </div>
+  </div>) : null}
   {analysisProgress ? (
     <p className="mt-2 text-sm text-[#C6A75A]" role="status" aria-live="polite">
       {analysisProgress}

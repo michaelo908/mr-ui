@@ -39,7 +39,7 @@ test("customer copy and transactional templates use Multirrupt while Gravitate a
   for (const source of [app, funnels, emails, metadata]) {
     assert.doesNotMatch(source, /Gravitas(?:\s+(?:access|Day Pass|subscription|emails|Email Check|Proposal Check|Landing Page Check)|\.|,|\?|!|<|$)/);
   }
-  assert.match(app, /isLoading \? "Working…" : "Gravitate"/);
+  assert.match(app, /isJumpIn \? "GO" : "Gravitate"/);
   assert.match(app, /aria-label="Gravitons"/);
   assert.match(app, /label: "Proposal"/);
   assert.match(app, /What will the decision-maker conclude\?/);

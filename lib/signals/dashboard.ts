@@ -124,10 +124,15 @@ export function buildFunnel(rows: DashboardSignal[]) {
     ...(rows.some((row) => row.signal_name === "discovery.landing_viewed")
       ? [["Landing viewed", "discovery.landing_viewed", false] as const]
       : []),
-    ["Editor opened", "discovery.session_started", false],
+    ["Editor initialised (automatic)", "discovery.session_started", false],
+    ...(rows.some((row) => row.signal_name === "discovery.sample_selected" || row.signal_name === "discovery.go_clicked")
+      ? [["Sample selected", "discovery.sample_selected", false] as const, ["GO clicked", "discovery.go_clicked", false] as const]
+      : []),
     ["Analysis started", "analysis.started", false],
     ["Analysis completed", "analysis.completed", true],
     ["Rewrite engaged", "workflow.rewrite_revealed", false],
+    ...(rows.some((row) => row.signal_name === "discovery.registration_completed")
+      ? [["Optional registration / sign-in", "discovery.registration_completed", false] as const] : []),
     ["Linked purchase after rewrite", "purchase.checkout_completed", true],
   ] as const;
   const funnel = stages.map(([label, name, authoritative]) => ({

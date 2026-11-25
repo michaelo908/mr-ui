@@ -174,6 +174,6 @@ test("Jump In route re-signs transition cookies without duplicate analytics", ()
   assert.match(route, /existing\.needsResign/);
   assert.match(route, /expires: new Date\(getJumpInTokenAbsoluteExpiry\(existing\)\)/);
   assert.match(route, /maxAge: getJumpInTokenRemainingCookieSeconds\(existing, now\)/);
-  assert.match(route, /if \(!activeExisting \|\| existing\?\.needsResign\)/);
-  assert.match(route, /if \(!activeExisting\) \{[\s\S]*first_analysis_performed/);
+  assert.match(route, /if \(existing\.needsResign\)/);
+  assert.doesNotMatch(route, /first_analysis_performed/);
 });

@@ -7,10 +7,11 @@ import {
   isJumpInTokenExpired,
   isJumpInTokenResetEligible,
   JUMP_IN_COOKIE_NAME,
+  JUMP_IN_PREVIEW_COOKIE_NAME,
   readJumpInToken,
 } from "@/lib/jump-in-server";
 import { JUMP_IN_RESET_MS } from "@/lib/jump-in";
-import { hasAuthenticatedJumpInUser } from "@/lib/jump-in-auth";
+import { isJumpInSameOrigin } from "@/lib/jump-in-server";
 
 function requestedSessionId(value: string | null) {
   return value &&
@@ -22,16 +23,16 @@ function requestedSessionId(value: string | null) {
 }
 
 export async function POST(req: Request) {
-  if (!(await hasAuthenticatedJumpInUser())) {
-    return NextResponse.json({ error: "Sign in to unlock your Jump In." }, { status: 401 });
-  }
+  if (!isJumpInSameOrigin(req)) return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
 
   const cookieStore = await cookies();
   const now = Date.now();
-  const existing = readJumpInToken(
+  const current = readJumpInToken(
     cookieStore.get(JUMP_IN_COOKIE_NAME)?.value,
     now
   );
+  const preview = current ? null : readJumpInToken(cookieStore.get(JUMP_IN_PREVIEW_COOKIE_NAME)?.value, now);
+  const existing = current ?? (preview ? { ...preview, needsResign: true } : null);
   const resetEligible = existing && isJumpInTokenResetEligible(existing, now);
 
   if (existing && isJumpInTokenExpired(existing, now) && !resetEligible) {

@@ -44,8 +44,8 @@ test("Jump-In preserves 3,000 pasted words and a signed seven-day cooldown", () 
     analysisRoute,
     /maxPastedTextWords: JUMP_IN_MAX_PASTED_WORDS/
   );
-  assert.match(analysisRoute, /maxAge: JUMP_IN_RESET_MS \/ 1000/);
-  assert.match(analysisRoute, /isJumpInTokenResetEligible/);
+  assert.match(read("app/api/jump-in/start/route.ts"), /maxAge: JUMP_IN_RESET_MS \/ 1000/);
+  assert.match(read("app/api/jump-in/start/route.ts"), /isJumpInTokenResetEligible/);
   assert.match(server, /token\.startedAt \+ JUMP_IN_RESET_MS/);
   assert.match(app, /isJumpInResetEligible\(parsed\.startedAt\)/);
   assert.doesNotMatch(app, /remaining analyses/i);

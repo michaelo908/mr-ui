@@ -441,10 +441,13 @@ Any extracted page text in the input is supporting readability assistance only. 
     try { parsedResponse = JSON.parse(text); } catch {}
     const verifiedCompletion = upstream.ok && typeof parsedResponse?.output === "string" && parsedResponse.output.trim().length > 0;
 
-    after(() => recordSignal(verifiedCompletion ? "analysis.completed" : "analysis.failed", {
+    const jumpInRewrite = signalContext.surface === "jump-in" && rewriteOnlyRequest;
+    after(() => recordSignal(jumpInRewrite
+      ? (verifiedCompletion ? "workflow.rewrite_completed" : "workflow.rewrite_failed")
+      : (verifiedCompletion ? "analysis.completed" : "analysis.failed"), {
       ...signalContext,
       verified: true,
-      dedupeKey: analysisId ? `analysis:${analysisId}:${verifiedCompletion ? "completed" : "failed"}` : null,
+      dedupeKey: analysisId ? `${jumpInRewrite ? "rewrite" : "analysis"}:${analysisId}:${verifiedCompletion ? "completed" : "failed"}` : null,
       properties: verifiedCompletion ? analysisProperties : {
         ...analysisProperties,
         failure_stage: upstream.ok ? "invalid_output" : "upstream_response",
@@ -478,7 +481,7 @@ Any extracted page text in the input is supporting readability assistance only. 
       headers: { "Content-Type": "text/plain" },
     });
   } catch (err: any) {
-    after(() => recordSignal("analysis.failed", {
+    after(() => recordSignal(signalContext.surface === "jump-in" && rewriteOnlyRequest ? "workflow.rewrite_failed" : "analysis.failed", {
       ...signalContext,
       verified: true,
       dedupeKey: analysisId ? `analysis:${analysisId}:failed` : null,
