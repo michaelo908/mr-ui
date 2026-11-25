@@ -1725,7 +1725,7 @@ ${cadenceInstruction(cadence)}${
                   {variant.label}
                 </h3>
 
-                <div className="ml-auto flex items-center gap-2" data-copy-ui="true">
+                <div className="rewrite-actions ml-auto flex items-center gap-2" data-copy-ui="true">
                   <button
                     onClick={() => handleCopyRewrite(variant, variant.copyFormat)}
                     className="rounded-xl border px-4 py-2 text-sm font-semibold text-black shadow-sm transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
@@ -3927,7 +3927,7 @@ if (urlSourceImages.length > 0) {
   }
 
   return (
-    <main className={classNames("gravitas-shell text-neutral-100", embedded ? "rounded-[2rem]" : "min-h-screen")}>
+    <main className={classNames("gravitas-shell text-neutral-100", isJumpIn && "jump-in-shell", embedded ? "rounded-[2rem]" : "min-h-screen")}>
       <div className={classNames("relative z-10 mx-auto w-full max-w-5xl px-4 sm:px-6", embedded ? "py-5 sm:py-6" : "py-8 sm:py-12")}>
         <header className="gravitas-header mb-6 flex flex-col gap-5 rounded-2xl px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div>
