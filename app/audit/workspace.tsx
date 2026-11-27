@@ -213,6 +213,12 @@ export default function AuditWorkspace() {
       setError(e instanceof Error ? e.message : "Source unavailable.");
     }
   }
+  function exportReport(format: "markdown" | "html") {
+    if (!job) return;
+    const href = `/api/audit/${job.id}/export?format=${format}`;
+    if (format === "html") window.open(href, "_blank", "noopener,noreferrer");
+    else window.location.assign(href);
+  }
   return (
     <main className="min-h-screen bg-neutral-950 px-5 py-10 text-neutral-100">
       <div className="mx-auto max-w-5xl space-y-10">
@@ -382,6 +388,22 @@ export default function AuditWorkspace() {
               <p className="text-amber-200">
                 {job.failure} Your entitlement has not been consumed.
               </p>
+            )}
+            {job.status === "completed" && job.result && (
+              <div className="flex flex-wrap gap-3">
+                <button
+                  className="rounded-lg border border-neutral-600 px-4 py-2"
+                  onClick={() => exportReport("html")}
+                >
+                  Print / Save PDF
+                </button>
+                <button
+                  className="rounded-lg border border-neutral-600 px-4 py-2"
+                  onClick={() => exportReport("markdown")}
+                >
+                  Download Markdown
+                </button>
+              </div>
             )}
             {job.status !== "completed" && !busy && job.attempts < 2 && (
               <button className={button} onClick={() => void run(job)}>
