@@ -92,7 +92,7 @@ export async function POST(req: Request) {
       p_entitlement: key,
       p_reserve: BUDGETS[kind].reserve,
       p_daily_limit: Math.floor(daily * 1000000),
-      p_buckets: rateBuckets(req, actor.user?.id || null, actor.hash),
+      p_buckets: rateBuckets(req, actor.user?.id || null, actor.hash, kind),
     });
     if (error) throw new Error(error.message);
     await auditSignal("audit.started", {

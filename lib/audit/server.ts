@@ -146,6 +146,7 @@ export function rateBuckets(
   req: Request,
   user: string | null,
   hash: string | null,
+  kind: AuditKind,
 ) {
   const secret = process.env.SIGNALS_RATE_LIMIT_SECRET;
   if (!secret) throw new Error("Audit limits are not configured.");
@@ -154,8 +155,10 @@ export function rateBuckets(
     req.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     "unknown";
+  // Preserve free-tier buckets; a free allowance must not block a purchased assessment.
+  const prefix = kind === "mini" ? "" : `${kind}:`;
   return [`ip:${ip}`, `owner:${user || hash}`].map((s) =>
-    createHmac("sha256", secret).update(`${day}:${s}`).digest("hex"),
+    createHmac("sha256", secret).update(`${day}:${prefix}${s}`).digest("hex"),
   );
 }
 export async function entitlement(
