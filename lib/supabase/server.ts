@@ -14,7 +14,14 @@ export async function createClient() {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
+            // Server Components can read a refreshed session but cannot write
+            // its cookie. Middleware or a Route Handler persists it instead.
+            try {
+              cookieStore.set(name, value, options);
+            } catch {
+              // A page render must not fail merely because the refresh cookie
+              // can only be written in a mutable response context.
+            }
           });
         },
       },
