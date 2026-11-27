@@ -73,3 +73,11 @@ Migration `202611280002_paid_homepage_audit.sql` was applied successfully to the
 Sandbox credit validation was isolated from audit generation: one test payment completed, one duplicate attempt was rejected without payment, and no AI calls were made. The paid-mini migration and frontend have now been deployed to staging.
 
 Deployed-flow verification: the US$5 test purchase completed and appeared as a recoverable purchased mini in the signed-in account. Opening comprehensive checkout automatically applied the Homepage audit credit, showing US$59 less US$5 = US$54. That upgrade was left unpaid. Anonymous mini creation returned HTTP 401. No AI assessment was started during this deployment checkpoint; production is unchanged.
+
+## Five-page live validation — 28 November 2026
+
+Audit `5b9e5034-f854-4f9c-9dff-c12285607fdb` completed on the GOV.UK homepage and the explicitly selected benefits, childcare-parenting, working and tax browse pages. It saved five individual reports and one cross-page synthesis in six stage attempts, with recorded exposure US$0.94564 including capture allowances. The purchase was consumed only after completion. Reloading and reopening the saved report left the stage count and exposure unchanged. Saved Money and tax evidence opened with supporting text and four captured viewports.
+
+The synthesis grounded naming and routing findings across multiple supplied pages, preserved useful repetition and justified load, and explicitly limited claims about unvisited destinations. This is one successful comprehensive case, not completion of the broader contrasting-site/contradiction calibration gate.
+
+The new paid-mini run was blocked by the daily limit already used by earlier mini calibration; its purchased entitlement remained available and no processing started. That live paid-mini completion check remains pending a limit reset. Readiness, subscription-period lifecycle and remediation validation remain outstanding. No production changes were made in this checkpoint.
