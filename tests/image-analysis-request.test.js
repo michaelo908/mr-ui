@@ -91,7 +91,7 @@ test("image payload, selected lens, and rewrite extraction stay wired", () => {
 });
 
 test("both authenticated and Jump In routes share visual-aware intake", () => {
-  const route = read("app/api/mr/route.ts");
+  const route = (read("app/api/mr/route.ts") + read("lib/mr-request.ts"));
   const jumpIn = read("app/api/jump-in/mr/route.ts");
 
   assert.match(route, /sourceAvailabilityInstruction/);

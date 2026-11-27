@@ -1,3 +1,4 @@
+import { supportingHtmlEvidence } from "@/lib/audit/html-evidence";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import sharp from "sharp";
@@ -137,6 +138,7 @@ async function fetchSupportingPage(initialUrl: URL) {
       finalUrl: currentUrl,
       title,
       text,
+      technicalEvidence: supportingHtmlEvidence(html, response.status, contentType),
     };
   }
 
@@ -266,6 +268,7 @@ export async function captureRenderedPage(
     finalUrl,
     title: capture.pageTitle || supportingPage?.title || "",
     extractedText: extractedText.slice(0, MAX_SUPPORTING_TEXT),
+    technicalEvidence: supportingPage?.technicalEvidence ?? "Supporting HTML was unavailable. Technical accessibility is unverified.",
     wordCount: extractedText.split(/\s+/).filter(Boolean).length,
     truncated: extractedText.length > MAX_SUPPORTING_TEXT,
     images,

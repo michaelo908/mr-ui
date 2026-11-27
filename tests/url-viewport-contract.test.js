@@ -13,14 +13,14 @@ const {
 } = require("../lib/sources.ts");
 
 test("URL route renders viewports and no longer imports detached page images", () => {
-  const route = read("app/api/sources/url/route.ts");
+  const route = (read("app/api/sources/url/route.ts") + read("lib/url-source-request.ts"));
   assert.match(route, /captureRenderedPage/);
   assert.doesNotMatch(route, /extractHtmlImageCandidates|importPageImages|fetchPublicImage/);
   assert.match(route, /captureMode:\s*"rendered-viewports"/);
 });
 
 test("analysis payload explicitly marks rendered URL evidence hierarchy", () => {
-  const apiRoute = read("app/api/mr/route.ts");
+  const apiRoute = (read("app/api/mr/route.ts") + read("lib/mr-request.ts"));
   assert.match(apiRoute, /sole primary evidence/i);
   assert.match(apiRoute, /supporting readability assistance only/i);
   assert.match(apiRoute, /not visible in the viewport sequence/i);
@@ -140,7 +140,7 @@ test("long-page capture stays within the serverless deadline", () => {
 
 test("DNS failures identify mistyped or unavailable websites", () => {
   const capture = read("lib/viewport-capture.ts");
-  const route = read("app/api/sources/url/route.ts");
+  const route = (read("app/api/sources/url/route.ts") + read("lib/url-source-request.ts"));
 
   assert.match(capture, /code !== "EBUSY" && code !== "EAI_AGAIN"/);
   assert.match(capture, /TRANSIENT_DNS_RETRY_DELAY_MS/);
@@ -151,7 +151,7 @@ test("DNS failures identify mistyped or unavailable websites", () => {
 test("URL analysis consistently caps ordered captures at 16 viewports", () => {
   const sources = read("lib/sources.ts");
   const capture = read("lib/viewport-capture.ts");
-  const apiRoute = read("app/api/mr/route.ts");
+  const apiRoute = (read("app/api/mr/route.ts") + read("lib/mr-request.ts"));
   const app = read("components/GravitasApp.tsx");
 
   assert.match(sources, /MAX_URL_VIEWPORTS = 16/);
@@ -167,7 +167,7 @@ test("URL analysis consistently caps ordered captures at 16 viewports", () => {
 
 test("server validates provider output and sanitises capture failures", () => {
   const capture = read("lib/viewport-capture.ts");
-  const route = read("app/api/sources/url/route.ts");
+  const route = (read("app/api/sources/url/route.ts") + read("lib/url-source-request.ts"));
 
   assert.match(capture, /metadata\.format !== "png"/);
   assert.match(capture, /width < 640 \|\| height < 240/);
@@ -184,7 +184,7 @@ test("server validates provider output and sanitises capture failures", () => {
 test("URL rendering retains SSRF protection and bounded provider timeouts", () => {
   const capture = read("lib/viewport-capture.ts");
   const provider = read("lib/screenshotone.ts");
-  const route = read("app/api/sources/url/route.ts");
+  const route = (read("app/api/sources/url/route.ts") + read("lib/url-source-request.ts"));
 
   assert.match(capture, /validatePublicBrowserUrl\(initialUrl\)/);
   assert.match(capture, /validatePublicBrowserUrl\(currentUrl\)/);

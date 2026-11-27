@@ -1,3 +1,4 @@
+import { AuditSignalsPanel } from "@/lib/audit/signals-panel";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import SignalsBrowserExclusion from "@/components/SignalsBrowserExclusion";
@@ -78,6 +79,7 @@ export default async function SignalsPage({
           <SignalsBrowserExclusion />
           <SignalsRefreshButton />
         </div>
+        <AuditSignalsPanel since={since} until={now.toISOString()} includeTest={includeTest} events={rows} />
         <p className="mt-3 text-xs text-neutral-500">Today begins at midnight in Australia/Melbourne. Seven- and thirty-day views are rolling windows ending now. Test/demo activity is excluded by default; keep this browser marked as excluded while developing.</p>
 
         {unavailable ? <div className="mt-6 rounded-xl border border-amber-700/50 bg-amber-950/30 p-4 text-amber-200">Signals storage is not available yet. Apply the included Supabase migration and configure the service-role key.</div> : null}

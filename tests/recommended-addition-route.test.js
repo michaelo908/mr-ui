@@ -44,7 +44,7 @@ function harness() {
     }, { filename: file });
     return loadedModule.exports;
   }
-  return { requests, handle: load(path.resolve('app/api/mr/route.ts')).handleMrRequest };
+  return { requests, handle: load(path.resolve('lib/mr-request.ts')).handleMrRequest };
 }
 const source = 'We invite you to complete our community survey and share your views about the issues affecting your neighbourhood. Please use the survey link to take part.';
 const request = (body) => new Request('https://local.invalid/api/mr', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ input: source, ...body }) });

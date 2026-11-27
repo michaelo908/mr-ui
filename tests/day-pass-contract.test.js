@@ -46,6 +46,6 @@ test("Jump In and paid renewal share the configured Day Pass destination", () =>
 });
 
 test("The Hidden Campaign remains independently available to Multirrupt analysis", () => {
-  const analysisRoute = read("app/api/mr/route.ts");
+  const analysisRoute = (read("app/api/mr/route.ts") + read("lib/mr-request.ts"));
   assert.match(analysisRoute, /hidden campaign/i);
 });

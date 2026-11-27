@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { handleMrRequest } from "@/app/api/mr/route";
+import { handleMrRequest } from "@/lib/mr-request";
 import {
   createJumpInToken,
   getJumpInTokenAbsoluteExpiry,

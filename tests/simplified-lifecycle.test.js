@@ -164,8 +164,8 @@ test("billing portal is authenticated, server-owned and return-path constrained"
 });
 
 test("paid model and URL operations use the canonical server-authoritative lifecycle", () => {
-  const mr = read("app/api/mr/route.ts");
-  const url = read("app/api/sources/url/route.ts");
+  const mr = (read("app/api/mr/route.ts") + read("lib/mr-request.ts"));
+  const url = (read("app/api/sources/url/route.ts") + read("lib/url-source-request.ts"));
   const access = read("app/api/access/route.ts");
   for (const source of [mr, url]) {
     assert.match(source, /authenticatedLifecycle\(\)/);

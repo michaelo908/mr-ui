@@ -83,7 +83,7 @@ test("rate limiting uses service-role RPC and stores only rotating HMAC buckets"
 });
 
 test("analysis completion and purchase outcomes come from authoritative server paths", () => {
-  const mr = read("app/api/mr/route.ts");
+  const mr = (read("app/api/mr/route.ts") + read("lib/mr-request.ts"));
   const webhook = read("app/api/stripe/webhook/route.ts");
   assert.match(mr, /verifiedCompletion[\s\S]*analysis\.completed/);
   assert.match(mr, /verified: true/);

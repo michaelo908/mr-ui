@@ -66,8 +66,8 @@ export function isCadenceMode(value: unknown): value is CadenceMode {
   return value === "dynamic" || value === "sustained" || value === "dynamic-preserve" || value === "sustained-preserve";
 }
 
-export function isValidResumeTarget(value: unknown): value is typeof GRAVITAS_RESUME_TARGET {
-  return value === GRAVITAS_RESUME_TARGET;
+export function isValidResumeTarget(value: unknown): value is string {
+  return value === GRAVITAS_RESUME_TARGET || value === "/audit" || (typeof value === "string" && /^\/audit\/[a-f0-9-]{36}\/remediate\?page=[0-4]$/.test(value));
 }
 
 export function isValidWorkspaceSnapshot(

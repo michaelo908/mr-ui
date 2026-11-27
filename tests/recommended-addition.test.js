@@ -21,7 +21,7 @@ test('legacy summaries, incidental mentions and empty labels do not activate mar
   }
 });
 test('source boundary covers all rewrite requests without changing cadence or graviton definitions', () => {
-  const route = fs.readFileSync('app/api/mr/route.ts', 'utf8');
+  const route = fs.readFileSync('lib/mr-request.ts', 'utf8');
   assert.match(route, /heresyMode \? "" : SOURCE_RESTRAINT_CONTRACT/);
   assert.match(route, /\$\{RECOMMENDED_ADDITION_CONTRACT\}/);
   assert.match(SOURCE_RESTRAINT_CONTRACT, /claims, commitments, benefits or evidence/);

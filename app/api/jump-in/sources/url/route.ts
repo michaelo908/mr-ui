@@ -1,4 +1,4 @@
-import { handleUrlSourceRequest } from "@/app/api/sources/url/route";
+import { handleUrlSourceRequest } from "@/lib/url-source-request";
 import { JUMP_IN_MAX_URL_VIEWPORTS } from "@/lib/jump-in";
 import { cookies } from "next/headers";
 import { isJumpInSameOrigin, readJumpInToken, isJumpInTokenExpired, JUMP_IN_COOKIE_NAME } from "@/lib/jump-in-server";

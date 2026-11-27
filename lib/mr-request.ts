@@ -1,0 +1,495 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import {
+  RECOMMENDED_ADDITION_CONTRACT,
+  SOURCE_RESTRAINT_CONTRACT,
+} from "@/lib/recommended-addition";
+import { after, NextResponse } from "next/server";
+import { cadenceInstruction, isCadenceMode, type CadenceMode } from "@/lib/cadence";
+import { MAX_URL_VIEWPORTS } from "@/lib/sources";
+import {
+  assessEditorSummary,
+  EDITOR_SUMMARY_CONTRACT,
+} from "@/lib/editor-summary";
+import { sourceAvailabilityInstruction } from "@/lib/gravitas-analysis-request";
+import { recordSignal, signalContextFromRequest } from "@/lib/signals/server";
+import {
+  extractRewriteOrRaw,
+  gravitonRewriteInstruction,
+  isValidRewriteCandidate,
+  rewriteOnlyInstruction,
+} from "@/lib/graviton-rewrite";
+import {
+  isShortFormEditorialCandidate,
+  SHORT_FORM_EDITORIAL_POLICY,
+} from "@/lib/short-form-editorial";
+
+/**
+ * Default domain frame (normal Multirrupt operation).
+ * NOTE: This frame is intentionally NOT used in MR_HERESY mode,
+ * because it re-arms "diagnosis/helpfulness/completion" behavior.
+ */
+const MR_DOMAIN_FRAME = `
+You are not a consultant, copywriter, or optimizer; your role is to describe what is happening in the reader’s mind and narrative field.
+
+“Diagnosis” means observation and explanation only — but you ARE allowed to output a rewrite because this product is a diagnosis+rewrite engine. You must not offer advice, recommendations, alternative structures, or examples *outside* the required sections.
+
+Operate in accordance with the Multirrupt canon and laws as already defined; do not restate, enumerate, explain, or invent them.
+
+You are Multirrupt, an expert system for analysing, diagnosing, and rewriting
+marketing emails, landing pages, advertisements, and persuasive written communication.
+
+All references to "diagnosis" refer to structural, narrative, tonal, and persuasive
+analysis of written material — not medical, health, legal, or clinical diagnosis.
+
+CRITICAL BEHAVIOUR:
+- Calibrate the reader model to the source's apparent purpose, stakes, genre, audience cues, and complexity. Do not default to a generic impatient reader who abandons any demanding material.
+- Serious, specialised, high-stakes, or argument-led work may legitimately ask an interested reader for sustained attention. Treat detail, length, evidence, or conceptual difficulty as a problem only when it fails to repay the likely reader's attention, obscures their purpose, repeats without progress, or blocks a decision they came to make.
+- Distinguish genuine reader friction from a mere preference for shorter or simpler material. Preserve demanding, distinctive, and well-earned substance when it helps the intended reader judge, understand, or trust the work.
+- Do not mention whether images, visual input, files, attachments, screenshots, or other modalities were or were not supplied. If no images are supplied, simply analyse the available text. Never include meta-commentary about missing images, visual flags, prompt format, API state, or input modality.
+- If the user has supplied neither usable text nor visual input (for example, they ask "can we do a diagnosis?"),
+  respond briefly and professionally. Ask for the text.
+  Use this exact style of wording:
+  "Paste the email/landing page/ad copy you want diagnosed.
+   For clarity, add a short note on its primary purpose (e.g. sales, nurturing, re-activation)."
+  Do NOT present long intake questionnaires or multi-point checklists at this stage.
+- If the user asks a meta or explanatory question (capabilities, scope, how it works),
+  answer clearly and completely, then stop. Do NOT prompt them to paste text unless they explicitly signal intent.
+
+OUTPUT CONTRACT (MANDATORY WHEN SOURCE MATERIAL IS PROVIDED):
+Follow the request's REWRITE CAPABILITY instruction.
+When it is REQUIRED, output EXACTLY these six sections, in this exact order, using Markdown headings exactly as shown:
+
+## Reader Response
+## Editor's Summary
+## Narrative Performance
+## Diagnosis in Depth
+## Rewrite
+## Rewrite Debrief
+
+When REWRITE CAPABILITY is OMIT, output only the first four analytical sections and omit Rewrite and Rewrite Debrief.
+
+SECTION RULES:
+
+## Reader Response
+- This is a qualitative evidence profile, not a numerical score, percentage, behavioural forecast, or conversion claim.
+- Evaluate all five signals independently. A strength is never an offset against reader risk. A message may be strong and engaging while also being uneven or containing a specific at-risk point.
+- Use this fixed scale for each signal only: none; trace; present; pronounced; dominant. These are internal qualitative weights and must not appear as numbers or percentages.
+- Output exactly these six lines and nothing else in this section, in this exact order:
+  **Strong:** <one exact weight from the scale>
+  **Engaged:** <one exact weight from the scale>
+  **Uneven:** <one exact weight from the scale>
+  **Vulnerable:** <one exact weight from the scale>
+  **At risk:** <one exact weight from the scale>
+  **Verdict:** <one plain, source-specific sentence, normally 16–30 words, explaining the central reader experience and its principal consequence>
+- Give positive signals only for demonstrated reader strengths. Do not give green merely because the writing is competent.
+- Err toward surfacing a real reader risk when the detailed analysis identifies meaningful friction, including a specific interruption, unsupported claim, delayed value, competing motive, or loss of trust. Do not reserve At risk for total failure.
+- Every non-none signal must be supported by the detailed diagnosis. Never intensify a signal for drama.
+
+## Editor's Summary
+${EDITOR_SUMMARY_CONTRACT}
+${RECOMMENDED_ADDITION_CONTRACT}
+
+## Narrative Performance
+- This is a concise operational consequence of the completed analysis, not a second analysis, scorecard, estimated conversion assessment, or generic advice layer.
+- Do not introduce any substantive finding that is unsupported by the Editor's Summary or Diagnosis in Depth. You may express an operational consequence more directly and concisely than those sections.
+- Include only genuinely supported observations from this allowed set, omitting any that the analysis does not establish:
+  • **Decision Readiness:** <concise analysis-derived observation>
+  • **Effective Narrative Length:** <concise analysis-derived observation>
+  • **Primary Narrative Drag:** <concise analysis-derived observation>
+  • **Recommended Structure:** <concise analysis-derived observation>
+- Never invent a metric or observation to fill the panel. Do not use numerical scores, generic performance dimensions, projected rewrite scores, current-versus-rewrite comparisons, or estimated conversion performance.
+- Then provide normally 3 concise recommendations. Use up to 5 only for unusually complex material with distinct, material issues that cannot responsibly be combined.
+- Each recommendation must be a single bullet using exactly one of these prefixes:
+  • 🟢 **Protect** —
+  • 🟡 **Consolidate** —
+  • 🔴 **Reduce** —
+  • 🔵 **Introduce** —
+- Every recommendation must contain exactly three concise sentences in this order: the observed condition in the source; the consequence for the reader; the prescribed action.
+- Recommendations must be specific to the analysed material. Use 🔵 Introduce only where the completed analysis establishes that something genuinely absent is required.
+- For rendered URL analyses, cite the exact relevant viewport as "Viewport N" or "Viewports N and N" whenever the finding is visual or positional. Never cite a viewport that does not support the finding.
+- For plain-text analyses only, end every recommendation with "Evidence: **N · N**", referencing the exact numbered evidence blocks in Editor's Notes in Depth that support it. Cite every material supporting block and no unsupported block. Do not use paragraph numbers.
+
+## Diagnosis in Depth
+- Full detailed diagnostic (Multirrupt v1.8 style): comprehensive, multi-point, high-signal.
+- This section can be long. It proves competence.
+- For plain-text analyses only, divide this section into the smallest coherent evidence blocks that preserve contextual understanding: a paragraph, consecutive connected paragraphs, a heading with its associated content, a list, a quote, or another naturally coherent narrative unit.
+- Put a machine-readable marker on its own line immediately before every plain-text evidence block, using exactly "[[Evidence: N]]". Number blocks sequentially from 1 in report order. The marker is structural metadata and must not be discussed in the prose.
+- Each plain-text recommendation's Evidence references must use this same block numbering. Never create a second numbering scheme.
+
+## Rewrite (CRITICAL: MUST BE A REAL REWRITE)
+The rewrite MUST be constructed from the diagnosis above and MUST produce MATERIAL CHANGE:
+- Do NOT preserve the original paragraph architecture.
+- Do NOT “lightly edit” wording.
+- You MUST change sequencing, pacing, and narrative escalation to correct the diagnosed faults.
+- If the original is FAQ/admin, you may compress logistics and re-sequence value/identity earlier if diagnosis indicates.
+- The rewrite must feel like a different *structure*, not just different sentences.
+- Preserve the author’s voice as a constraint, but do not allow voice to justify structural sameness.
+
+## Rewrite Debrief
+- Always visible.
+- Max 5 bullets.
+- Use this debrief-specific bullet format:
+  • **<2–4 word descriptive heading>:** <1–2 short sentences>
+- Each bullet must explicitly link a rewrite move to a diagnosed weakness.
+- No teaching. No extra recommendations. Just proof-of-pudding alignment.
+
+TONE:
+- Competent, direct, unrushed.
+- Assume the user is intelligent and already invested.
+`.trim();
+
+/**
+ * MR Heresy Charter v1.0 (Sealed MR Mode — restricted cognitive state)
+ * This MUST be the only governing frame in mr_heresy mode.
+ */
+const MR_HERESY_CHARTER = `
+MR Heresy Charter v1.0 (Multirrupt Mode — Restricted Cognitive State)
+
+PURPOSE:
+Multirrupt (MR) Mode exists to generate pre-decisional narrative disturbance. Its function is not to persuade, explain, improve, or resolve — but to dislocate orientation and preserve cognitive tension.
+
+SUCCESS CONDITION (PRIMARY):
+Successful only if the reader does not feel oriented, reassured, or complete; feels a subtle but persistent sense of misalignment; and the text ends before a solution/action/conclusion can be inferred. If the output feels "helpful," it has failed.
+
+FAILURE CONDITIONS (HARD STOPS):
+Failure if it concludes/summarizes; explains fully; improves/optimizes/fixes; offers solutions/advice/recommendations; suggests next steps/actions; invites engagement; proposes rewrites/options; resolves uncertainty; or names/references persuasion/marketing/copywriting frameworks (including criticizing them).
+
+FORBIDDEN FRAMES:
+Direct Response (DR), conversion, funnels, CTAs, offers/leads/objections/scarcity/proof, sales/marketing optimization/performance framing, "helping" or "guiding."
+
+FORBIDDEN LEXICON (NON-EXHAUSTIVE):
+convert, CTA, funnel, offer, book, secure, optimize, improve, strategy, solution, next step, how to, fix, benefit, pain point, objection, scarcity, proof, sales, marketing, actionable, takeaway, summary
+
+ALLOWED MOVES (ONLY):
+Notice subtle misalignment; name a partial pattern; indicate one implication without resolving; point to absence/delay/quiet signal; stop early.
+MR indicates, it does not explain. MR exposes a fracture, it does not diagnose. MR withdraws, it does not resolve.
+
+OUTPUT SHAPE (STRUCTURAL CONSTRAINT):
+Max 120 words. No lists/bullets/headings. No reader-directed questions. No more than one implication. End immediately after the implication appears. Final sentence must not complete the thought.
+
+STOP RULE (CRITICAL):
+Stop before the reader feels oriented again. If the next sentence would add clarity/reassurance/direction — end before writing it.
+
+ENFORCEMENT:
+Helpfulness/completion/clarity are violations. Ambiguity, incompletion, and restraint are required.
+
+CANONICAL REMINDER:
+MR is not persuasion. MR is what happens before persuasion is possible.
+`.trim();
+
+/**
+ * Decide whether this request should run in MR Heresy mode.
+ * Supported switches:
+ *  - body.mode === "mr_heresy"
+ *  - body.mr_heresy === true
+ */
+function isMrHeresyMode(body: any): boolean {
+  const mode = typeof body?.mode === "string" ? body.mode.toLowerCase() : "";
+  return mode === "mr_heresy" || body?.mr_heresy === true;
+}
+
+/**
+ * Detect if the UI is sending a continuation context (i.e. we already have
+ * a full diagnostic in the conversation, so we should NOT re-arm intake rules).
+ *
+ * Note: This is intentionally heuristic and narrow; it prevents "Paste the text…"
+ * from reappearing after continuations.
+ */
+function isContinuationContext(body: any): boolean {
+  const ctx = typeof body?.context === "string" ? body.context.toLowerCase() : "";
+  return (
+    ctx.includes("## reader hold") ||
+    ctx.includes("## reader response") ||
+    ctx.includes("## executive summary") ||
+    ctx.includes("## editor's summary") ||
+    ctx.includes("## editor’s summary") ||
+    ctx.includes("## narrative performance") ||
+    ctx.includes("## diagnosis in depth") ||
+    ctx.includes("## rewrite") ||
+    ctx.includes("## rewrite debrief") ||
+    ctx.includes("what’s happening in the reader’s mind") ||
+    ctx.includes("what's happening in the reader's mind") ||
+    ctx.includes("overall diagnosis") ||
+    ctx.includes("narrative field")
+  );
+}
+
+export async function handleMrRequest(
+  req: Request,
+  options: {
+    maxUrlViewports?: number;
+    maxPastedTextWords?: number;
+  } = {}
+) {
+  const signalContext = signalContextFromRequest(req);
+  const analysisId = req.headers.get("x-gravitas-analysis-id");
+  const MR_API_URL = process.env.MR_API_URL;
+  const MR_API_KEY = process.env.MR_API_KEY;
+
+  if (!MR_API_URL || !MR_API_KEY) {
+    return NextResponse.json(
+      { error: "Missing MR_API_URL or MR_API_KEY in .env.local" },
+      { status: 500 }
+    );
+  }
+
+  let body: any;
+  try {
+    body = await req.json();
+    console.log("MR_UI route.ts incoming mode:", body?.mode, "mr_heresy:", body?.mr_heresy);
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const heresyMode = isMrHeresyMode(body);
+  const alternateRewrite = body?.requestKind === "alternate-rewrite";
+  const initialRewriteRepair = body?.requestKind === "initial-rewrite-repair";
+  const rewriteOnlyRequest = alternateRewrite || initialRewriteRepair;
+  const selectedGraviton =
+    typeof body?.selectedGraviton === "string" && body.selectedGraviton.trim()
+      ? body.selectedGraviton.trim()
+      : "Full Analysis";
+  const cadence: CadenceMode =
+    isCadenceMode(body?.cadence) ? body.cadence : "dynamic";
+
+  // Preserve any per-request context from the UI
+  const originalContext = typeof body?.context === "string" ? body.context : "";
+
+  const imageData =
+    typeof body?.imageData === "string" || Array.isArray(body?.imageData)
+      ? body.imageData
+      : null;
+
+  const hasImageData = Array.isArray(imageData)
+    ? imageData.length > 0
+    : typeof imageData === "string" && imageData.trim().length > 0;
+  const hasUsableText =
+    typeof body?.input === "string" && body.input.trim().length > 0;
+
+  const maxUrlViewports = options.maxUrlViewports ?? MAX_URL_VIEWPORTS;
+
+  if (
+    body?.sourceMode === "rendered-url" &&
+    Array.isArray(imageData) &&
+    imageData.length > maxUrlViewports
+  ) {
+    return NextResponse.json(
+      {
+        error: `Rendered URL analysis supports up to ${maxUrlViewports} ordered viewports.`,
+      },
+      { status: 400 }
+    );
+  }
+
+  if (
+    options.maxPastedTextWords &&
+    body?.requestKind !== "alternate-rewrite" &&
+    body?.sourceMode !== "rendered-url" &&
+    !hasImageData
+  ) {
+    const entitlementSourceText =
+      typeof body?.entitlementSourceText === "string"
+        ? body.entitlementSourceText
+        : "";
+    const wordCount = entitlementSourceText.trim().split(/\s+/).filter(Boolean).length;
+    if (!entitlementSourceText || wordCount > options.maxPastedTextWords) {
+      return NextResponse.json(
+        {
+          error: `The free embedded session supports pasted text up to ${options.maxPastedTextWords} words.`,
+        },
+        { status: 400 }
+      );
+    }
+  }
+
+  const visualAnalysisContext = hasImageData
+    ? `
+VISUAL INPUT PRESENT:
+The user has supplied one or more images/screenshots as part of this request.
+
+Do not refer to images, screenshots, visual input, or modality as a technical condition. Analyse them naturally as part of the communication experience.
+
+Analyse the image as a communication experience, not merely as visual design.
+Focus on:
+- first impression
+- visual hierarchy
+- likely visitor/reader conclusions
+- intended message vs experienced message
+- attention path
+- trust/friction signals
+- hidden campaign
+- structural and copy implications
+
+If text is also supplied, analyse the text and image together.
+`.trim()
+    : "";
+
+  const renderedUrlContext =
+    body?.sourceMode === "rendered-url"
+      ? `
+RENDERED WEBPAGE VIEWPORT HIERARCHY:
+The supplied ordered viewport screenshots (up to 16) are the sole primary evidence for the substantive webpage analysis.
+
+Analyse the viewport sequence first and as the actual visitor experience:
+- preserve its top-to-bottom order
+- judge first impression, hierarchy, attention, trust, flow, friction, and image/copy relationships from what is visibly rendered
+- ground every substantive finding in the viewport sequence
+
+Any extracted page text in the input is supporting readability assistance only. Use it solely to clarify wording that is visibly present but difficult to read in a supplied viewport. Do not let extracted text determine structure, introduce menus/footer/mechanical noise, or support findings that are not visible in the viewport sequence.
+`.trim()
+      : "";
+
+  // If we already have a diagnostic in the context, avoid re-arming intake rules.
+  const continuation = isContinuationContext(body);
+  const shortFormEditorial = !heresyMode && isShortFormEditorialCandidate({
+    input: body?.input,
+    sourceMode: body?.sourceMode,
+    hasVisualInput: hasImageData,
+    rewriteOnly: rewriteOnlyRequest,
+    continuation,
+  });
+
+  // Sealed framing rules:
+  // - Normal mode: MR_DOMAIN_FRAME (+ originalContext), except continuation where we keep originalContext only
+  // - MR Heresy mode: MR_HERESY_CHARTER only (+ originalContext), never MR_DOMAIN_FRAME
+  const rewriteCadenceContext = heresyMode ? "" : cadenceInstruction(cadence);
+  const sourceAvailabilityContext = sourceAvailabilityInstruction({
+    hasUsableText,
+    hasVisualInput: hasImageData,
+  });
+  const combinedOriginalContext = [
+    originalContext,
+    visualAnalysisContext,
+    renderedUrlContext,
+    sourceAvailabilityContext,
+    rewriteCadenceContext,
+    heresyMode ? "" : SOURCE_RESTRAINT_CONTRACT,
+    shortFormEditorial ? SHORT_FORM_EDITORIAL_POLICY : "",
+    heresyMode
+      ? ""
+      : rewriteOnlyRequest
+        ? rewriteOnlyInstruction(
+            selectedGraviton,
+            initialRewriteRepair ? "initial" : "alternate"
+          )
+        : gravitonRewriteInstruction(selectedGraviton),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const context = heresyMode
+    ? combinedOriginalContext
+      ? `${MR_HERESY_CHARTER}\n\n${combinedOriginalContext}`
+      : MR_HERESY_CHARTER
+    : rewriteOnlyRequest || continuation
+      ? combinedOriginalContext
+      : combinedOriginalContext
+        ? `${MR_DOMAIN_FRAME}\n\n${combinedOriginalContext}`
+        : MR_DOMAIN_FRAME;
+
+  // Patch body upstream
+  const patchedBody: any = {
+    ...body,
+    context,
+  };
+
+  // Optional: enforce tight generation defaults in MR Heresy mode (only if caller didn't specify)
+  if (heresyMode) {
+    if (patchedBody.temperature == null) patchedBody.temperature = 0.5;
+    if (patchedBody.max_tokens == null) patchedBody.max_tokens = 180;
+  }
+
+  /**
+   * HARD SEAL (critical):
+   * In MR Heresy mode, never allow "input" to carry task semantics.
+   */
+  if (heresyMode) {
+    patchedBody.input = " ";
+  }
+
+  try {
+    const upstream = await fetch(MR_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": MR_API_KEY,
+      },
+      body: JSON.stringify(patchedBody),
+    });
+
+    const text = await upstream.text();
+
+    const analysisProperties = {
+      source_mode: body?.sourceMode === "rendered-url"
+        ? "url"
+        : hasImageData ? "images" : "text",
+      viewport_count: body?.sourceMode === "rendered-url" && Array.isArray(imageData)
+        ? imageData.length : 0,
+      image_count: body?.sourceMode !== "rendered-url" && Array.isArray(imageData)
+        ? imageData.length : hasImageData ? 1 : 0,
+      request_kind: alternateRewrite
+        ? "alternate_rewrite"
+        : initialRewriteRepair
+          ? "initial_rewrite_repair"
+          : "analysis",
+      cadence,
+      status_code: upstream.status,
+    };
+
+    let parsedResponse: any = null;
+    try { parsedResponse = JSON.parse(text); } catch {}
+    const verifiedCompletion = upstream.ok && typeof parsedResponse?.output === "string" && parsedResponse.output.trim().length > 0;
+
+    const jumpInRewrite = signalContext.surface === "jump-in" && rewriteOnlyRequest;
+    after(() => recordSignal(jumpInRewrite
+      ? (verifiedCompletion ? "workflow.rewrite_completed" : "workflow.rewrite_failed")
+      : (verifiedCompletion ? "analysis.completed" : "analysis.failed"), {
+      ...signalContext,
+      verified: true,
+      dedupeKey: analysisId ? `${jumpInRewrite ? "rewrite" : "analysis"}:${analysisId}:${verifiedCompletion ? "completed" : "failed"}` : null,
+      properties: verifiedCompletion ? analysisProperties : {
+        ...analysisProperties,
+        failure_stage: upstream.ok ? "invalid_output" : "upstream_response",
+      },
+    }));
+
+    if (parsedResponse) {
+      const json = parsedResponse;
+      if (
+        rewriteOnlyRequest &&
+        typeof json?.output === "string" &&
+        !isValidRewriteCandidate(extractRewriteOrRaw(json.output), "", cadence)
+      ) {
+        return NextResponse.json(
+          { error: "The rewrite could not be completed." },
+          { status: 502 }
+        );
+      }
+      if (!rewriteOnlyRequest && typeof json?.output === "string") {
+        const summaryAssessment = assessEditorSummary(json.output);
+        if (summaryAssessment.violations.length > 0) {
+          console.warn("Editor’s Summary contract warning", {
+            violations: summaryAssessment.violations,
+          });
+        }
+      }
+      return NextResponse.json(json, { status: upstream.status });
+    }
+    return new NextResponse(text, {
+      status: upstream.status,
+      headers: { "Content-Type": "text/plain" },
+    });
+  } catch (err: any) {
+    after(() => recordSignal(signalContext.surface === "jump-in" && rewriteOnlyRequest ? "workflow.rewrite_failed" : "analysis.failed", {
+      ...signalContext,
+      verified: true,
+      dedupeKey: analysisId ? `analysis:${analysisId}:failed` : null,
+      properties: { failure_stage: "upstream_transport" },
+    }));
+    return NextResponse.json(
+      { error: "Upstream request failed", detail: String(err?.message ?? err) },
+      { status: 502 }
+    );
+  }
+}
+

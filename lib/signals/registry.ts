@@ -9,6 +9,12 @@ export type ClientPropertyRule =
   | { type: "enum"; values: readonly string[] };
 
 export const SIGNAL_REGISTRY = {
+  "audit.started": { category: "audit", client: false, properties: {} },
+  "audit.completed": { category: "audit", client: false, properties: {} },
+  "audit.failed": { category: "audit", client: false, properties: {} },
+  "audit.remediation_opened": { category: "audit", client: false, properties: {} },
+  "audit.purchased": { category: "audit", client: false, properties: {} },
+
   "acquisition.funnel_viewed": { category: "acquisition", client: true, properties: { funnel: { type: "enum", values: ["email", "proposal", "landing-page"] } } },
   "acquisition.signup_completed": { category: "acquisition", client: false, properties: {} },
   "discovery.landing_viewed": { category: "discovery", client: true, properties: { entry_path: { type: "pathname" } } },

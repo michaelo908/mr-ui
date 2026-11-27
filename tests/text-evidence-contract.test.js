@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 test("analysis contract gives text recommendations and notes one evidence numbering system", () => {
-  const route = read("app/api/mr/route.ts");
+  const route = (read("app/api/mr/route.ts") + read("lib/mr-request.ts"));
   assert.match(route, /Evidence: \*\*N · N\*\*/);
   assert.match(route, /\[\[Evidence: N\]\]/);
   assert.match(route, /same block numbering/);

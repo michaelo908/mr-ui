@@ -28,7 +28,7 @@ test("selected cadence reaches every rewrite prompt path", () => {
     "utf8"
   );
   const route = require("node:fs").readFileSync(
-    require("node:path").join(__dirname, "../app/api/mr/route.ts"),
+    require("node:path").join(__dirname, "../lib/mr-request.ts"),
     "utf8"
   );
 
@@ -47,7 +47,7 @@ test("selected cadence is used when validating rewrite output", () => {
     "utf8"
   );
   const route = require("node:fs").readFileSync(
-    require("node:path").join(__dirname, "../app/api/mr/route.ts"),
+    require("node:path").join(__dirname, "../lib/mr-request.ts"),
     "utf8"
   );
 

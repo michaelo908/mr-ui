@@ -2007,6 +2007,7 @@ export default function GravitasApp({
   embedded = false,
   requireAuthBeforeAnalysis = false,
   handoffToken,
+  auditHandoff,
 }: {
   experience?: "paid" | "jump-in";
   funnel?: AcquisitionFunnel;
@@ -2014,6 +2015,7 @@ export default function GravitasApp({
   embedded?: boolean;
   requireAuthBeforeAnalysis?: boolean;
   handoffToken?: string;
+  auditHandoff?: { id: string; source: import("@/lib/audit/contracts").AuditSource; context: string };
 }) {
   const isJumpIn = experience === "jump-in";
 
@@ -2027,6 +2029,7 @@ export default function GravitasApp({
     rawSetMessages(next);
   }, []);
   const [draft, setDraft] = useState("");
+  const [auditSourceLoaded, setAuditSourceLoaded] = useState(false);
   const [jumpInSampleId, setJumpInSampleId] = useState<JumpInSampleId | null>(null);
   const [inputMode, setInputMode] = useState<"text" | "url" | "images" | "document">(isJumpIn ? "text" : (funnel?.preferredSource ?? "text"));
   const [urlDraft, setUrlDraft] = useState("");
@@ -3357,6 +3360,7 @@ useEffect(() => {
       setCadence("sustained");
     }
     setDraft("");
+    setAuditSourceLoaded(false);
     setJumpInSampleId(null);
     setUrlDraft("");
     setUrlError(null);
@@ -3653,6 +3657,10 @@ if (urlSourceImages.length > 0) {
           entitlementSourceText:
             isJumpIn && (inputMode === "text" || inputMode === "document") ? raw : undefined,
         };
+
+    if (auditSourceLoaded && auditHandoff && sourceIdentity?.originalLocation === auditHandoff.source.finalUrl) {
+      payload.context = `${payload.context || ""}\nSaved audit evidence and remediation guidance (not new source facts):\n${auditHandoff.context}`;
+    }
 
     try {
       const res = await fetch(apiEndpoint, {
@@ -3952,6 +3960,8 @@ if (urlSourceImages.length > 0) {
                 See the narrative from the other side.
               </div>
             )}
+            {auditHandoff ? <aside className="my-4 rounded-xl border border-sky-800 p-4 text-sm"><p className="font-semibold">Saved audit context is available for {auditHandoff.source.title}.</p><p className="mt-2 text-neutral-400">Loading this page replaces the current editor workspace. The saved audit remains available.</p><button disabled={isLoading || paidWorkspaceHydration === "hydrating"} className="mt-3 rounded bg-sky-300 px-3 py-2 font-semibold text-neutral-950 disabled:opacity-40" onClick={() => { onClear(); const source=auditHandoff.source; setInputMode("url"); setUrlDraft(source.finalUrl); setImportedUrl({requestedUrl:source.finalUrl,source:{id:`audit-${auditHandoff.id}`,type:"url",title:source.title,originalLocation:source.finalUrl,extractedText:source.text,wordCount:source.text.split(/\s+/).length,truncated:source.truncated,captureMode:"rendered-viewports",images:source.images.map((dataUrl,i)=>({id:`audit-viewport-${i}`,type:"image",role:"viewport",title:`Viewport ${i+1}`,dataUrl,order:i}))}}); setAuditSourceLoaded(true); }}>Load saved page for remediation</button><details className="mt-3"><summary>View audit guidance</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-xs">{auditHandoff.context}</pre></details><a className="mt-3 block text-sky-300 underline" href="/audit">Return to saved audit</a></aside> : null}
+            {!isJumpIn && process.env.NEXT_PUBLIC_AUDIT_ENABLED === "true" ? <a className="mt-3 block text-sky-300 underline" href="/audit">Audit · saved website assessments</a> : null}
             {!showSimpleJumpIn ? (<>
             <div className="mt-2 text-[10px] font-medium uppercase tracking-[0.16em] text-neutral-600">
               Multirrupt {MULTIRRUPT_RELEASE} · build {MULTIRRUPT_BUILD}

@@ -19,7 +19,7 @@ test("the shared report contract defines Editor's Summary as findings, not reaso
 });
 
 test("text, URL, image, paid, Jump-In, and Gravitons share the same summary contract", () => {
-  const route = read("app/api/mr/route.ts");
+  const route = (read("app/api/mr/route.ts") + read("lib/mr-request.ts"));
   const app = read("components/GravitasApp.tsx");
   const request = read("lib/gravitas-analysis-request.ts");
   const jumpIn = read("app/api/jump-in/mr/route.ts");
@@ -34,7 +34,7 @@ test("text, URL, image, paid, Jump-In, and Gravitons share the same summary cont
 });
 
 test("in-depth reasoning and every surrounding report layer remain intact", () => {
-  const route = read("app/api/mr/route.ts");
+  const route = (read("app/api/mr/route.ts") + read("lib/mr-request.ts"));
   const cadence = read("lib/cadence.ts");
 
   for (const heading of [
@@ -65,7 +65,7 @@ test("the UI keeps Editor's Summary and legacy normalization changes headings on
 });
 
 test("alternate rewrites bypass summary generation and output validation", () => {
-  const route = read("app/api/mr/route.ts");
+  const route = (read("app/api/mr/route.ts") + read("lib/mr-request.ts"));
   assert.match(route, /rewriteOnlyRequest \|\| continuation/);
   assert.match(route, /if \(!rewriteOnlyRequest && typeof json\?\.output === "string"\)/);
 });

@@ -9,7 +9,7 @@ const read = (relativePath) =>
   fs.readFileSync(path.join(root, relativePath), "utf8");
 
 test("normal analysis contract places Narrative Performance after Editor's Summary", () => {
-  const route = read("app/api/mr/route.ts");
+  const route = (read("app/api/mr/route.ts") + read("lib/mr-request.ts"));
   const summary = route.indexOf("## Editor's Summary");
   const performance = route.indexOf("## Narrative Performance");
   const depth = route.indexOf("## Diagnosis in Depth");
@@ -24,7 +24,7 @@ test("normal analysis contract places Narrative Performance after Editor's Summa
 });
 
 test("reader analysis distinguishes earned complexity from genuine friction", () => {
-  const route = read("app/api/mr/route.ts");
+  const route = (read("app/api/mr/route.ts") + read("lib/mr-request.ts"));
 
   assert.match(route, /Do not default to a generic impatient reader/);
   assert.match(route, /may legitimately ask an interested reader for sustained attention/);
@@ -32,7 +32,7 @@ test("reader analysis distinguishes earned complexity from genuine friction", ()
 });
 
 test("alternate rewrites bypass the full analysis contract", () => {
-  const route = read("app/api/mr/route.ts");
+  const route = (read("app/api/mr/route.ts") + read("lib/mr-request.ts"));
   const app = read("components/GravitasApp.tsx");
 
   assert.match(app, /requestKind:\s*"alternate-rewrite"/);

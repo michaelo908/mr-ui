@@ -33,8 +33,8 @@ function harness() {
     function localRequire(name) {
       if (name === 'next/server') return { NextResponse };
       if (name === 'next/headers') return { cookies: async () => ({ get: (key) => jar.has(key) ? { value: jar.get(key) } : undefined }) };
-      if (name === '@/app/api/mr/route') return { handleMrRequest: async (req, limits) => { calls.push({ body: await req.json(), limits }); return NextResponse.json({ output: 'complete analysis and rewrite' }); } };
-      if (name === '@/app/api/sources/url/route') return { handleUrlSourceRequest: async (req, limit) => { calls.push({ captureLimit: limit }); return Response.json({ captured: true }); } };
+      if (name === '@/lib/mr-request') return { handleMrRequest: async (req, limits) => { calls.push({ body: await req.json(), limits }); return NextResponse.json({ output: 'complete analysis and rewrite' }); } };
+      if (name === '@/lib/url-source-request') return { handleUrlSourceRequest: async (req, limit) => { calls.push({ captureLimit: limit }); return Response.json({ captured: true }); } };
       if (name === '@/lib/jump-in-token') return require('../lib/jump-in-token.js');
       if (name.startsWith('@/')) return load(name.slice(2) + '.ts');
       return require(name);

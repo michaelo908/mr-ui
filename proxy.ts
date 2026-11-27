@@ -10,6 +10,8 @@ export async function proxy(request: NextRequest) {
     "/check",
     "/jump-in",
     "/quick-tester",
+    "/audit",
+    "/api/audit",
     "/api/jump-in",
     // A document is read transiently before Jump In asks the visitor to sign in.
     // The route only returns extracted text; it cannot run an analysis or retain a file.

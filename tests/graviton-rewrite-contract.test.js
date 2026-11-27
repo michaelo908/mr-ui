@@ -160,7 +160,7 @@ test("rewrite-only requests reject analysis and require finished copy", () => {
   assert.match(instruction, /supplied specialist analysis/);
   assert.match(instruction, /only finished rewritten source copy/);
 
-  const route = read("app/api/mr/route.ts");
+  const route = (read("app/api/mr/route.ts") + read("lib/mr-request.ts"));
   assert.match(route, /initial-rewrite-repair/);
   assert.match(route, /isValidRewriteCandidate\(extractRewriteOrRaw\(json\.output\), "", cadence\)/);
 });

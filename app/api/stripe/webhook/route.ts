@@ -1,3 +1,4 @@
+import { fulfilAuditPayment } from "@/lib/audit/payments";
 import { readJumpInPurchaseReference } from "@/lib/signals/jump-in-purchase";
 import Stripe from "stripe";
 import { Resend } from "resend";
@@ -284,6 +285,7 @@ async function checkoutLineItems(sessionId: string) {
 }
 
 async function processCheckout(event: Stripe.Event, session: Stripe.Checkout.Session) {
+  if (await fulfilAuditPayment(session)) return;
   const jumpInReference = readJumpInPurchaseReference(session.client_reference_id);
   const lineItems = await checkoutLineItems(session.id);
   const isDayPass = lineItems.data.some((item) => item.price?.id === GRAVITAS_DAY_PASS_PRICE_ID);
