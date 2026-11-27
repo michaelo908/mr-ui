@@ -43,4 +43,18 @@ await assert.rejects(()=>db.query('select claim_reader_audit_step($1,$2,1000,0,1
 assert.equal((await db.query('select attempts from reader_audits where id=$1',[second])).rows[0].attempts,0);
 assert.equal((await db.query("select has_table_privilege('anon','reader_audits','select') allowed")).rows[0].allowed,false);
 console.log('PASS: duplicate create, exclusive lease, stale lease fencing, failure release, unknown-cost retention, retry success, consumption, renewal, expired period, daily budget rollback, stale-step fencing, two-attempt ceiling.');
+await db.exec(await readFile(new URL('../supabase/migrations/202611280002_paid_homepage_audit.sql',import.meta.url),'utf8'));
+const miniCreate=(id,key,owner=user)=>db.query("select create_reader_audit($1,$2,null,'mini',$3,null,$4,550000,25000000,ARRAY[]::text[])",[id,owner,JSON.stringify(['https://example.com/']),key]);
+await assert.rejects(()=>miniCreate(uuid(),null),/entitlement unavailable/);
+await db.query("insert into reader_audit_entitlements(entitlement_key,user_id,kind) values('paid-mini',$1,'mini')",[user]);
+await assert.rejects(()=>miniCreate(uuid(),'paid-mini',null),/entitlement unavailable/);
+const paidMini=uuid();await miniCreate(paidMini,'paid-mini');
+await assert.rejects(()=>miniCreate(uuid(),'paid-mini'),/already using/);
+const failLease=uuid();await db.query('select claim_reader_audit_step($1,$2,100000,0)',[paidMini,failLease]);
+await db.query("select finish_reader_audit_step($1,$2,null,null,false,'failed',0,'{}')",[paidMini,failLease]);
+assert.equal((await db.query("select consumed_at from reader_audit_entitlements where entitlement_key='paid-mini'")).rows[0].consumed_at,null);
+const goodLease=uuid();await db.query('select claim_reader_audit_step($1,$2,100000,0)',[paidMini,goodLease]);
+await db.query("select finish_reader_audit_step($1,$2,'{}','[]',true,null,50000,'{}')",[paidMini,goodLease]);
+await assert.rejects(()=>miniCreate(uuid(),'paid-mini'),/entitlement unavailable/);
+console.log('PASS: paid mini required, anonymous denied, duplicate reservation denied, failure preserves purchase, success consumes once.');
 await db.close();

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { miniUpgradeCoupon } from "@/lib/audit/pricing";
 import { stripe } from "@/lib/supabase/stripe";
 import {
   auditVisitor,
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const kind = body.kind;
     if (
-      !["comprehensive", "readiness"].includes(kind) ||
+      !["mini", "comprehensive", "readiness"].includes(kind) ||
       !/^[\da-f-]{36}$/i.test(body.requestId)
     )
       throw new Error("Invalid purchase.");
@@ -33,10 +34,12 @@ export async function POST(req: Request) {
       )
         throw new Error("Select a completed comprehensive audit.");
     }
+    const credit = kind === "comprehensive" ? await miniUpgradeCoupon(actor.user.id) : null;
     const base = process.env.NEXT_PUBLIC_APP_URL!;
     const session = await stripe.checkout.sessions.create(
       {
         mode: "payment",
+        ...(credit ? { discounts: [{ coupon: credit.coupon }] } : {}),
         payment_method_types: ["card"],
         client_reference_id: actor.user.id,
         line_items: [
@@ -44,10 +47,10 @@ export async function POST(req: Request) {
             quantity: 1,
             price_data: {
               currency: "usd",
-              unit_amount: kind === "comprehensive" ? 5900 : 2900,
+              unit_amount: kind === "mini" ? 500 : kind === "comprehensive" ? 5900 : 2900,
               product_data: {
                 name:
-                  kind === "comprehensive"
+                  kind === "mini" ? "Multirrupt Homepage Reader Audit" : kind === "comprehensive"
                     ? "Multirrupt Reader Side Audit — up to five URLs"
                     : "Multirrupt AI Answer Readiness",
               },
@@ -58,6 +61,7 @@ export async function POST(req: Request) {
         cancel_url: `${base}/audit`,
         metadata: {
           user_id: actor.user.id,
+          mini_credit_key: credit?.key || "",
           audit_visitor_id: auditVisitor(actor.hash) || "",
           reader_audit_kind: kind,
           audit_request_id: body.requestId,

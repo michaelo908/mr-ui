@@ -129,7 +129,7 @@ export default function AuditWorkspace() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     setCheckout(q.get("checkout"));
-    setPaidKind(q.get("kind") === "readiness" ? "readiness" : "comprehensive");
+    setPaidKind(q.get("kind") === "mini" ? "mini" : q.get("kind") === "readiness" ? "readiness" : "comprehensive");
     setParentId(q.get("parent"));
     try {
       const saved = sessionStorage.getItem("mr-audit-urls");
@@ -228,7 +228,7 @@ export default function AuditWorkspace() {
           </h1>
           <p className="mt-4 max-w-2xl text-neutral-300">
             Examine how your pages build understanding, trust and a clear way
-            forward. Start with a free homepage audit, or select up to five
+            forward. Start with a US$5 homepage audit, or select up to five
             pages for a comprehensive assessment.
           </p>
         </header>
@@ -279,15 +279,16 @@ export default function AuditWorkspace() {
             <button
               className={button}
               disabled={busy || !urls[0]}
-              onClick={() => void start("mini")}
+              onClick={() => signedIn ? void purchase("mini") : window.location.assign("/login?next=%2Faudit")}
             >
-              Free homepage mini audit
+              Homepage reader audit · US$5
             </button>
           </div>
+          <p className="mt-3 text-sm text-neutral-300">Your homepage audit includes a summary, seven-dimension reader profile, three evidence-backed findings and tailored Beyond the Homepage guidance. Each paid mini provides one US$5 credit toward a comprehensive audit; credits do not stack.</p>
           <div className="mt-6 border-t border-neutral-800 pt-5">
             <p className="text-sm text-neutral-300">
               Comprehensive audit · US$59 · up to five URLs · individual
-              assessments, cross-page synthesis and prioritised remedies.
+              assessments, cross-page synthesis and prioritised remedies. Your US$5 homepage audit payment counts toward this: pay US$54 with one unused mini credit.
             </p>
             <p className="mt-2 text-sm text-neutral-400">
               Subscribers receive one comprehensive audit per billing period. No
@@ -301,7 +302,7 @@ export default function AuditWorkspace() {
                     disabled={busy}
                     onClick={() => void purchase("comprehensive")}
                   >
-                    Buy comprehensive audit · US$59
+                    Comprehensive audit · US$59 (US$54 with mini credit)
                   </button>
                   <button
                     className="rounded-lg border border-neutral-600 px-4 py-2"

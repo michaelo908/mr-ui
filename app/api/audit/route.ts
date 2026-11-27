@@ -58,9 +58,9 @@ export async function POST(req: Request) {
     const kind: AuditKind = body.kind;
     if (!Object.hasOwn(BUDGETS, kind)) throw new Error("Invalid audit type.");
     const actor = await identity(true);
-    if (kind !== "mini" && !actor.user)
+    if (!actor.user)
       return NextResponse.json(
-        { error: "Sign in to purchase or use a comprehensive audit." },
+        { error: "Sign in to purchase or use an audit." },
         { status: 401 },
       );
     let urls = normalizeUrls(body.urls, kind);
@@ -75,10 +75,7 @@ export async function POST(req: Request) {
         throw new Error("Select your completed comprehensive audit.");
       urls = parent.urls;
     }
-    const key =
-      kind === "mini"
-        ? null
-        : await entitlement(actor.user!.id, kind, body.checkout);
+    const key = await entitlement(actor.user!.id, kind, body.checkout);
     const daily = Number(process.env.AUDIT_DAILY_USD || "25");
     if (!Number.isFinite(daily) || daily <= 0 || daily > 100)
       throw new Error("Audit daily budget is not configured.");

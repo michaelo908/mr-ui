@@ -2,7 +2,7 @@
 
 ## Scope and deployment boundary
 
-Approved scope: a free homepage mini; US$59 for up to five explicitly selected URLs including the user-identified homepage; optional US$29 AI Answer Readiness on those same captured pages. No discovery crawl. Existing US$19 48-hour Day Pass or US$97 subscription enables remediation. One comprehensive audit per paid subscription billing period, no rollover, failures do not consume the allowance.
+Approved scope: a US$5 homepage mini, with one non-stacking US$5 credit toward a US$59 comprehensive audit; US$59 for up to five explicitly selected URLs including the user-identified homepage; optional US$29 AI Answer Readiness on those same captured pages. No discovery crawl. Existing US$19 48-hour Day Pass or US$97 subscription enables remediation. One comprehensive audit per paid subscription billing period, no rollover, failures do not consume the allowance.
 
 Frontend implementation starts at staging f32fee4867edcecbec987939b0107cc80786925e. Backend starts at 759dde1724b824957c3d7b3801b3eebe1ee15181. Existing unrelated working copies are untouched. All new audit paths are disabled unless explicitly enabled for the dedicated staging frontend, staging API, staging Supabase project and Stripe test key. Production promotion is not authorised.
 
@@ -37,9 +37,9 @@ Count the actual multimodal input before generation. No SDK retries. The output 
 
 Cost accounting uses US$10/million input and US$50/million output without cache discounts. Captures reserve US$0.018 per capture stage for the existing two-attempt ScreenshotOne wrapper; reused captures add no capture allowance. This is a conservative exposure ledger, not a provider invoice. Unknown model outcomes retain the entire stage reservation. Hosting, storage, payment fees and taxes are additional.
 
-`AUDIT_DAILY_USD` defaults to 25, maximum 100. Both new job reservations and execution-day stage reservations enforce that ceiling, so previous-day backlog cannot bypass the execution limit. A default three-new-jobs-per-day limit applies to both a pseudonymous address bucket and owner bucket, separately for mini, comprehensive and readiness. Free attempts cannot exhaust a purchased assessment's allowance. The table ledger is authoritative; Signals reports linked conversion and processing exposure, including failed and uncertain attempts.
+`AUDIT_DAILY_USD` defaults to 25, maximum 100. Both new job reservations and execution-day stage reservations enforce that ceiling, so previous-day backlog cannot bypass the execution limit. A default three-new-jobs-per-day limit applies to both a pseudonymous address bucket and owner bucket, separately for mini, comprehensive and readiness. Mini attempts cannot exhaust a purchased assessment's allowance. The table ledger is authoritative; Signals reports linked conversion and processing exposure, including failed and uncertain attempts.
 
-The free tier's normal cost should be measured during calibration; its budget is not a claim about observed average cost. Review the allowance against evidence quality before increasing volume. Stored anonymous source retention and paid-source lifecycle should be reviewed before a public launch; this staging version does not run a destructive retention sweep.
+The mini's normal cost should be measured during calibration; its budget is not a claim about observed average cost. Review the allowance against evidence quality before increasing volume. Stored anonymous source retention and paid-source lifecycle should be reviewed before a public launch; this staging version does not run a destructive retention sweep.
 
 ## Staging activation sequence
 
@@ -47,7 +47,7 @@ The free tier's normal cost should be measured during calibration; its budget is
 2. Run `npm test`, `npm run test:audit-db`, TypeScript, lint and the Next build. Run backend tests with the pinned supported SDK. Database tests use an isolated PostgreSQL engine, not production or staging data.
 3. Apply `202611280001_reader_side_audit.sql` to staging only. It adds private audit tables, transactional functions, a private source bucket and the audit Signals category.
 4. Deploy the frontend and backend candidates to the existing staging projects with audit flags initially off. Frontend: `AUDIT_ENABLED=true`, `NEXT_PUBLIC_AUDIT_ENABLED=true`, `AUDIT_DAILY_USD=25`. Backend: `AUDIT_ENABLED=true`, `AUDIT_ENVIRONMENT=staging`. Verify staging `MR_API_KEY` matches across the existing services. The frontend rejects other service hostnames, databases or a live Stripe key.
-5. Exercise a free mini, a five-page comprehensive audit, subscription allowance, test checkout, optional readiness, saved-source inspection, account claim and paid remediation. Close the browser during a job and verify background completion. Reopen without new analysis. Verify cancellation/renewal, duplicate checkout webhook, simultaneous run, failure/retry and permission boundaries.
+5. Exercise a paid mini, a five-page comprehensive audit, subscription allowance, test checkout, optional readiness, saved-source inspection, account claim and paid remediation. Close the browser during a job and verify background completion. Reopen without new analysis. Verify cancellation/renewal, duplicate checkout webhook, simultaneous run, failure/retry and permission boundaries.
 6. Calibrate methodology on contrasting actual sites and controlled source pairs. Do not activate a public production product before this gate is passed and production approval is obtained.
 
 ## Calibration acceptance criteria
@@ -61,3 +61,11 @@ Current status (28 November 2026): frontend deployment `dpl_8kAE2T1dnTkLaaUAHw1Y
 Initial live minis for Example.com and GOV.UK both completed through the background worker, without browser advance calls. Recorded exposure was US$0.09835 and US$0.12742, including conservative capture allowances. This two-case sample implies US$2.2577 in mini processing per paid conversion at 5%; it is not a volume forecast. GOV.UK's report preserved justified directory breadth and effective entry routes. Both reports passed the exact-quote/viewport-reference contract, had seven dimensions, exactly three findings and tailored continuation rationales.
 
 Live ownership isolation, cross-origin rejection, anonymous paid-access rejection and mini page limits passed. Account-based checkout, subscription lifecycle, comprehensive/readiness output and remediation checks are still pending. Broader calibration, controlled contradictions and repeated contrasting cases remain launch gates. No production changes have been made. The local webpack build is used because Turbopack rejects the shared node_modules symlink outside the worktree root; Vercel's isolated build succeeded normally.
+
+## Paid mini update — prepared locally, not deployed
+
+New minis require sign-in and a US$5 Stripe test payment. The same entitlement reservation/completion rules apply to minis: failures do not consume the assessment. Legacy free reports remain readable, but pending free work cannot initiate new processing without entitlement.
+
+Each paid mini supplies one US$5 comprehensive-only credit, applied automatically at checkout (US$59 less US$5 = US$54). It does not reduce the subscription price or readiness add-on, and credits do not stack. A deterministic Stripe coupon with `max_redemptions=1` controls reuse; authenticated ownership selects the credit, and webhook validation checks its amount, coupon and owner. Cancelled-checkout and simultaneous-checkout behavior still require Stripe sandbox validation before deployment.
+
+Apply migration `202611280002_paid_homepage_audit.sql` before the updated frontend. The live staging deployment still has the previous free-mini offer until this migration and deployment are explicitly resumed.

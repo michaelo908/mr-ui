@@ -183,7 +183,7 @@ export async function entitlement(
     return data.entitlement_key;
   }
   if (kind !== "comprehensive")
-    throw new Error("Purchase AI Answer Readiness to continue.");
+    throw new Error(kind === "mini" ? "Purchase a homepage audit to continue." : "Purchase AI Answer Readiness to continue.");
   const access = await authenticatedLifecycle();
   if (
     !access ||
