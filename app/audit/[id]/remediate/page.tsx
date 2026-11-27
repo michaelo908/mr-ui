@@ -7,7 +7,6 @@ import {
   ownedAudit,
   requireAuditEnvironment,
 } from "@/lib/audit/server";
-import { JUMP_IN_DAY_PASS_URL } from "@/lib/jump-in";
 export const dynamic = "force-dynamic";
 export default async function Remediate({
   params,
@@ -41,14 +40,11 @@ export default async function Remediate({
       <main className="mx-auto max-w-2xl space-y-6 p-10 text-neutral-100">
         <h1 className="text-3xl font-semibold">Put your audit into practice</h1>
         <p>
-          Your saved audit and source context are ready. Remediation uses active
-          Multirrupt access.
+          Your saved audit and source context are ready. Remediation is included
+          with an active Multirrupt subscription.
         </p>
-        <a className="block text-sky-300 underline" href={JUMP_IN_DAY_PASS_URL}>
-          Get the US$19 48-hour Day Pass
-        </a>
         <a className="block text-sky-300 underline" href="/workbench">
-          Subscribe for US$97
+          Subscribe for US$97 to work on these recommendations
         </a>
         <p>After purchase, return to this saved audit to continue.</p>
         <a href="/audit" className="text-sky-300 underline">

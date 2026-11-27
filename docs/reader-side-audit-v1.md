@@ -2,7 +2,7 @@
 
 ## Scope and deployment boundary
 
-Approved scope: a US$5 homepage mini, with one non-stacking US$5 credit toward a US$59 comprehensive audit; US$59 for up to five explicitly selected URLs including the user-identified homepage; optional US$29 AI Answer Readiness on those same captured pages. No discovery crawl. Existing US$19 48-hour Day Pass or US$97 subscription enables remediation. One comprehensive audit per paid subscription billing period, no rollover, failures do not consume the allowance.
+Approved scope: a US$5 homepage mini, with one non-stacking US$5 credit toward a US$59 comprehensive audit; US$59 for up to five explicitly selected URLs including the user-identified homepage; optional US$29 AI Answer Readiness on those same captured pages. No discovery crawl. An active US$97 subscription enables audit remediation; the existing Day Pass is not offered in this audit journey. One comprehensive audit per paid subscription billing period, no rollover, failures do not consume the allowance.
 
 Frontend implementation starts at staging f32fee4867edcecbec987939b0107cc80786925e. Backend starts at 759dde1724b824957c3d7b3801b3eebe1ee15181. Existing unrelated working copies are untouched. All new audit paths are disabled unless explicitly enabled for the dedicated staging frontend, staging API, staging Supabase project and Stripe test key. Production promotion is not authorised.
 
