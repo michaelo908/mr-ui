@@ -62,12 +62,14 @@ Initial live minis for Example.com and GOV.UK both completed through the backgro
 
 Live ownership isolation, cross-origin rejection, anonymous paid-access rejection and mini page limits passed. Account-based checkout, subscription lifecycle, comprehensive/readiness output and remediation checks are still pending. Broader calibration, controlled contradictions and repeated contrasting cases remain launch gates. No production changes have been made. The local webpack build is used because Turbopack rejects the shared node_modules symlink outside the worktree root; Vercel's isolated build succeeded normally.
 
-## Paid mini update — prepared locally, not deployed
+## Paid mini update — deployed to staging
 
 New minis require sign-in and a US$5 Stripe test payment. The same entitlement reservation/completion rules apply to minis: failures do not consume the assessment. Legacy free reports remain readable, but pending free work cannot initiate new processing without entitlement.
 
 Each paid mini supplies one US$5 comprehensive-only credit, applied automatically at checkout (US$59 less US$5 = US$54). It does not reduce the subscription price or readiness add-on, and credits do not stack. A deterministic Stripe coupon with `max_redemptions=1` controls reuse; authenticated ownership selects the credit, and webhook validation checks its amount, coupon and owner. Stripe sandbox validation passed: expiring an unpaid checkout preserved the credit; the first payment charged US$54; a second already-open checkout was blocked from reusing the discount and displayed the full US$59 price with a notice, requiring a fresh payment confirmation. Fulfilment accepts that separately confirmed full-price payment without consuming another credit.
 
-Apply migration `202611280002_paid_homepage_audit.sql` before the updated frontend. The live staging deployment still has the previous free-mini offer until this migration and deployment are explicitly resumed.
+Migration `202611280002_paid_homepage_audit.sql` was applied successfully to the staging database. Frontend deployment `dpl_FvcVKQiG9Txc6Sgnordx6FopBCHf` (commit `6d4617b`) is Ready at the existing staging domain.
 
-Sandbox credit validation was isolated from audit generation: one test payment completed, one duplicate attempt was rejected without payment, and no AI calls were made. Paid-mini migration and frontend remain undeployed.
+Sandbox credit validation was isolated from audit generation: one test payment completed, one duplicate attempt was rejected without payment, and no AI calls were made. The paid-mini migration and frontend have now been deployed to staging.
+
+Deployed-flow verification: the US$5 test purchase completed and appeared as a recoverable purchased mini in the signed-in account. Opening comprehensive checkout automatically applied the Homepage audit credit, showing US$59 less US$5 = US$54. That upgrade was left unpaid. Anonymous mini creation returned HTTP 401. No AI assessment was started during this deployment checkpoint; production is unchanged.
