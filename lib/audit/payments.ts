@@ -22,10 +22,15 @@ export async function fulfilAuditPayment(session: Stripe.Checkout.Session) {
     !session.metadata?.user_id
   )
     throw new Error("Invalid audit payment.");
+  let sourceAuditId: string | null = null;
   if (creditApplied && creditKey) {
-    const { data: credit, error } = await auditAdmin().from("reader_audit_entitlements").select("entitlement_key").eq("entitlement_key", creditKey).eq("user_id", session.metadata.user_id).eq("kind", "mini").maybeSingle();
+    const { data: credit, error } = await auditAdmin().from("reader_audit_entitlements").select("entitlement_key,audit_id").eq("entitlement_key", creditKey).eq("user_id", session.metadata.user_id).eq("kind", "mini").maybeSingle();
     const applied = session.discounts?.some(d => (typeof d.coupon === "string" ? d.coupon : d.coupon?.id) === miniCouponId(creditKey));
     if (kind !== "comprehensive" || error || !credit || !applied || session.total_details?.amount_discount !== 500) throw new Error("Invalid mini audit credit.");
+    if (credit.audit_id) {
+      const { data: mini } = await auditAdmin().from("reader_audits").select("id").eq("id", credit.audit_id).eq("user_id", session.metadata.user_id).eq("kind", "mini").eq("status", "completed").maybeSingle();
+      sourceAuditId = mini?.id || null;
+    }
   }
   const { error } = await auditAdmin()
     .from("reader_audit_entitlements")
@@ -36,6 +41,7 @@ export async function fulfilAuditPayment(session: Stripe.Checkout.Session) {
         kind,
         parent_id:
           kind === "readiness" ? session.metadata.parent_audit_id : null,
+        source_audit_id: kind === "comprehensive" ? sourceAuditId : null,
       },
       { onConflict: "entitlement_key", ignoreDuplicates: true },
     );

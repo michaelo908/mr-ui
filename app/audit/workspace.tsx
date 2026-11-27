@@ -284,11 +284,11 @@ export default function AuditWorkspace() {
               Homepage reader audit · US$5
             </button>
           </div>
-          <p className="mt-3 text-sm text-neutral-300">Your homepage audit includes a summary, seven-dimension reader profile, three evidence-backed findings and tailored Beyond the Homepage guidance. Each paid mini provides one US$5 credit toward a comprehensive audit; credits do not stack.</p>
+          <p className="mt-3 text-sm text-neutral-300">Your homepage audit includes a summary, seven-dimension reader profile, three evidence-backed findings and tailored Beyond the Homepage guidance. Each paid mini provides one US$5 credit toward a comprehensive audit; credits do not stack. If you upgrade after it is complete, its saved homepage evidence and findings carry into the full audit.</p>
           <div className="mt-6 border-t border-neutral-800 pt-5">
             <p className="text-sm text-neutral-300">
               Comprehensive audit · US$59 · up to five URLs · individual
-              assessments, cross-page synthesis and prioritised remedies. Your US$5 homepage audit payment counts toward this: pay US$54 with one unused mini credit.
+              assessments, cross-page synthesis and prioritised remedies. Your US$5 homepage audit payment counts toward this: pay US$54 with one unused mini credit, and a completed mini becomes the homepage assessment rather than being run twice.
             </p>
             <p className="mt-2 text-sm text-neutral-400">
               Subscribers receive one comprehensive audit per billing period. No
@@ -401,7 +401,7 @@ export default function AuditWorkspace() {
                 className="rounded-xl border border-neutral-800 p-5"
               >
                 <summary className="cursor-pointer font-semibold">
-                  Page {i + 1} · {job.urls[i]}
+                  Page {i + 1}{i === 0 && job.source_audit_id ? " · homepage mini carried forward" : ""} · {job.urls[i]}
                 </summary>
                 <div className="mt-5">
                   <Report

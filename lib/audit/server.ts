@@ -95,6 +95,7 @@ export function publicAudit(job: AuditJob) {
     failure,
     created_at,
     parent_id,
+    source_audit_id,
     attempts,
   } = job;
   return {
@@ -108,6 +109,7 @@ export function publicAudit(job: AuditJob) {
     failure,
     created_at,
     parent_id,
+    source_audit_id,
     attempts,
   };
 }
@@ -161,16 +163,16 @@ export function rateBuckets(
     createHmac("sha256", secret).update(`${day}:${prefix}${s}`).digest("hex"),
   );
 }
-export async function entitlement(
+export async function entitlementDetails(
   userId: string,
   kind: AuditKind,
   checkout?: string,
-) {
+): Promise<{ key: string; sourceAuditId: string | null }> {
   const db = auditAdmin();
   if (checkout) {
     const { data } = await db
       .from("reader_audit_entitlements")
-      .select("entitlement_key")
+      .select("entitlement_key,source_audit_id")
       .eq("entitlement_key", `checkout:${checkout}`)
       .eq("user_id", userId)
       .eq("kind", kind)
@@ -180,7 +182,7 @@ export async function entitlement(
       throw new Error(
         "Payment is still being confirmed. Please try again shortly.",
       );
-    return data.entitlement_key;
+    return { key: data.entitlement_key, sourceAuditId: data.source_audit_id };
   }
   if (kind !== "comprehensive")
     throw new Error(kind === "mini" ? "Purchase a homepage audit to continue." : "Purchase AI Answer Readiness to continue.");
@@ -229,7 +231,14 @@ export async function entitlement(
       { onConflict: "entitlement_key", ignoreDuplicates: true },
     );
   if (error) throw new Error("Could not reserve subscription allowance.");
-  return key;
+  return { key, sourceAuditId: null };
+}
+export async function entitlement(
+  userId: string,
+  kind: AuditKind,
+  checkout?: string,
+) {
+  return (await entitlementDetails(userId, kind, checkout)).key;
 }
 export async function getSource(
   job: AuditJob,
@@ -237,7 +246,7 @@ export async function getSource(
 ): Promise<AuditSource> {
   const { data, error } = await auditAdmin()
     .storage.from("reader-audit-sources")
-    .download(`${job.parent_id || job.id}/${index}.json`);
+    .download(`${job.kind === "readiness" ? job.parent_id || job.id : job.source_audit_id && index === 0 ? job.source_audit_id : job.id}/${index}.json`);
   if (error || !data) throw new Error("Saved source is unavailable.");
   return JSON.parse(await data.text());
 }

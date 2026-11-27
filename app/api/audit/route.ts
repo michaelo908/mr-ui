@@ -3,7 +3,7 @@ import { BUDGETS, normalizeUrls, type AuditKind } from "@/lib/audit/contracts";
 import {
   auditAdmin,
   auditSignal,
-  entitlement,
+  entitlementDetails,
   identity,
   ownedAudit,
   publicAudit,
@@ -75,7 +75,7 @@ export async function POST(req: Request) {
         throw new Error("Select your completed comprehensive audit.");
       urls = parent.urls;
     }
-    const key = await entitlement(actor.user!.id, kind, body.checkout);
+    const grant = await entitlementDetails(actor.user!.id, kind, body.checkout);
     const daily = Number(process.env.AUDIT_DAILY_USD || "25");
     if (!Number.isFinite(daily) || daily <= 0 || daily > 100)
       throw new Error("Audit daily budget is not configured.");
@@ -86,10 +86,16 @@ export async function POST(req: Request) {
       p_kind: kind,
       p_urls: urls,
       p_parent: parent?.id || null,
-      p_entitlement: key,
-      p_reserve: BUDGETS[kind].reserve,
+      p_entitlement: grant.key,
+      // A completed mini already supplies the homepage capture and page report.
+      // Reserve only the remaining work, while retaining a conservative bound.
+      p_reserve:
+        kind === "comprehensive" && grant.sourceAuditId
+          ? BUDGETS.comprehensive.reserve - BUDGETS.mini.reserve
+          : BUDGETS[kind].reserve,
       p_daily_limit: Math.floor(daily * 1000000),
       p_buckets: rateBuckets(req, actor.user?.id || null, actor.hash, kind),
+      p_source: grant.sourceAuditId,
     });
     if (error) throw new Error(error.message);
     await auditSignal("audit.started", {

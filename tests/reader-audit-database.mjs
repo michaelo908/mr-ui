@@ -57,4 +57,14 @@ const goodLease=uuid();await db.query('select claim_reader_audit_step($1,$2,1000
 await db.query("select finish_reader_audit_step($1,$2,'{}','[]',true,null,50000,'{}')",[paidMini,goodLease]);
 await assert.rejects(()=>miniCreate(uuid(),'paid-mini'),/entitlement unavailable/);
 console.log('PASS: paid mini required, anonymous denied, duplicate reservation denied, failure preserves purchase, success consumes once.');
+await db.exec(await readFile(new URL('../supabase/migrations/202611280003_carry_mini_to_comprehensive.sql',import.meta.url),'utf8'));
+await db.query("update reader_audits set source_keys='[\"paid-mini/0.json\"]'::jsonb where id=$1",[paidMini]);
+await db.query("insert into reader_audit_entitlements(entitlement_key,user_id,kind,source_audit_id) values('mini-upgrade',$1,'comprehensive',$2)",[user,paidMini]);
+const carried=uuid();
+await db.query("select create_reader_audit($1,$2,null,'comprehensive',$3,null,'mini-upgrade',3450000,25000000,ARRAY[]::text[],$4)",[carried,user,JSON.stringify(['https://example.com/','https://example.com/about']),paidMini]);
+const carriedRow=(await db.query('select step,reports,source_keys,source_audit_id,reserve_microusd from reader_audits where id=$1',[carried])).rows[0];
+assert.equal(carriedRow.step,1);assert.equal(carriedRow.reports.length,1);assert.equal(carriedRow.source_keys[0],'paid-mini/0.json');assert.equal(carriedRow.source_audit_id,paidMini);assert.equal(carriedRow.reserve_microusd,3450000);
+await db.query("insert into reader_audit_entitlements(entitlement_key,user_id,kind,source_audit_id) values('mismatched-upgrade',$1,'comprehensive',$2)",[user,paidMini]);
+await assert.rejects(()=>db.query("select create_reader_audit($1,$2,null,'comprehensive',$3,null,'mismatched-upgrade',3450000,25000000,ARRAY[]::text[],$4)",[uuid(),user,JSON.stringify(['https://other.example/']),paidMini]),/does not match/);
+console.log('PASS: a completed paid mini carries its report and saved homepage source into a matching comprehensive audit, with no second homepage reservation.');
 await db.close();

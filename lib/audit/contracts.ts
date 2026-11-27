@@ -66,6 +66,7 @@ export type AuditJob = {
   result: AuditReport | null;
   failure: string | null;
   parent_id: string | null;
+  source_audit_id: string | null;
   created_at: string;
   source_keys: string[];
   attempts: number;

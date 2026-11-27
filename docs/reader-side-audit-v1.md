@@ -19,6 +19,7 @@ AI Answer Readiness uses Accessibility, Semantic Clarity, Answer Sufficiency, Co
 - New `/audit` workspace and account-owned saved reports. Anonymous access uses a 256-bit HttpOnly capability cookie; sign-in can claim those reports. Browser roles cannot read the underlying audit tables or private source bucket directly.
 - Capture each explicit URL once; preserve text, four ordered desktop viewports, technical observations, timestamp and coverage limits in private Supabase Storage. Capture limits are visible to readers. The maximum stored object size is 8 MB.
 - Run one page stage per URL, followed by one cross-page synthesis using the individual reports and their cited evidence. AI readiness reuses the original source objects. Completed reports do not trigger model calls when reopened.
+- When a completed paid mini is upgraded with its US$5 credit, its matching homepage source and page report are carried into the comprehensive job. The comprehensive job starts at the next selected page, then synthesises all pages including the carried homepage. A changed homepage URL deliberately falls back to a new full assessment rather than treating stale evidence as current.
 - Jobs, stage leases and usage reservations are persisted in PostgreSQL. A worker thread in the existing staging Railway service polls the existing staging frontend once per minute when idle, or two seconds after completing a stage. No additional queue service or hosting project is introduced. Jobs continue after browser closure and recover after expired leases. Failed stages require a deliberate retry; there are at most two attempts per stage.
 - Jobs use a database lease plus expected step to prevent duplicate or stale work. Unknown provider outcomes retain their full reserved cost. Saved captures are reused on retry.
 - Entitlement reservation, completion and release are transactional. Subscription keys include subscription ID and actual billing-period start/end, and require paid-through coverage. Add-on purchases are tied to their original completed audit. Unused purchases are recoverable in the audit workspace.
@@ -34,6 +35,8 @@ AI Answer Readiness uses Accessibility, Semantic Clarity, Answer Sufficiency, Co
 | AI readiness | 45,000 | 8,000 | 2.00 |
 
 Count the actual multimodal input before generation. No SDK retries. The output allowance includes reasoning. The model stays `gpt-6-astra`, with low reasoning effort. The existing editor governor/rewrite path is not used for audit analysis.
+
+An upgrade that carries a completed mini reserves US$3.45 rather than US$4.00, because the first-page capture and page-analysis allowance are not run again. The original mini retains its source and report as the evidence record.
 
 Cost accounting uses US$10/million input and US$50/million output without cache discounts. Captures reserve US$0.018 per capture stage for the existing two-attempt ScreenshotOne wrapper; reused captures add no capture allowance. This is a conservative exposure ledger, not a provider invoice. Unknown model outcomes retain the entire stage reservation. Hosting, storage, payment fees and taxes are additional.
 
