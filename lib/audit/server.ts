@@ -348,6 +348,7 @@ export async function advance(job: AuditJob) {
         sources: sources.map((s, i) => ({
           page: all ? i + 1 : job.step + 1,
           url: s.finalUrl,
+          context: job.page_contexts?.[all ? i : job.step] || "",
           text: synthesis
             ? Array.from(
                 new Set(

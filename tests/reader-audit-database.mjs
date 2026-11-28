@@ -67,4 +67,11 @@ assert.equal(carriedRow.step,1);assert.equal(carriedRow.reports.length,1);assert
 await db.query("insert into reader_audit_entitlements(entitlement_key,user_id,kind,source_audit_id) values('mismatched-upgrade',$1,'comprehensive',$2)",[user,paidMini]);
 await assert.rejects(()=>db.query("select create_reader_audit($1,$2,null,'comprehensive',$3,null,'mismatched-upgrade',3450000,25000000,ARRAY[]::text[],$4)",[uuid(),user,JSON.stringify(['https://other.example/']),paidMini]),/does not match/);
 console.log('PASS: a completed paid mini carries its report and saved homepage source into a matching comprehensive audit, with no second homepage reservation.');
+await db.exec(await readFile(new URL('../supabase/migrations/202611280004_reader_context.sql',import.meta.url),'utf8'));
+await db.query("insert into reader_audit_entitlements(entitlement_key,user_id,kind) values('context-mini',$1,'mini')",[user]);
+const contextual=uuid();
+await db.query("select create_reader_audit($1,$2,null,'mini',$3,null,'context-mini',550000,25000000,ARRAY[]::text[],null,$4)",[contextual,user,JSON.stringify(['https://example.com/']),JSON.stringify(['Warm, informed readers considering a high-value product.'])]);
+assert.equal((await db.query('select page_contexts from reader_audits where id=$1',[contextual])).rows[0].page_contexts[0],'Warm, informed readers considering a high-value product.');
+await assert.rejects(()=>db.query("select create_reader_audit($1,$2,null,'mini',$3,null,'context-mini',550000,25000000,ARRAY[]::text[],null,$4)",[uuid(),user,JSON.stringify(['https://example.com/']),JSON.stringify([])]),/Invalid page context/);
+console.log('PASS: per-page reader context is persisted only when it matches the selected URL set.');
 await db.close();

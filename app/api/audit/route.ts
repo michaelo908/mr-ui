@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { BUDGETS, normalizeUrls, type AuditKind } from "@/lib/audit/contracts";
+import {
+  BUDGETS,
+  normalizePageContexts,
+  normalizeUrls,
+  type AuditKind,
+} from "@/lib/audit/contracts";
 import {
   auditAdmin,
   auditSignal,
@@ -64,6 +69,7 @@ export async function POST(req: Request) {
         { status: 401 },
       );
     let urls = normalizeUrls(body.urls, kind);
+    let contexts = normalizePageContexts(body.contexts, urls);
     let parent = null;
     if (kind === "readiness") {
       parent = await ownedAudit(body.parentId);
@@ -74,6 +80,7 @@ export async function POST(req: Request) {
       )
         throw new Error("Select your completed comprehensive audit.");
       urls = parent.urls;
+      contexts = parent.page_contexts || urls.map(() => "");
     }
     const grant = await entitlementDetails(actor.user!.id, kind, body.checkout);
     const daily = Number(process.env.AUDIT_DAILY_USD || "25");
@@ -96,6 +103,7 @@ export async function POST(req: Request) {
       p_daily_limit: Math.floor(daily * 1000000),
       p_buckets: rateBuckets(req, actor.user?.id || null, actor.hash, kind),
       p_source: grant.sourceAuditId,
+      p_contexts: contexts,
     });
     if (error) throw new Error(error.message);
     await auditSignal("audit.started", {

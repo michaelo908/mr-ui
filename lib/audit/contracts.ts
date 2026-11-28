@@ -60,6 +60,7 @@ export type AuditJob = {
   anonymous_hash: string | null;
   kind: AuditKind;
   urls: string[];
+  page_contexts: string[];
   status: "queued" | "running" | "failed" | "completed";
   step: number;
   reports: AuditReport[];
@@ -109,6 +110,15 @@ export function normalizeUrls(values: unknown, kind: AuditKind): string[] {
     throw new Error("Each URL must be different.");
   // The user identifies their homepage; localised homepages can have a path.
   return urls;
+}
+export function normalizePageContexts(values: unknown, urls: string[]) {
+  if (!Array.isArray(values) || values.length !== urls.length)
+    throw new Error("Add context for each selected page, or leave it blank.");
+  return values.map((value) => {
+    if (typeof value !== "string" || value.length > 1200)
+      throw new Error("Page context is too long.");
+    return value.trim();
+  });
 }
 export function stageBudget(
   kind: AuditKind,

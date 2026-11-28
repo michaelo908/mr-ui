@@ -109,6 +109,7 @@ export default function AuditWorkspace() {
     { entitlement_key: string; kind: AuditKind; parent_id: string | null }[]
   >([]);
   const [urls, setUrls] = useState([""]);
+  const [contexts, setContexts] = useState([""]);
   const [audits, setAudits] = useState<AuditJob[]>([]);
   const [job, setJob] = useState<AuditJob | null>(null);
   const [signedIn, setSignedIn] = useState(false);
@@ -133,7 +134,19 @@ export default function AuditWorkspace() {
     setParentId(q.get("parent"));
     try {
       const saved = sessionStorage.getItem("mr-audit-urls");
-      if (saved) setUrls(JSON.parse(saved));
+      const savedUrls = saved ? JSON.parse(saved) : [""];
+      const savedContexts = sessionStorage.getItem("mr-audit-contexts");
+      const restoredContexts = savedContexts ? JSON.parse(savedContexts) : [];
+      if (Array.isArray(savedUrls)) {
+        setUrls(savedUrls);
+        setContexts(
+          savedUrls.map((_, index) =>
+            Array.isArray(restoredContexts) && typeof restoredContexts[index] === "string"
+              ? restoredContexts[index]
+              : "",
+          ),
+        );
+      }
     } catch {}
     void api("/api/audit/claim", {})
       .catch(() => {})
@@ -173,10 +186,12 @@ export default function AuditWorkspace() {
     setError("");
     setBusy(true);
     try {
+      const selectedUrls = kind === "mini" ? [urls[0]] : urls;
       const data = await api("/api/audit", {
         id: crypto.randomUUID(),
         kind,
-        urls: kind === "mini" ? [urls[0]] : urls,
+        urls: selectedUrls,
+        contexts: selectedUrls.map((_, index) => contexts[index] || ""),
         checkout: kind === paidKind ? checkout : null,
         parentId,
       });
@@ -194,6 +209,10 @@ export default function AuditWorkspace() {
     setBusy(true);
     try {
       sessionStorage.setItem("mr-audit-urls", JSON.stringify(urls));
+      sessionStorage.setItem(
+        "mr-audit-contexts",
+        JSON.stringify(urls.map((_, index) => contexts[index] || "")),
+      );
       const data = await api("/api/audit/checkout", {
         kind,
         parentId: parent,
@@ -260,6 +279,22 @@ export default function AuditWorkspace() {
                   disabled={busy}
                   className="mt-1 block w-full rounded-lg border border-neutral-600 bg-neutral-900 p-3"
                 />
+                <span className="mt-3 block text-neutral-400">
+                  What should this page help its reader understand, feel, or do?{" "}
+                  <span className="text-neutral-500">Optional</span>
+                </span>
+                <textarea
+                  value={contexts[i] || ""}
+                  onChange={(e) =>
+                    setContexts((v) =>
+                      v.map((x, n) => (n === i ? e.target.value : x)),
+                    )
+                  }
+                  maxLength={1200}
+                  disabled={busy}
+                  placeholder="For example: reassure an existing customer, introduce a high-consideration offer, or invite a warm reader to apply."
+                  className="mt-1 block min-h-24 w-full rounded-lg border border-neutral-600 bg-neutral-900 p-3"
+                />
               </label>
             ))}
           </div>
@@ -267,7 +302,10 @@ export default function AuditWorkspace() {
             {urls.length < 5 && (
               <button
                 disabled={busy}
-                onClick={() => setUrls((v) => [...v, ""])}
+                onClick={() => {
+                  setUrls((v) => [...v, ""]);
+                  setContexts((v) => [...v, ""]);
+                }}
                 className="rounded-lg border border-neutral-600 px-4 py-2"
               >
                 Add a page
@@ -276,7 +314,10 @@ export default function AuditWorkspace() {
             {urls.length > 1 && (
               <button
                 disabled={busy}
-                onClick={() => setUrls((v) => v.slice(0, -1))}
+                onClick={() => {
+                  setUrls((v) => v.slice(0, -1));
+                  setContexts((v) => v.slice(0, -1));
+                }}
                 className="px-4 py-2 text-neutral-400"
               >
                 Remove last page
